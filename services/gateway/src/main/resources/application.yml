@@ -1,0 +1,8 @@
+server:
+  # 8090 avoids clash with Apache httpd often bound to 8080 on Windows
+  port: 8090
+medtrack:
+  schedule-url: http://localhost:8081
+  visit-url: http://localhost:8082
+  notify-url: http://localhost:8083
+  booking-url: http://localhost:8084

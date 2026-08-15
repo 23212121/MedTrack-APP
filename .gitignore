@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+web/node_modules/
+
+# Env / secrets — never commit
+.env
+.env.local
+.env.*.local
+**/AWS_Application.properties.local
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+target/
+*.class
+*.jar
+!**/src/**/resources/**
+
+# IDE / OS
+.idea/
+.vscode/
+.metadata/
+eclipse-workspace/
+*.iml
+.project
+.classpath
+.settings/
+.DS_Store
+Thumbs.db
+
+# Logs / temp
+*.log
+*.err.log
+*.tmp
+tsconfig.tsbuildinfo
+web/tsconfig.tsbuildinfo
+services/*.log
+services/*.err.log
+
+# Uploads / local data
+uploads/
+**/uploads/
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal

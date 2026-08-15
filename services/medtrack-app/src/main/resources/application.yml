@@ -1,0 +1,67 @@
+server:
+  # Single API port (avoids Apache httpd on :8080)
+  port: 8090
+
+spring:
+  application:
+    name: medtrack-app
+  config:
+    # Load AWS S3 enabled/region/bucket/keys from AWS_Application.properties
+    import: optional:classpath:AWS_Application.properties
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/medtrackapp?currentSchema=svc}
+    username: ${SPRING_DATASOURCE_USERNAME:medtrack}
+    password: ${SPRING_DATASOURCE_PASSWORD:medtrack}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.postgresql.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        default_schema: svc
+        dialect: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.dialect.PostgreSQLDialect}
+  mail:
+    # Real inbox delivery: set MAIL_HOST=smtp.gmail.com MAIL_PORT=587 MAIL_USER MAIL_PASS (Gmail App Password)
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USER:}
+    password: ${MAIL_PASS:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS:true}
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 100MB
+
+medtrack:
+  clinic-id: seed-clinic-1
+  clinic-name: Sunrise Care Clinic
+  doctor-id: seed-doctor-1
+  doctor-name: Dr. Mehta
+  patient-id: seed-patient-1
+  patient-name: Anita Sharma
+  patient-phone: "9876543210"
+  patient-email: anita@example.com
+  default-clinic-id: seed-clinic-1
+  default-clinic-name: Sunrise Care Clinic
+  avg-consultation-minutes: 10
+  sms-provider: console
+  email-from: ${MAIL_FROM:${MAIL_USER:noreply@sunriseclinic.local}}
+  # false = do not pretend email was sent when SMTP fails (recommended for real Gmail)
+  console-fallback: ${MAIL_CONSOLE_FALLBACK:false}
+  # Hospital patient test-document uploads (svc.documents)
+  upload-dir: ${MEDTRACK_UPLOAD_DIR:uploads/patient-documents}
+  # S3 settings are loaded from AWS_Application.properties (aws.s3.*)
+  # Keep medtrack.s3.* as optional env overrides for older scripts
+  s3:
+    enabled: ${MEDTRACK_S3_ENABLED:${aws.s3.enabled:true}}
+    bucket: ${MEDTRACK_S3_BUCKET:${aws.s3.bucket:medtrack-demo-docs}}
+    region: ${MEDTRACK_S3_REGION:${aws.s3.region:ap-south-1}}
+    access-key: ${MEDTRACK_S3_ACCESS_KEY:${aws.s3.access-key:}}
+    secret-key: ${MEDTRACK_S3_SECRET_KEY:${aws.s3.secret-key:}}
+    prefix: ${MEDTRACK_S3_PREFIX:${aws.s3.prefix:patient-documents}}

@@ -1,0 +1,337 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  EMPLOYEE
+  DOCTOR
+  PATIENT
+}
+
+enum VisitStatus {
+  CALLED
+  BOOKED
+  CHECKED_IN
+  IN_CONSULT
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
+enum NoteType {
+  STAFF
+  CLINICAL
+  PATIENT_SUMMARY
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+}
+
+model Clinic {
+  id                       String   @id @default(cuid())
+  name                     String
+  timezone                 String   @default("Asia/Kolkata")
+  lateGraceMinutes         Int      @default(10)
+  maxDelayAlertsPerVisit   Int      @default(2)
+  youAreNextThreshold      Int      @default(2)
+  fixedConsultMinutes      Int      @default(15)
+  overtimeFeeAmount        Float    @default(200)
+  overtimeFeeCurrency      String   @default("INR")
+  overtimeFeePerBlockMinutes Int    @default(15)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  users                  User[]
+  departments            Department[]
+  doctors                Doctor[]
+  patients               Patient[]
+  visits                 Visit[]
+  notifications          Notification[]
+  notificationTemplates  NotificationTemplate[]
+}
+
+model User {
+  id           String    @id @default(cuid())
+  clinicId     String?
+  email        String?   @unique
+  phone        String?
+  passwordHash String?
+  role         UserRole
+  fullName     String
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  clinic           Clinic?      @relation(fields: [clinicId], references: [id])
+  doctorProfile    Doctor?
+  patientProfile   Patient?
+  createdVisits    Visit[]      @relation("VisitCreatedBy")
+  visitEvents      VisitEvent[]
+  visitNotes       VisitNote[]
+
+  @@index([clinicId])
+  @@index([phone])
+  @@index([role])
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  clinicId  String
+  name      String
+  code      String?
+  createdAt DateTime @default(now())
+
+  clinic Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctors Doctor[]
+  visits  Visit[]
+
+  @@unique([clinicId, name])
+}
+
+model Doctor {
+  id                 String   @id @default(cuid())
+  clinicId           String
+  userId             String   @unique
+  departmentId       String?
+  specialty          String?
+  avgConsultMinutes  Int      @default(15)
+  baseConsultFee     Float    @default(500)
+  fixedConsultMinutes Int?
+  overtimeFeeAmount  Float?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+
+  clinic       Clinic               @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   Department?          @relation(fields: [departmentId], references: [id])
+  schedules    DoctorSchedule[]
+  slots        ScheduleSlot[]
+  visits       Visit[]
+  availability DoctorAvailability[]
+}
+
+model DoctorAvailability {
+  id               String   @id @default(cuid())
+  doctorId         String
+  startsAt         DateTime
+  endsAt           DateTime
+  availabilityType String   @default("AVAILABLE") // AVAILABLE | BUSY | LEAVE | BLOCKED
+  reason           String?
+  createdAt        DateTime @default(now())
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, startsAt, endsAt])
+}
+
+model DoctorSchedule {
+  id          String @id @default(cuid())
+  doctorId    String
+  dayOfWeek   Int
+  startTime   String
+  endTime     String
+  slotMinutes Int    @default(15)
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, dayOfWeek, startTime])
+}
+
+model ScheduleSlot {
+  id        String   @id @default(cuid())
+  doctorId  String
+  startsAt  DateTime
+  endsAt    DateTime
+  isBlocked Boolean  @default(false)
+  visitId   String?  @unique
+  createdAt DateTime @default(now())
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  visit  Visit? @relation(fields: [visitId], references: [id])
+
+  @@unique([doctorId, startsAt])
+}
+
+model Patient {
+  id          String   @id @default(cuid())
+  clinicId    String
+  userId      String?  @unique
+  phone       String
+  fullName    String
+  dateOfBirth DateTime?
+  gender      Gender   @default(UNKNOWN)
+  email       String?
+  externalMrn String?
+  smsConsent  Boolean  @default(true)
+  emailConsent Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clinic        Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  user          User?          @relation(fields: [userId], references: [id])
+  visits        Visit[]
+  notifications Notification[]
+
+  @@index([clinicId, phone])
+}
+
+model Visit {
+  id               String      @id @default(cuid())
+  clinicId         String
+  patientId        String
+  doctorId         String?
+  departmentId     String?
+  status           VisitStatus @default(CALLED)
+  tokenNumber      Int?
+  reason           String?
+  scheduledStart   DateTime?
+  scheduledEnd     DateTime?
+  checkedInAt      DateTime?
+  actualStart      DateTime?
+  actualEnd        DateTime?
+  delayMinutes     Int         @default(0)
+  delayAlertsSent  Int         @default(0)
+  baseFee          Float?
+  overtimeMinutes  Int         @default(0)
+  overtimeFee      Float       @default(0)
+  totalFee         Float?
+  feeCurrency      String?     @default("INR")
+  createdByUserId  String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  clinic      Clinic           @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient     Patient          @relation(fields: [patientId], references: [id])
+  doctor      Doctor?          @relation(fields: [doctorId], references: [id])
+  department  Department?      @relation(fields: [departmentId], references: [id])
+  createdBy   User?            @relation("VisitCreatedBy", fields: [createdByUserId], references: [id])
+  events      VisitEvent[]
+  notes       VisitNote[]
+  slot        ScheduleSlot?
+  notifications Notification[]
+  feeCharges  VisitFeeCharge[]
+
+  @@index([clinicId, status])
+  @@index([patientId])
+  @@index([doctorId, status])
+}
+
+model VisitFeeCharge {
+  id          String   @id @default(cuid())
+  visitId     String
+  chargeType  String
+  description String?
+  amount      Float
+  currency    String   @default("INR")
+  minutesOver Int?
+  createdAt   DateTime @default(now())
+
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@index([visitId])
+}
+
+model VisitEvent {
+  id          String       @id @default(cuid())
+  visitId     String
+  actorUserId String?
+  eventType   String
+  fromStatus  VisitStatus?
+  toStatus    VisitStatus?
+  message     String?
+  metadataJson String?
+  createdAt   DateTime     @default(now())
+
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([visitId, createdAt])
+}
+
+model VisitNote {
+  id           String   @id @default(cuid())
+  visitId      String
+  authorUserId String?
+  noteType     NoteType
+  body         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  visit  Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  author User? @relation(fields: [authorUserId], references: [id])
+
+  @@index([visitId])
+}
+
+model NotificationTemplate {
+  id           String              @id @default(cuid())
+  clinicId     String
+  eventCode    String
+  channel      NotificationChannel
+  subject      String?
+  bodyTemplate String
+  isEnabled    Boolean             @default(true)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, eventCode, channel])
+}
+
+model Notification {
+  id           String              @id @default(cuid())
+  clinicId     String
+  visitId      String?
+  patientId    String?
+  eventCode    String
+  channel      NotificationChannel
+  recipient    String
+  subject      String?
+  body         String
+  status       NotificationStatus  @default(PENDING)
+  providerRef  String?
+  errorMessage String?
+  scheduledFor DateTime?
+  sentAt       DateTime?
+  createdAt    DateTime            @default(now())
+
+  clinic  Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  visit   Visit?   @relation(fields: [visitId], references: [id])
+  patient Patient? @relation(fields: [patientId], references: [id])
+
+  @@index([visitId])
+  @@index([status, scheduledFor])
+}
+
+model OtpChallenge {
+  id         String    @id @default(cuid())
+  phone      String
+  codeHash   String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, expiresAt])
+}
