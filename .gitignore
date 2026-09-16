@@ -6,8 +6,6 @@ web/node_modules/
 .env
 .env.local
 .env.*.local
-**/AWS_Application.properties.local
-**/AWS_Application.properties
 
 # Build outputs
 .next/
@@ -18,6 +16,8 @@ target/
 *.class
 *.jar
 !**/src/**/resources/**
+**/AWS_Application.properties
+**/AWS_Application.properties.local
 
 # IDE / OS
 .idea/
