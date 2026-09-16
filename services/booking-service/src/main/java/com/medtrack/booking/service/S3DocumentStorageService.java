@@ -24,8 +24,28 @@ public class S3DocumentStorageService {
     return awsDocument.getBucket();
   }
 
+  /** Logical bucket name (MedTrackApp). */
+  public String getBucketName() {
+    return awsDocument.getBucketName();
+  }
+
+  /** S3 key folder/file path using Aadhaar number. */
+  public String objectKey(String aadhaarNumber, String documentId, String storedFileName) {
+    return awsDocument.buildObjectKey(aadhaarNumber, documentId, storedFileName);
+  }
+
+  /** @deprecated Prefer Aadhaar-based {@link #objectKey(String, String, String)}. */
   public String objectKey(Long hospitalId, String documentId, String storedFileName) {
     return awsDocument.buildObjectKey(hospitalId, documentId, storedFileName);
+  }
+
+  /** Chat files must stay under the IAM-allowed prefix (patient-documents/…). */
+  public String chatObjectKey(String appointmentId, String storedFileName) {
+    return awsDocument.buildChatObjectKey(appointmentId, storedFileName);
+  }
+
+  public String medicineOrderObjectKey(String orderId, String storedFileName) {
+    return awsDocument.buildMedicineOrderObjectKey(orderId, storedFileName);
   }
 
   public Optional<String> upload(

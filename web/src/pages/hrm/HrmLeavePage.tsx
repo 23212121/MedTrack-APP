@@ -6,6 +6,7 @@ import {
   getLeaveSummary,
   requestLeave,
 } from "../../api";
+import { toast } from "../../toast";
 
 const BALANCE_COLORS = [
   "#a78bfa",
@@ -185,6 +186,7 @@ export default function HrmLeavePage() {
   }, [load]);
 
   const pending = data?.pending ?? [];
+  const history = data?.history ?? [];
   const balances = data?.balances ?? [];
   const stats = data?.stats;
 
@@ -204,10 +206,11 @@ export default function HrmLeavePage() {
         fromDate: form.fromDate,
         toDate: form.toDate,
         reason: form.reason || undefined,
-        autoApprove: true,
+        autoApprove: false,
       });
       setShowForm(false);
       setForm((f) => ({ ...f, fromDate: "", toDate: "", reason: "" }));
+      toast.success("Leave submitted for approval.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Request failed");
@@ -380,6 +383,40 @@ export default function HrmLeavePage() {
             );
           })}
         </div>
+      </section>
+
+      <section className="hrm-leave-pending panel">
+        <div className="hrm-leave-pending-head">
+          <h2>My leave</h2>
+        </div>
+        {history.length === 0 ? (
+          <p className="hrm-muted">No leave recorded this year. Use Request Leave to apply.</p>
+        ) : (
+          <div className="table-scroll">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Status</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((r: LeaveRequestRow) => (
+                  <tr key={r.id}>
+                    <td>{r.leaveType}</td>
+                    <td>{r.fromDate}</td>
+                    <td>{r.toDate}</td>
+                    <td>{r.status}</td>
+                    <td>{r.reason || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );

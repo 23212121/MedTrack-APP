@@ -3,7 +3,7 @@ package com.medtrack.hrm.domain;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "hrm_candidates")
+@Table(schema = "svc", name = "hrm_candidates")
 public class CandidateEntity extends AuditableEntity {
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)

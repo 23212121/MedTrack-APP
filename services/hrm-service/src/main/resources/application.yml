@@ -5,24 +5,35 @@ spring:
   application:
     name: hrm-service
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/hrmdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH}
-    username: ${SPRING_DATASOURCE_USERNAME:sa}
-    password: ${SPRING_DATASOURCE_PASSWORD:}
-    driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.h2.Driver}
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/medtrackapp?currentSchema=svc}
+    username: ${SPRING_DATASOURCE_USERNAME:medtrack}
+    password: ${SPRING_DATASOURCE_PASSWORD:medtrack}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.postgresql.Driver}
   jpa:
     hibernate:
-      ddl-auto: update
+      # Tables already exist in PostgreSQL (svc.hrm_*, svc.leave_applications). Do not create H2 or auto-DDL.
+      ddl-auto: none
     show-sql: false
     properties:
       hibernate:
-        format_sql: true
-        dialect: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.dialect.H2Dialect}
+        default_schema: svc
+        dialect: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.dialect.PostgreSQLDialect}
 
 medtrack:
   hrm:
     default-doctor-id: seed-doctor-1
     default-user: system
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+info:
+  app:
+    name: hrm-service
+    port: 8086

@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../api";
+import { toast } from "../../toast";
 
 export default function PatientRegisterPage() {
   const navigate = useNavigate();
@@ -14,13 +15,11 @@ export default function PatientRegisterPage() {
     email: "",
   });
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
-    setMessage("");
     if (form.password !== form.confirm) {
       setError("Passwords do not match");
       return;
@@ -35,7 +34,7 @@ export default function PatientRegisterPage() {
         gender: form.gender || undefined,
         email: form.email || undefined,
       });
-      setMessage("Account created. Sign in with your phone and password.");
+      toast.success("Account created. Sign in with your phone and password.");
       setTimeout(() => navigate("/patient/login"), 1200);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
@@ -49,7 +48,6 @@ export default function PatientRegisterPage() {
       <h1 style={{ color: "var(--brand-dark)" }}>Patient Registration</h1>
       <p className="lead">Create your portal account to manage appointments.</p>
       {error && <div className="msg error">{error}</div>}
-      {message && <div className="msg ok">{message}</div>}
       <form className="stack" onSubmit={onSubmit}>
         <label>
           Full name

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, HospitalDoctor, Visit } from "../api";
+import { toast } from "../toast";
 
 function doctorLabel(d: HospitalDoctor) {
   const dept = d.department?.trim() || d.specialization?.trim() || "General";
@@ -13,7 +14,6 @@ export default function CheckInPage() {
   const [loadingDoctors, setLoadingDoctors] = useState(false);
   const [loadingBoard, setLoadingBoard] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
 
   const selectedDoctor = useMemo(
@@ -93,11 +93,10 @@ export default function CheckInPage() {
 
   async function checkIn(id: string) {
     setBusyId(id);
-    setMessage("");
     setError("");
     try {
       const v = await api.checkIn(id);
-      setMessage(
+      toast.success(
         `Checked in ${v.patientName} — token ${v.tokenNumber}. SMS + email sent.`
       );
       await loadBoard(selectedDoctor);
@@ -112,7 +111,6 @@ export default function CheckInPage() {
     <section>
       <h1>Patient check-in</h1>
       {error && <div className="msg error">{error}</div>}
-      {message && <div className="msg ok">{message}</div>}
 
       <div className="panel stack checkin-filters">
         <label>

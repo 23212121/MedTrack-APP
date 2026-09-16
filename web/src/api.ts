@@ -82,6 +82,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (hospitalId) {
     headers["X-Hospital-Id"] = hospitalId;
   }
+  const loginType = session.getLoginType();
+  if (loginType) headers["X-Login-Type"] = loginType;
+  const storeId = session.getMedicalStoreId();
+  if (storeId) headers["X-Medical-Store-Id"] = storeId;
+  const patientPhone = session.getPatientPhone();
+  if (patientPhone) headers["X-Patient-Phone"] = patientPhone;
+  const patientId = session.getPatientId();
+  if (patientId) headers["X-Patient-Id"] = patientId;
+  const patientName = session.getPatientName();
+  if (patientName) headers["X-Patient-Name"] = patientName;
   const doctorId = resolveDoctorId();
   if (doctorId) {
     headers["X-Doctor-Id"] = doctorId;
@@ -89,6 +99,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const username = session.getUsername();
   if (username) {
     headers["X-User"] = username;
+  }
+  const token = session.getAccessToken();
+  if (token && token.includes(".")) {
+    headers.Authorization = `Bearer ${token}`;
   }
   const res = await fetch(path, {
     ...init,
@@ -107,10 +121,24 @@ async function requestForm<T>(path: string, form: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   const hospitalId = session.getHospitalId();
   if (hospitalId) headers["X-Hospital-Id"] = hospitalId;
+  const loginType = session.getLoginType();
+  if (loginType) headers["X-Login-Type"] = loginType;
+  const storeId = session.getMedicalStoreId();
+  if (storeId) headers["X-Medical-Store-Id"] = storeId;
+  const patientPhone = session.getPatientPhone();
+  if (patientPhone) headers["X-Patient-Phone"] = patientPhone;
+  const patientId = session.getPatientId();
+  if (patientId) headers["X-Patient-Id"] = patientId;
+  const patientName = session.getPatientName();
+  if (patientName) headers["X-Patient-Name"] = patientName;
   const doctorId = resolveDoctorId();
   if (doctorId) headers["X-Doctor-Id"] = doctorId;
   const username = session.getUsername();
   if (username) headers["X-User"] = username;
+  const token = session.getAccessToken();
+  if (token && token.includes(".")) {
+    headers.Authorization = `Bearer ${token}`;
+  }
   const res = await fetch(path, { method: "POST", headers, body: form });
   if (!res.ok) {
     const text = await res.text();
@@ -140,6 +168,29 @@ export type PatientDocument = {
   updateUser?: string;
 };
 
+export type SystemStatusResponse = {
+  checkedAt?: string;
+  mode?: string;
+  overall?: string;
+  summary?: { up: number; down: number; total: number };
+  local?: {
+    name?: string;
+    port?: number;
+    status?: string;
+    actuator?: string;
+    components?: Record<string, string>;
+  };
+  services?: Array<{
+    name: string;
+    port?: number;
+    status?: string;
+    mode?: string;
+    detail?: string;
+    url?: string;
+    embedded?: boolean;
+  }>;
+};
+
 export type Visit = {
   id: string;
   clinicId?: string;
@@ -166,15 +217,35 @@ export type Visit = {
 export type ScheduleSlot = {
   id: string;
   doctorId: string;
+  hospitalId?: number;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
   slotMinutes: number;
 };
 
+export type SchedulePerson = {
+  id: string;
+  name: string;
+  role: "Doctor" | "Staff";
+  typeLabel?: string;
+};
+
+export type StaffMember = {
+  employeeId: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  employeeType?: string;
+  designation?: string;
+  department?: string;
+  doctorLinkId?: string;
+};
+
 export type Availability = {
   id: string;
   doctorId: string;
+  hospitalId?: number;
   startsAt: string;
   endsAt: string;
   availabilityType: string;
@@ -246,6 +317,7 @@ export type Booking = {
   hospitalId: number;
   hospitalName?: string;
   doctorId: string;
+  doctorName?: string;
   patientName: string;
   patientPhone: string;
   patientAge?: number;
@@ -284,6 +356,7 @@ export type Appointment = {
   id: string;
   hospitalId?: number | null;
   hospitalName?: string;
+  doctorName?: string;
   doctorId: string;
   patientId: string;
   patientName: string;
@@ -303,6 +376,9 @@ export type Appointment = {
   createdDate: string;
   updatedBy?: string;
   updatedDate?: string;
+  chatCount?: number;
+  unreadCount?: number;
+  otherMessageAts?: string[];
 };
 
 /** Mirrors booking-service DoctorRegistrationEntity / doctor_details. */
@@ -455,27 +531,76 @@ export const api = {
 
   weekly: (doctorId: string) =>
     request<{ schedules: ScheduleSlot[] }>(`/api/schedules/weekly/${doctorId}`),
+  hospitalSchedules: (hospitalId: string | number, personIds?: string[]) => {
+    const q =
+      personIds && personIds.length
+        ? `?personIds=${encodeURIComponent(personIds.join(","))}`
+        : "";
+    return request<{ schedules: ScheduleSlot[] }>(
+      `/api/schedules/hospital/${encodeURIComponent(String(hospitalId))}${q}`,
+    );
+  },
   saveWeekly: (doctorId: string, schedules: Omit<ScheduleSlot, "id" | "doctorId">[]) =>
     request<{ schedules: ScheduleSlot[] }>(`/api/schedules/weekly/${doctorId}`, {
       method: "PUT",
       body: JSON.stringify(schedules),
     }),
+  saveWeeklyBatch: (
+    personIds: string[],
+    schedules: Omit<ScheduleSlot, "id" | "doctorId">[],
+    hospitalId?: string | number,
+  ) =>
+    request<{ schedules: ScheduleSlot[] }>("/api/schedules/weekly-batch", {
+      method: "PUT",
+      body: JSON.stringify({
+        personIds,
+        hospitalId: hospitalId != null && hospitalId !== "" ? Number(hospitalId) : undefined,
+        schedules,
+      }),
+    }),
+  employees: () =>
+    request<{ count: number; employees: StaffMember[] }>("/api/hrm/employees"),
   availability: (doctorId: string, from: string, to: string) =>
     request<{ availability: Availability[] }>(
       `/api/schedules/availability/${doctorId}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
     ),
+  hospitalAvailability: (
+    hospitalId: string | number,
+    from: string,
+    to: string,
+    personIds?: string[],
+  ) => {
+    const q = new URLSearchParams({ from, to });
+    if (personIds && personIds.length) q.set("personIds", personIds.join(","));
+    return request<{ availability: Availability[] }>(
+      `/api/schedules/availability-hospital/${encodeURIComponent(String(hospitalId))}?${q}`,
+    );
+  },
   availableDays: (doctorId: string, from: string, to: string) =>
     request<DoctorAvailableDays>(
       `/api/schedules/available-days/${encodeURIComponent(doctorId)}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
     ),
   addAvailability: (body: {
     doctorId: string;
+    hospitalId?: number;
     startsAt: string;
     endsAt: string;
     availabilityType: string;
     reason?: string;
   }) =>
     request<Availability>("/api/schedules/availability", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  addAvailabilityBatch: (body: {
+    personIds: string[];
+    hospitalId?: number;
+    startsAt: string;
+    endsAt: string;
+    availabilityType: string;
+    reason?: string;
+  }) =>
+    request<{ availability: Availability[] }>("/api/schedules/availability-batch", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -502,6 +627,9 @@ export const api = {
   listPatientDocuments: () =>
     request<{ count: number; documents: PatientDocument[] }>("/api/documents"),
 
+  systemStatus: () =>
+    request<SystemStatusResponse>("/api/system/status"),
+
   uploadPatientDocuments: (body: {
     patientName: string;
     aadhaarNumber: string;
@@ -515,7 +643,12 @@ export const api = {
     for (const file of body.files) {
       form.append("files", file);
     }
-    return requestForm<{ message: string; document: PatientDocument }>(
+    return requestForm<{
+      message: string;
+      document: PatientDocument;
+      s3Path?: string;
+      s3Uploaded?: boolean;
+    }>(
       "/api/documents",
       form,
     );
@@ -528,6 +661,10 @@ export const api = {
     if (hospitalId) headers["X-Hospital-Id"] = hospitalId;
     const username = session.getUsername();
     if (username) headers["X-User"] = username;
+    const token = session.getAccessToken();
+    if (token && token.includes(".")) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const res = await fetch(`/api/documents/${documentId}/files/${slot}`, { headers });
     if (!res.ok) {
       const text = await res.text();
@@ -582,6 +719,14 @@ export const api = {
       doctorName?: string;
       hospitalName?: string;
       tokenCount: number;
+      totalBookings?: number;
+      bookedCount?: number;
+      inProcessCount?: number;
+      completedCount?: number;
+      cancelledCount?: number;
+      patientCount?: number;
+      specialization?: string;
+      department?: string;
       withinClinicHours?: boolean;
       scheduleWindows?: { startTime: string; endTime: string; slotMinutes?: number }[];
       patients: Appointment[];
@@ -601,7 +746,47 @@ export const api = {
         uploadDate?: string;
       }[];
       documentCount: number;
+      previousRecords?: {
+        id: string;
+        appointmentDate?: string;
+        status?: string;
+        tokenNumber?: number;
+        doctorName?: string;
+        reason?: string;
+      }[];
     }>(`/api/doctor/patients/${encodeURIComponent(appointmentId)}`),
+
+  uploadDoctorPatientDocuments: (appointmentId: string, body: { aadhaarNumber: string; files: File[] }) => {
+    const form = new FormData();
+    form.append("aadhaarNumber", body.aadhaarNumber);
+    for (const file of body.files) {
+      form.append("files", file);
+    }
+    return requestForm<{
+      patient: Appointment;
+      documents: {
+        id: string;
+        slot: number;
+        patientName?: string;
+        aadhaarNumber?: string;
+        documentType: string;
+        documentName: string;
+        uploadDate?: string;
+        downloadUrl?: string;
+      }[];
+      documentCount: number;
+    }>(`/api/doctor/patients/${encodeURIComponent(appointmentId)}/documents`, form);
+  },
+
+  doctorPatientStatus: (appointmentId: string, action: "start" | "complete" | "IN-PROCESS" | "COMPLETED") =>
+    request<{
+      patient: Appointment;
+      documents: unknown[];
+      documentCount: number;
+    }>(`/api/doctor/patients/${encodeURIComponent(appointmentId)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ action }),
+    }),
 
   doctors: () =>
     request<{ count: number; doctors: DoctorRegistration[] }>("/api/doctors"),
@@ -627,10 +812,10 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) }
     ),
 
-  login: (body: { loginType: "HOSPITAL" | "USER" | "PATIENT"; id: string; password: string }) =>
+  login: (body: { loginType: "HOSPITAL" | "USER" | "PATIENT" | "MEDICAL"; id: string; password: string }) =>
     request<{
       message: string;
-      loginType: "HOSPITAL" | "USER" | "PATIENT";
+      loginType: "HOSPITAL" | "USER" | "PATIENT" | "MEDICAL";
       username: string;
       userId?: string;
       doctorId?: string;
@@ -638,10 +823,14 @@ export const api = {
       hospitalName?: string;
       hospitalCode?: string;
       role?: string;
+      token?: string;
       patientPhone?: string;
       patientName?: string;
       patientId?: string;
       patientUserId?: string;
+      medicalStoreId?: string;
+      storeCode?: string;
+      storeName?: string;
     }>("/api/auth/login", { method: "POST", body: JSON.stringify(body) }),
 
   registerPatient: (body: {
@@ -750,6 +939,76 @@ export const api = {
     );
   },
 
+  hospitalPatientList: () =>
+    request<{
+      hospitalId: number;
+      hospitalName?: string;
+      totalPatients: number;
+      totalDoctors: number;
+      totalBookings: number;
+      rows: HospitalPatientListRow[];
+    }>("/api/hospital/patient-list"),
+
+  patientChatThreads: (phone: string) =>
+    request<{ count: number; threads: PatientChatThread[] }>(
+      `/api/care-chats?phone=${encodeURIComponent(phone.replace(/\D/g, ""))}`,
+    ),
+
+  careChatUnreadHints: (ids: string[], viewer: "HOSPITAL" | "DOCTOR" | "PATIENT") =>
+    request<{
+      viewer: string;
+      unreadCount: Record<string, number>;
+      otherMessageAts: Record<string, string[]>;
+    }>("/api/care-chats/unread-hints", {
+      method: "POST",
+      body: JSON.stringify({ viewer, ids }),
+    }),
+
+  careChatThread: (appointmentId: string, phone?: string) => {
+    const q = phone ? `?phone=${encodeURIComponent(phone.replace(/\D/g, ""))}` : "";
+    return request<CareChatThread>(`/api/care-chats/${encodeURIComponent(appointmentId)}${q}`);
+  },
+
+  sendCareChat: (
+    appointmentId: string,
+    body: { message: string; senderType: "HOSPITAL" | "DOCTOR" | "PATIENT"; senderName: string },
+    phone?: string,
+  ) => {
+    const q = phone ? `?phone=${encodeURIComponent(phone.replace(/\D/g, ""))}` : "";
+    return request<CareChatThread>(`/api/care-chats/${encodeURIComponent(appointmentId)}${q}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  attachCareChat: (
+    appointmentId: string,
+    file: File,
+    body: { senderType: "HOSPITAL" | "DOCTOR" | "PATIENT"; senderName: string; message?: string },
+    phone?: string,
+  ) => {
+    const q = new URLSearchParams();
+    if (phone) q.set("phone", phone.replace(/\D/g, ""));
+    q.set("senderType", body.senderType);
+    q.set("senderName", body.senderName);
+    if (body.message?.trim()) q.set("message", body.message.trim());
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return requestForm<CareChatThread>(
+      `/api/care-chats/${encodeURIComponent(appointmentId)}/attachments?${q}`,
+      form,
+    );
+  },
+
+  careChatFileUrl: (path: string, phone?: string) => {
+    const q = new URLSearchParams();
+    if (phone) q.set("phone", phone.replace(/\D/g, ""));
+    const hospitalId = session.getHospitalId();
+    if (hospitalId) q.set("hospitalId", hospitalId);
+    const qs = q.toString();
+    return qs ? `${path}?${qs}` : path;
+  },
+
   /** Download document: backend fetches path from table → Amazon S3 (demo keys). */
   downloadPatientPortalDocument: async (
     documentId: string,
@@ -807,7 +1066,300 @@ export const api = {
     if (tokenNo != null) qs.set("tokenNo", String(tokenNo));
     return request<QueueStatus>(`/api/queue/status?${qs}`);
   },
+
+  medicineOrders: (opts?: {
+    status?: string;
+    amountStatus?: string;
+    q?: string;
+    fulfillment?: string;
+    from?: string;
+    to?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (opts?.status) qs.set("status", opts.status);
+    if (opts?.amountStatus) qs.set("amountStatus", opts.amountStatus);
+    if (opts?.q) qs.set("q", opts.q);
+    if (opts?.fulfillment) qs.set("fulfillment", opts.fulfillment);
+    if (opts?.from) qs.set("from", opts.from);
+    if (opts?.to) qs.set("to", opts.to);
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<{ count: number; orders: MedicineOrder[] }>(`/api/medicine-orders${suffix}`);
+  },
+
+  medicineOrder: (id: string) =>
+    request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}`),
+
+  medicineOrderCounts: () => request<MedicineOrderCounts>("/api/medicine-orders/counts"),
+
+  medicineOrderNotifications: () =>
+    request<{ count: number; notifications: MedicineOrderNotification[] }>(
+      "/api/medicine-orders/notifications",
+    ),
+
+  markMedicineNotificationRead: (id: string) =>
+    request<{ ok: boolean }>(`/api/medicine-orders/notifications/${encodeURIComponent(id)}/read`, {
+      method: "POST",
+      body: "{}",
+    }),
+
+  createMedicineOrder: (form: FormData) =>
+    requestForm<{ id: string; orderNumber: string } & MedicineOrder>("/api/medicine-orders", form),
+
+  acceptMedicineOrder: (id: string) =>
+    request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/accept`, {
+      method: "POST",
+      body: "{}",
+    }),
+
+  rejectMedicineOrder: (id: string, reason: string) =>
+    request<{ message: string; order: MedicineOrder }>(
+      `/api/medicine-orders/${encodeURIComponent(id)}/reject`,
+      { method: "POST", body: JSON.stringify({ reason }) },
+    ),
+
+  markMedicinePending: (id: string, reason: string) =>
+    request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/pending`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  saveMedicineQuote: (
+    id: string,
+    body: { items: MedicineOrderItemInput[]; charges: MedicineOrderChargesInput; reason?: string },
+    send: boolean,
+  ) =>
+    request<MedicineOrder>(
+      `/api/medicine-orders/${encodeURIComponent(id)}/quote?send=${send ? "true" : "false"}`,
+      { method: "PUT", body: JSON.stringify(body) },
+    ),
+
+  acceptMedicineAmount: (id: string) =>
+    request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/amount/accept`, {
+      method: "POST",
+      body: "{}",
+    }),
+
+  rejectMedicineAmount: (id: string, reason: string, comments?: string) =>
+    request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/amount/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason, comments }),
+    }),
+
+  markMedicineReady: (id: string) =>
+    request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/ready`, {
+      method: "POST",
+      body: "{}",
+    }),
+
+  completeMedicineOrder: (id: string) =>
+    request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/complete`, {
+      method: "POST",
+      body: "{}",
+    }),
+
+  cancelMedicineOrder: (id: string, reason: string) =>
+    request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  releaseMedicineOrder: (id: string, reason: string) =>
+    request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/release`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  markPrescriptionUnclear: (id: string, note: string) =>
+    request<{ message: string; order: MedicineOrder }>(
+      `/api/medicine-orders/${encodeURIComponent(id)}/prescription-unclear`,
+      { method: "POST", body: JSON.stringify({ note }) },
+    ),
+
+  uploadMedicineDocuments: (id: string, form: FormData) =>
+    requestForm<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/documents`, form),
+
+  medicalStores: (hospitalId?: string | number, activeOnly = false) => {
+    const qs = new URLSearchParams();
+    if (hospitalId != null && String(hospitalId)) qs.set("hospitalId", String(hospitalId));
+    if (activeOnly) qs.set("activeOnly", "true");
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<{ count: number; stores: MedicalStore[] }>(`/api/medical-stores${suffix}`);
+  },
+
+  registerMedicalStore: (body: {
+    storeName: string;
+    phone?: string;
+    address?: string;
+    password?: string;
+  }) =>
+    request<MedicalStore & { loginId?: string; message?: string }>("/api/medical-stores", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  setMedicalStoreStatus: (id: string, status: "ACTIVE" | "INACTIVE") =>
+    request<MedicalStore>(`/api/medical-stores/${encodeURIComponent(id)}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status }),
+    }),
 };
+
+export type MedicineOrderDocument = {
+  id: string;
+  fileName: string;
+  contentType?: string;
+  latest?: boolean;
+  createdAt?: string;
+  previewUrl?: string;
+};
+
+export type MedicineOrderItem = {
+  id?: string;
+  prescribedName?: string;
+  medicineName: string;
+  quantity: number;
+  unitPrice?: number;
+  lineTotal?: number;
+  availability?: string;
+  substituteName?: string;
+  substituteReason?: string;
+};
+
+export type MedicineOrderItemInput = {
+  prescribedName?: string;
+  medicineName: string;
+  quantity: number;
+  unitPrice: number;
+  availability?: string;
+  substituteName?: string;
+  substituteReason?: string;
+};
+
+export type MedicineOrderCharges = {
+  deliveryCharge: number;
+  packagingCharge: number;
+  tax: number;
+  otherCharges: number;
+  discount: number;
+  medicineSubtotal: number;
+  grandTotal: number;
+  draft?: boolean;
+  quoteVersion?: number;
+};
+
+export type MedicineOrderChargesInput = {
+  deliveryCharge?: number;
+  packagingCharge?: number;
+  tax?: number;
+  otherCharges?: number;
+  discount?: number;
+};
+
+export type MedicineOrder = {
+  id: string;
+  orderNumber: string;
+  hospitalId: number;
+  patientName: string;
+  patientPhone: string;
+  patientId?: string;
+  doctorId?: string;
+  doctorName?: string;
+  fulfillment?: string;
+  deliveryAddress?: string;
+  notes?: string;
+  pendingReason?: string;
+  status: string;
+  statusCode?: number;
+  assignedStoreId?: string;
+  assignedStoreName?: string;
+  amount?: number | null;
+  currentAmount?: number | null;
+  amountVisible?: boolean;
+  amountStatus?: string;
+  bookedBy?: string;
+  cancelReason?: string;
+  cancelledAt?: string;
+  completedAt?: string;
+  createdAt?: string;
+  prescriptionCount?: number;
+  documents?: MedicineOrderDocument[];
+  items?: MedicineOrderItem[];
+  charges?: MedicineOrderCharges | null;
+  amountHistory?: {
+    version: number;
+    grandTotal: number;
+    status: string;
+    reason?: string;
+    createdAt?: string;
+    createdBy?: string;
+  }[];
+  statusHistory?: {
+    previousStatus?: string;
+    newStatus: string;
+    actor?: string;
+    note?: string;
+    createdAt?: string;
+  }[];
+};
+
+export type MedicineOrderCounts = {
+  newOrders: number;
+  pending: number;
+  inProcess: number;
+  waitingApproval: number;
+  amountAccepted: number;
+  medicineReady: number;
+  completed: number;
+  canceled: number;
+  unreadNotifications: number;
+};
+
+export type MedicineOrderNotification = {
+  id: string;
+  orderId?: string;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt?: string;
+};
+
+export type MedicalStore = {
+  id: string;
+  hospitalId: number;
+  storeCode: string;
+  storeName: string;
+  phone?: string;
+  address?: string;
+  status: string;
+  createdAt?: string;
+  loginId?: string;
+  message?: string;
+};
+
+export async function fetchMedicineDocumentBlob(orderId: string, docId: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  const hospitalId = session.getHospitalId();
+  if (hospitalId) headers["X-Hospital-Id"] = hospitalId;
+  const loginType = session.getLoginType();
+  if (loginType) headers["X-Login-Type"] = loginType;
+  const storeId = session.getMedicalStoreId();
+  if (storeId) headers["X-Medical-Store-Id"] = storeId;
+  const patientPhone = session.getPatientPhone();
+  if (patientPhone) headers["X-Patient-Phone"] = patientPhone;
+  const username = session.getUsername();
+  if (username) headers["X-User"] = username;
+  const token = session.getAccessToken();
+  if (token && token.includes(".")) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(
+    `/api/medicine-orders/${encodeURIComponent(orderId)}/documents/${encodeURIComponent(docId)}`,
+    { headers },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(friendlyHttpError(res.status, text));
+  }
+  return res.blob();
+}
 
 export type QueuePatient = {
   token: number;
@@ -938,6 +1490,63 @@ export type PatientPortalDocument = {
   downloadUrl?: string;
 };
 
+export type HospitalPatientListRow = {
+  appointmentId: string;
+  hospitalId: number;
+  hospitalName?: string;
+  patientName: string;
+  patientPhone?: string;
+  patientId?: string;
+  doctorId: string;
+  doctorName: string;
+  tokenNumber?: number;
+  status?: string;
+  appointmentDate?: string;
+  createdDate?: string;
+  createdUser?: string;
+  chatCount: number;
+  unreadCount?: number;
+  otherMessageAts?: string[];
+  chatLink?: string;
+};
+
+export type CareChatMessage = {
+  id: string;
+  appointmentId?: string;
+  senderType: string;
+  senderName?: string;
+  message: string;
+  documentUrl?: string;
+  documentName?: string;
+  createdAt?: string;
+};
+
+export type CareChatThread = {
+  appointmentId: string;
+  patientName?: string;
+  phoneNumber?: string;
+  doctorId?: string;
+  hospitalId?: number;
+  status?: string;
+  tokenNumber?: number;
+  messages: CareChatMessage[];
+  s3Uploaded?: boolean;
+  s3Error?: string;
+};
+
+export type PatientChatThread = {
+  appointmentId: string;
+  hospitalName?: string;
+  patientName: string;
+  doctorName?: string;
+  tokenNumber?: number;
+  status?: string;
+  appointmentDate?: string;
+  chatCount: number;
+  unreadCount?: number;
+  otherMessageAts?: string[];
+};
+
 export type PatientDashboard = {
   patient: PatientProfile;
   nextAppointment: BookingSummary | null;
@@ -1028,10 +1637,13 @@ export type LeaveBalanceRow = {
 
 export type LeaveRequestRow = {
   id: string;
+  employeeId?: string;
+  employeeName?: string;
   leaveTypeId: string;
   leaveType: string;
   fromDate: string;
   toDate: string;
+  days?: number;
   reason?: string;
   status: string;
 };
@@ -1045,6 +1657,7 @@ export type LeaveSummary = {
     doctorLinkId?: string;
   };
   pending: LeaveRequestRow[];
+  history?: LeaveRequestRow[];
   balances: LeaveBalanceRow[];
   stats: {
     weeklyPattern: number[];
@@ -1149,6 +1762,8 @@ export type WfhRequest = {
   id: string;
   hospitalId: number;
   doctorId: string;
+  employeeId?: string;
+  employeeName?: string;
   fromDate: string;
   toDate: string;
   days: number;
@@ -1166,5 +1781,192 @@ export function requestWorkFromHome(body: {
   return request<WfhRequest>("/api/hrm/wfh", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export type AttendanceLog = {
+  id: string;
+  employeeId?: string;
+  employeeName?: string;
+  attendanceDate: string;
+  inTime?: string | null;
+  outTime?: string | null;
+  totalHours?: number | null;
+  status?: string;
+  source?: string;
+};
+
+export type AttendanceBoard = {
+  today: string;
+  employeeId: string;
+  employeeName?: string;
+  inTime?: string | null;
+  outTime?: string | null;
+  status?: string | null;
+  totalHours?: number | null;
+  canClockIn: boolean;
+  canClockOut: boolean;
+  logs: AttendanceLog[];
+};
+
+export function getAttendanceBoard() {
+  return request<AttendanceBoard>("/api/hrm/attendance");
+}
+
+export function clockIn() {
+  return request<AttendanceLog>("/api/hrm/attendance/clock-in", {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export function clockOut() {
+  return request<AttendanceLog>("/api/hrm/attendance/clock-out", {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export type HrmHomePerson = {
+  name: string;
+  initials: string;
+  dateOfBirth?: string;
+  daysUntil?: number;
+};
+
+export type HrmHomeHoliday = {
+  id?: string;
+  name: string;
+  date: string;
+  day?: string;
+  reason?: string;
+};
+
+export type HrmPostComment = {
+  id: string;
+  postId: string;
+  userId: string;
+  userName?: string;
+  body: string;
+  createdAt?: string;
+};
+
+export type HrmHomeAnnouncement = {
+  id: string;
+  title: string;
+  body: string;
+  likes?: number;
+  comments?: number;
+  likedByMe?: boolean;
+  author?: string;
+  createdAt?: string;
+  commentItems?: HrmPostComment[];
+};
+
+export type HrmHomeFeed = {
+  today: string;
+  inboxPendingCount: number;
+  holidays: HrmHomeHoliday[];
+  onLeaveToday: HrmHomePerson[];
+  workingRemotely: HrmHomePerson[];
+  attendance: AttendanceBoard;
+  leaveBalances: LeaveBalanceRow[];
+  departments: { id: string; name: string }[];
+  announcements: HrmHomeAnnouncement[];
+  birthdaysToday: HrmHomePerson[];
+  upcomingBirthdays: HrmHomePerson[];
+  workAnniversaryCount: number;
+  newJoineeCount: number;
+};
+
+export function getHrmHome() {
+  return request<HrmHomeFeed>("/api/hrm/home");
+}
+
+export function createHrmPost(body: { body: string; title?: string }) {
+  return request<HrmHomeAnnouncement>("/api/hrm/posts", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function likeHrmPost(id: string) {
+  return request<HrmHomeAnnouncement>(`/api/hrm/posts/${id}/like`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export function commentHrmPost(id: string, body: string) {
+  return request<HrmHomeAnnouncement>(`/api/hrm/posts/${id}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
+export type HrmRights = {
+  hospitalId: number;
+  userId: string;
+  fromSettings: boolean;
+  rights: string[];
+  canApprove: boolean;
+  canManageHolidays?: boolean;
+  catalog: string[];
+};
+
+export function getHrmRights() {
+  return request<HrmRights>("/api/hrm/rights");
+}
+
+export type HrmHoliday = {
+  id: string;
+  name: string;
+  date: string;
+  day: string;
+  reason?: string;
+};
+
+export function getHrmHolidays() {
+  return request<HrmHoliday[]>("/api/hrm/holidays");
+}
+
+export function createHrmHoliday(body: { date: string; reason: string }) {
+  return request<HrmHoliday>("/api/hrm/holidays", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteHrmHoliday(id: string) {
+  return request<void>(`/api/hrm/holidays/${id}`, { method: "DELETE" });
+}
+
+export function grantHrmRights(userId: string, rights: string[]) {
+  return request<{ userId: string; rights: string[] }>("/api/hrm/rights", {
+    method: "PUT",
+    body: JSON.stringify({ userId, rights }),
+  });
+}
+
+export type ApproverPending = {
+  leave: LeaveRequestRow[];
+  wfh: WfhRequest[];
+};
+
+export function getApproverPending() {
+  return request<ApproverPending>("/api/hrm/approver/pending");
+}
+
+export function decideApproverLeave(id: string, status: string, remarks?: string) {
+  return request<LeaveRequestRow>(`/api/hrm/approver/leave/${id}/decide`, {
+    method: "POST",
+    body: JSON.stringify({ status, remarks }),
+  });
+}
+
+export function decideApproverWfh(id: string, status: string) {
+  return request<WfhRequest>(`/api/hrm/approver/wfh/${id}/decide`, {
+    method: "POST",
+    body: JSON.stringify({ status }),
   });
 }

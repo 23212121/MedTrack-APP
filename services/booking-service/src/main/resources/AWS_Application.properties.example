@@ -1,0 +1,21 @@
+# =============================================================================
+# AWS_Application.properties.example
+# Copy to AWS_Application.properties and fill in your own keys.
+# Do not commit AWS_Application.properties (see .gitignore).
+# =============================================================================
+
+aws.s3.enabled=false
+
+aws.s3.bucket=your-bucket-name
+aws.s3.account-id=
+aws.s3.access-point-name=
+aws.s3.access-point-arn=
+aws.s3.access-point-alias=
+aws.s3.region=ap-south-1
+
+aws.s3.access-key=
+aws.s3.secret-key=
+
+aws.s3.prefix=patient-documents
+aws.s3.endpoint=
+aws.s3.path-style-access=false

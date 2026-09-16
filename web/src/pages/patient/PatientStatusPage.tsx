@@ -5,9 +5,13 @@ import {
   LiveQueueStatus,
   PatientQueueStatusResponse,
 } from "../../api";
+import { useCareChatUnread } from "../../careChatUnread";
+import CareChatWindow from "../../components/CareChatWindow";
+import ChatLink from "../../components/ChatLink";
 import PatientBookingDetails from "../../components/PatientBookingDetails";
 import PatientQueueStatusView from "../../components/PatientQueueStatusView";
 import { getPatientId, getPatientPhone } from "../../auth";
+import { session } from "../../dl/MedTrackSession";
 
 function localTodayIso() {
   const d = new Date();
@@ -79,6 +83,7 @@ export default function PatientStatusPage() {
   const [status, setStatus] = useState<PatientQueueStatusResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [chatAppt, setChatAppt] = useState<BookingSummary | null>(null);
 
   const load = useCallback(async () => {
     if (!phone && !patientId) return;
@@ -126,6 +131,11 @@ export default function PatientStatusPage() {
     return () => window.clearInterval(id);
   }, [load]);
 
+  const unread = useCareChatUnread(
+    appointments.map((appt) => appt.id),
+    "PATIENT",
+  );
+
   useEffect(() => {
     const onFocus = () => load();
     window.addEventListener("focus", onFocus);
@@ -152,36 +162,38 @@ export default function PatientStatusPage() {
         {appointments.length === 0 && !loading ? (
           <p className="lead">No upcoming appointments.</p>
         ) : (
-          <ul className="patient-appointment-list">
-            {appointments.map((appt) => {
-              const isToday = appt.appointmentDate === today;
-              const isActive = status?.booking?.id === appt.id;
-              return (
-                <li
-                  key={appt.id}
-                  className={`patient-appointment-item${isToday ? " patient-appointment-item--today" : ""}${isActive ? " patient-appointment-item--active" : ""}`}
-                >
-                  <div className="patient-booking-card">
-                    <div className="patient-appt-status-row">
-                      <strong>{appt.doctorName || appt.doctorId}</strong>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Token</th>
+                  <th>Doctor</th>
+                  <th>Hospital</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Chat</th>
+                </tr>
+              </thead>
+              <tbody>
+                {appointments.map((appt) => (
+                  <tr key={appt.id}>
+                    <td>{appt.tokenNumber ?? "—"}</td>
+                    <td>{appt.doctorName || appt.doctorId}</td>
+                    <td>{appt.hospitalName || "—"}</td>
+                    <td>{appt.appointmentDate}</td>
+                    <td>
                       <span className={statusClass(appt.appointmentStatus || appt.status)}>
                         {appointmentStatusLabel(appt.appointmentStatus || appt.status)}
                       </span>
-                      {appt.tokenNumber != null && (
-                        <span className="patient-appt-token-tag">
-                          Token # {appt.tokenNumber}
-                        </span>
-                      )}
-                      {isToday && (
-                        <span className="patient-appt-today-tag">Today</span>
-                      )}
-                    </div>
-                    <PatientBookingDetails appt={appt} compactHeader />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                    </td>
+                    <td>
+                      <ChatLink unread={unread[appt.id] ?? 0} onClick={() => setChatAppt(appt)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -213,6 +225,17 @@ export default function PatientStatusPage() {
           <h2>Today&apos;s appointment details</h2>
           <PatientBookingDetails appt={todayAppointment} />
         </section>
+      )}
+      {chatAppt && phone && (
+        <CareChatWindow
+          appointmentId={chatAppt.id}
+          title={`${chatAppt.hospitalName || "Hospital"} · ${chatAppt.doctorName || "Doctor"}`}
+          subtitle={`Token ${chatAppt.tokenNumber ?? "—"} · chat with hospital and doctor`}
+          senderType="PATIENT"
+          senderName={session.getPatientName() || chatAppt.patientName || "Patient"}
+          phone={phone}
+          onClose={() => setChatAppt(null)}
+        />
       )}
     </div>
   );

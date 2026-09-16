@@ -54,10 +54,10 @@ async function fileToStoredValue(file: File | undefined): Promise<string> {
 
 function Field({ label, children, optional }: { label: string; children: ReactNode; optional?: boolean }) {
   return (
-    <label>
+    <div className="field-block">
       {label}{optional ? " (optional)" : ""}
       {children}
-    </label>
+    </div>
   );
 }
 

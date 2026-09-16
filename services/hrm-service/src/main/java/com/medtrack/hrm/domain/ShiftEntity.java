@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = "hrm_shifts", uniqueConstraints = {
+@Table(schema = "svc", name = "hrm_shifts", uniqueConstraints = {
     @UniqueConstraint(name = "uk_hrm_shift_name_doctor", columnNames = {"doctor_id", "name"})
 })
 public class ShiftEntity extends AuditableEntity {

@@ -36,8 +36,11 @@ public class DocumentController {
     DocumentEntity saved =
         service.upload(hospitalId, patientName, aadhaarNumber, phoneNumber, files, userHeader);
     Map<String, Object> out = new LinkedHashMap<>();
-    out.put("message", "Patient test documents uploaded");
+    out.put("message", "Documents saved");
     out.put("document", service.toMap(saved));
+    out.put("s3Path", saved.getFilePath());
+    out.put("s3Uploaded", saved.getDestinationPath() != null && saved.getDestinationPath().startsWith("s3://"));
+    out.put("aadhaarNumber", saved.getAadhaarNumber());
     return out;
   }
 

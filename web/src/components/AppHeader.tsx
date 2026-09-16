@@ -7,12 +7,15 @@ type Props = {
   showMenuButton?: boolean;
   /** Compact page title shown next to logo on inner pages */
   pageTitle?: string;
+  /** When set, show × Close instead of Logout (public popups). */
+  closeTo?: string;
 };
 
 export default function AppHeader({
   onMenuClick,
   showMenuButton = false,
   pageTitle,
+  closeTo,
 }: Props) {
   const loggedIn = isLoggedIn();
   const patient = isPatientLoggedIn();
@@ -20,8 +23,9 @@ export default function AppHeader({
     (patient ? session.getPatientName() : null) ||
     session.getUsername() ||
     "";
-  const homeTo = patient ? "/patient" : loggedIn ? "/" : "/login";
-  const profileTo = patient ? "/patient/profile" : loggedIn ? "/" : "/login";
+  const medical = session.isMedical();
+  const homeTo = patient ? "/patient" : medical ? "/medical" : loggedIn ? "/" : "/login";
+  const profileTo = patient ? "/patient/profile" : medical ? "/medical" : loggedIn ? "/" : "/login";
   const logoutTo = patient ? "/patient/logout" : "/logout";
 
   return (
@@ -68,9 +72,15 @@ export default function AppHeader({
               <Link to={profileTo} className="app-header-link">
                 Profile
               </Link>
-              <Link to={logoutTo} className="app-header-btn app-header-btn--ghost">
-                Logout
-              </Link>
+              {closeTo ? (
+                <Link to={closeTo} className="app-header-btn app-header-btn--ghost" aria-label="Close">
+                  × Close
+                </Link>
+              ) : (
+                <Link to={logoutTo} className="app-header-btn app-header-btn--ghost">
+                  Logout
+                </Link>
+              )}
             </>
           ) : (
             <>

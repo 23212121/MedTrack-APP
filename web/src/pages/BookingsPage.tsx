@@ -9,6 +9,7 @@ import {
   HospitalRegistrationSummary,
 } from "../api";
 import { session } from "../dl/MedTrackSession";
+import { toast } from "../toast";
 
 function todayYmd() {
   const d = new Date();
@@ -111,7 +112,6 @@ export default function BookingsPage({
   );
   const [form, setForm] = useState(publicMode ? blankPublicForm : emptyForm);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
   const [loadingHospitals, setLoadingHospitals] = useState(false);
@@ -305,7 +305,24 @@ export default function BookingsPage({
     setAvailNote("");
     try {
       const data = await api.availableDays(doctorId, from, to);
-      setAvailDays(data.days || []);
+      const days = data.days || [];
+      setAvailDays(days);
+      setForm((prev) => {
+        if (!prev.appointmentDate) return prev;
+        const picked = days.find((d) => d.date === prev.appointmentDate);
+        if (picked && !picked.available) {
+          setDateWarning(
+            unavailableMessage(
+              prev.doctorName,
+              prev.appointmentDate,
+              picked.summary,
+              (data.availableDates || []).filter((d) => d !== prev.appointmentDate),
+            ),
+          );
+          return { ...prev, appointmentDate: "" };
+        }
+        return prev;
+      });
       if (!data.hasWeeklySchedule) {
         setAvailNote(
           "No weekly schedule set for this doctor yet — availability may show as Off."
@@ -432,6 +449,7 @@ export default function BookingsPage({
     );
     if (!result.ok) {
       setDateWarning(result.message);
+      setField("appointmentDate", "");
     }
   }
 
@@ -444,7 +462,6 @@ export default function BookingsPage({
 
     setSaving(true);
     setError("");
-    setMessage("");
     setDateWarning("");
     try {
       const availability = await checkAppointmentDateAvailable(
@@ -480,7 +497,7 @@ export default function BookingsPage({
           : session.getUsername() || "HOSPITAL",
       };
       const res = await api.createBooking(body);
-      setMessage(
+      toast.success(
         `${res.message}. Token # ${res.booking.tokenNumber} for ${res.booking.patientName}. SMS confirmation queued${
           form.patientEmail.trim()
             ? `; email will be sent to ${form.patientEmail.trim()} if SMTP is configured`
@@ -521,7 +538,6 @@ export default function BookingsPage({
   return (
     <section className={publicMode ? "patient-booking-form" : undefined}>
       {error && <div className="msg error">{error}</div>}
-      {message && <div className="msg ok">{message}</div>}
 
       <form className={publicMode ? "stack" : "panel stack"} onSubmit={onSubmit}>
         {!publicMode && (
@@ -761,7 +777,13 @@ export default function BookingsPage({
               min={todayYmd()}
               onChange={(e) => void onAppointmentDateChange(e.target.value)}
               required
+              aria-invalid={!!dateWarning}
             />
+            {availDays.some((d) => !d.available) && (
+              <span className="muted" style={{ display: "block", marginTop: "0.35rem" }}>
+                Grey / disabled days above cannot be booked (doctor is busy).
+              </span>
+            )}
           </label>
           <label>
             <span>

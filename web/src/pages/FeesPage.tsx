@@ -1,12 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, DOCTOR_ID, FeeRule } from "../api";
+import { toast } from "../toast";
 
 export default function FeesPage() {
   const [rule, setRule] = useState<FeeRule | null>(null);
   const [minutes, setMinutes] = useState(40);
   const [preview, setPreview] = useState<Record<string, number | string> | null>(null);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
 
   async function load() {
     setError("");
@@ -24,12 +24,11 @@ export default function FeesPage() {
   async function onSave(e: FormEvent) {
     e.preventDefault();
     if (!rule) return;
-    setMessage("");
     setError("");
     try {
       const saved = await api.saveFees(DOCTOR_ID, rule);
       setRule(saved);
-      setMessage("Fee rules saved. Overtime applies after fixed consult minutes.");
+      toast.success("Fee rules saved. Overtime applies after fixed consult minutes.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     }
@@ -54,7 +53,6 @@ export default function FeesPage() {
         and trigger SMS/email when the visit completes.
       </p>
       {error && <div className="msg error">{error}</div>}
-      {message && <div className="msg ok">{message}</div>}
       <div className="grid-2">
         {rule && (
           <form className="panel stack" onSubmit={onSave}>

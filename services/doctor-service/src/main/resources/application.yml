@@ -22,3 +22,17 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 30MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+info:
+  app:
+    name: doctor-service
+    port: 8085

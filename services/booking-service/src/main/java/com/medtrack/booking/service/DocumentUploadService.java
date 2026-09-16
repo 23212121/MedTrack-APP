@@ -15,6 +15,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class DocumentUploadService {
+  private static final Logger log = LoggerFactory.getLogger(DocumentUploadService.class);
   private static final int MAX_FILES = 5;
   private static final String DEFAULT_DOC_TYPE = "TEST";
 
@@ -51,6 +54,18 @@ public class DocumentUploadService {
       String phoneNumber,
       MultipartFile[] files,
       String creationUser) {
+    return upload(hospitalId, patientName, aadhaarNumber, phoneNumber, files, creationUser, DEFAULT_DOC_TYPE);
+  }
+
+  @Transactional
+  public DocumentEntity upload(
+      Long hospitalId,
+      String patientName,
+      String aadhaarNumber,
+      String phoneNumber,
+      MultipartFile[] files,
+      String creationUser,
+      String documentType) {
     if (hospitalId == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Hospital id is required");
     }
@@ -67,7 +82,8 @@ public class DocumentUploadService {
     }
 
     String docId = UUID.randomUUID().toString();
-    Path destDir = uploadRoot.resolve("hospital-" + hospitalId).resolve(docId);
+    // Local mirror: uploads/.../aadhaar/{aadhaar}/{docId}/
+    Path destDir = uploadRoot.resolve("aadhaar").resolve(aadhaar).resolve(docId);
     try {
       Files.createDirectories(destDir);
     } catch (IOException ex) {
@@ -92,27 +108,42 @@ public class DocumentUploadService {
             HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save file: " + original);
       }
 
-      String s3Key = s3.objectKey(hospitalId, docId, stored);
-      Optional<String> uploaded =
-          s3.upload(s3Key, new java.io.ByteArrayInputStream(bytes), bytes.length, file.getContentType());
-      if (uploaded.isPresent()) {
-        storedKeys.add(uploaded.get());
-        anyS3 = true;
+      String s3Key = s3.objectKey(aadhaar, docId, stored);
+      if (s3.isEnabled()) {
+        try {
+          Optional<String> uploaded =
+              s3.upload(
+                  s3Key,
+                  new java.io.ByteArrayInputStream(bytes),
+                  bytes.length,
+                  file.getContentType());
+          if (uploaded.isEmpty()) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_GATEWAY, "Could not upload file to Amazon S3");
+          }
+          storedKeys.add(uploaded.get());
+          anyS3 = true;
+        } catch (ResponseStatusException ex) {
+          throw ex;
+        } catch (RuntimeException ex) {
+          log.error("Amazon S3 PutObject failed for {}: {}", s3Key, ex.getMessage());
+          throw new ResponseStatusException(
+              HttpStatus.BAD_GATEWAY, "Could not upload file to Amazon S3", ex);
+        }
       } else {
-        // Fallback: keep local filename; download will use local path
-        storedKeys.add(stored);
+        storedKeys.add(target.toString());
       }
       originalNames.add(original);
     }
 
-    String destination =
-        anyS3
-            ? "s3://" + s3.getBucket() + "/" + s3.objectKey(hospitalId, docId, "").replaceAll("/$", "")
-            : destDir.toString();
-    String filePath =
-        anyS3
-            ? s3.objectKey(hospitalId, docId, "").replaceAll("/$", "")
-            : destDir.toString();
+    String folderKey = s3.objectKey(aadhaar, docId, "").replaceAll("/$", "");
+    String logicalBucket =
+        s3.getBucketName() != null && !s3.getBucketName().isBlank()
+            ? s3.getBucketName()
+            : s3.getBucket();
+    String destination = anyS3 ? "s3://" + logicalBucket + "/" + folderKey : destDir.toString();
+    // file_path stores Aadhaar-based S3 folder (or local path) for downloads
+    String filePath = anyS3 ? folderKey : destDir.toString();
 
     DocumentEntity row = new DocumentEntity();
     row.setId(docId);
@@ -120,7 +151,10 @@ public class DocumentUploadService {
     row.setAadhaarNumber(aadhaar);
     row.setHospitalId(hospitalId);
     row.setPhoneNumber(phone);
-    row.setDocumentType(DEFAULT_DOC_TYPE);
+    String type =
+        documentType == null || documentType.isBlank() ? DEFAULT_DOC_TYPE : documentType.trim().toUpperCase(Locale.ROOT);
+    if (type.length() > 64) type = type.substring(0, 64);
+    row.setDocumentType(type);
     row.setDestinationPath(destination);
     row.setFilePath(filePath);
     row.setSourcePath(String.join(" | ", originalNames));
@@ -364,19 +398,24 @@ public class DocumentUploadService {
     // If S3 key was stored, map to local filename (last segment)
     String fileName = stored.contains("/") ? stored.substring(stored.lastIndexOf('/') + 1) : stored;
     String dest = doc.getDestinationPath();
-    Path base;
-    if (dest != null && dest.startsWith("s3://")) {
-      base = uploadRoot.resolve("hospital-" + doc.getHospitalId()).resolve(doc.getId());
-    } else if (dest != null && !dest.isBlank()) {
-      base = Path.of(dest).normalize();
-    } else {
-      base = uploadRoot.resolve("hospital-" + doc.getHospitalId()).resolve(doc.getId());
+    List<Path> bases = new ArrayList<>();
+    if (dest != null && !dest.isBlank() && !dest.startsWith("s3://")) {
+      bases.add(Path.of(dest).normalize());
     }
-    Path file = base.resolve(fileName).normalize();
-    if (!file.startsWith(base.normalize()) || !Files.isRegularFile(file)) {
-      return Optional.empty();
+    String aadhaar = doc.getAadhaarNumber() == null ? "" : doc.getAadhaarNumber().replaceAll("\\D", "");
+    if (!aadhaar.isBlank() && doc.getId() != null) {
+      bases.add(uploadRoot.resolve("aadhaar").resolve(aadhaar).resolve(doc.getId()));
     }
-    return Optional.of(file);
+    if (doc.getHospitalId() != null && doc.getId() != null) {
+      bases.add(uploadRoot.resolve("hospital-" + doc.getHospitalId()).resolve(doc.getId()));
+    }
+    for (Path base : bases) {
+      Path file = base.resolve(fileName).normalize();
+      if (file.startsWith(base.normalize()) && Files.isRegularFile(file)) {
+        return Optional.of(file);
+      }
+    }
+    return Optional.empty();
   }
 
   private static String slotPath(DocumentEntity doc, int slot) {

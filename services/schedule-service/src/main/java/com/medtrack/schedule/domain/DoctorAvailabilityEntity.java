@@ -9,7 +9,10 @@ public class DoctorAvailabilityEntity {
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
   private String id;
+  @Column(nullable = false)
   private String doctorId;
+  @Column(name = "hospital_id", nullable = false)
+  private Long hospitalId;
   private Instant startsAt;
   private Instant endsAt;
   private String availabilityType = "AVAILABLE";
@@ -20,6 +23,8 @@ public class DoctorAvailabilityEntity {
   public void setId(String id) { this.id = id; }
   public String getDoctorId() { return doctorId; }
   public void setDoctorId(String doctorId) { this.doctorId = doctorId; }
+  public Long getHospitalId() { return hospitalId; }
+  public void setHospitalId(Long hospitalId) { this.hospitalId = hospitalId; }
   public Instant getStartsAt() { return startsAt; }
   public void setStartsAt(Instant startsAt) { this.startsAt = startsAt; }
   public Instant getEndsAt() { return endsAt; }

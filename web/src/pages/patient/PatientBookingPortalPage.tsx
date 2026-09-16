@@ -1,7 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, Booking } from "../../api";
+import { useCareChatUnread } from "../../careChatUnread";
+import CareChatWindow from "../../components/CareChatWindow";
+import ChatLink from "../../components/ChatLink";
 import { getPatientId, getPatientPhone } from "../../auth";
+import { session } from "../../dl/MedTrackSession";
 import BookingsPage from "../BookingsPage";
+import { toast } from "../../toast";
 
 function formatInstant(iso: string) {
   try {
@@ -15,7 +20,7 @@ export default function PatientBookingPortalPage() {
   const phone = getPatientPhone();
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [chatBooking, setChatBooking] = useState<Booking | null>(null);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [rescheduleForm, setRescheduleForm] = useState({
     appointmentDate: "",
@@ -37,12 +42,17 @@ export default function PatientBookingPortalPage() {
     load();
   }, [phone]);
 
+  const unread = useCareChatUnread(
+    upcoming.map((b) => b.id),
+    "PATIENT",
+  );
+
   async function onCancel(id: string) {
     if (!phone || !window.confirm("Cancel this appointment?")) return;
     setError("");
     try {
       await api.cancelBooking(id, phone);
-      setMessage("Appointment cancelled");
+      toast.success("Appointment cancelled");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Cancel failed");
@@ -62,7 +72,7 @@ export default function PatientBookingPortalPage() {
         appointmentTime: instant,
         reason: rescheduleForm.reason || undefined,
       });
-      setMessage("Appointment rescheduled");
+      toast.success("Appointment rescheduled");
       setRescheduleId(null);
       await load();
     } catch (e) {
@@ -130,46 +140,71 @@ export default function PatientBookingPortalPage() {
       <section className="panel">
         <h2>Upcoming appointments</h2>
         {error && <div className="msg error">{error}</div>}
-        {message && <div className="msg ok">{message}</div>}
         {upcoming.length === 0 ? (
           <p className="lead">No upcoming appointments.</p>
         ) : (
-          <ul className="patient-appointment-list">
-            {upcoming.map((b) => (
-              <li key={b.id} className="patient-appointment-item">
-                <div className="patient-appointment-actions">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRescheduleId(b.id);
-                      setRescheduleForm({
-                        appointmentDate: b.appointmentDate,
-                        appointmentTime: new Date(b.appointmentTime)
-                          .toISOString()
-                          .slice(11, 16),
-                        reason: b.reason || "",
-                      });
-                    }}
-                  >
-                    Reschedule
-                  </button>
-                  <button type="button" className="btn-danger" onClick={() => onCancel(b.id)}>
-                    Cancel
-                  </button>
-                </div>
-                <div className="patient-booking-card">
-                  <strong>{b.doctorName}</strong>
-                  <p className="lead">
-                    {b.appointmentDate} · {formatInstant(b.appointmentTime)} · Token #{" "}
-                    {b.tokenNumber ?? "—"}
-                  </p>
-                  <p className="lead">Status: {b.status}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Token</th>
+                  <th>Doctor</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Chat</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {upcoming.map((b) => (
+                  <tr key={b.id}>
+                    <td>{b.tokenNumber ?? "—"}</td>
+                    <td>{b.doctorName || b.doctorId}</td>
+                    <td>
+                      {b.appointmentDate} · {formatInstant(b.appointmentTime)}
+                    </td>
+                    <td>{b.status}</td>
+                    <td>
+                      <ChatLink unread={unread[b.id] ?? 0} onClick={() => setChatBooking(b)} />
+                    </td>
+                    <td className="row">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRescheduleId(b.id);
+                          setRescheduleForm({
+                            appointmentDate: b.appointmentDate,
+                            appointmentTime: new Date(b.appointmentTime)
+                              .toISOString()
+                              .slice(11, 16),
+                            reason: b.reason || "",
+                          });
+                        }}
+                      >
+                        Reschedule
+                      </button>
+                      <button type="button" className="btn-danger" onClick={() => onCancel(b.id)}>
+                        Cancel
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
+      {chatBooking && phone && (
+        <CareChatWindow
+          appointmentId={chatBooking.id}
+          title={`${chatBooking.hospitalName || "Hospital"} · ${chatBooking.doctorName || "Doctor"}`}
+          subtitle={`Token ${chatBooking.tokenNumber ?? "—"} · chat with hospital and doctor`}
+          senderType="PATIENT"
+          senderName={session.getPatientName() || chatBooking.patientName || "Patient"}
+          phone={phone}
+          onClose={() => setChatBooking(null)}
+        />
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import PatientBookingDetails from "../components/PatientBookingDetails";
 import PatientQueueStatusView from "../components/PatientQueueStatusView";
+import { popupClosePath } from "../auth";
 import { api, BookingSummary, PatientQueueStatusResponse } from "../api";
 
 function normalizePhone(raw: string) {
@@ -96,8 +97,8 @@ export default function PatientTrackPage() {
               <code>/track?phone=982972723</code>
             </p>
           </div>
-          <Link to="/patient/login" className="patient-booking-signin">
-            Patient login
+          <Link to={popupClosePath()} className="patient-booking-signin" aria-label="Close">
+            ×
           </Link>
         </header>
 

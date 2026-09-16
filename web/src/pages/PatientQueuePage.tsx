@@ -2,11 +2,16 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
+  Appointment,
   HospitalDoctor,
   HospitalRegistrationSummary,
   QueueStatus,
 } from "../api";
-import { getHospitalId, isLoggedIn } from "../auth";
+import { useCareChatUnread, type CareChatRole } from "../careChatUnread";
+import CareChatWindow from "../components/CareChatWindow";
+import ChatLink from "../components/ChatLink";
+import { getHospitalId, isLoggedIn, popupClosePath } from "../auth";
+import { session } from "../dl/MedTrackSession";
 
 export default function PatientQueuePage() {
   const [params] = useSearchParams();
@@ -22,8 +27,17 @@ export default function PatientQueuePage() {
     params.get("tokenNo") ? Number(params.get("tokenNo")) : undefined
   );
   const [status, setStatus] = useState<QueueStatus | null>(null);
+  const [rows, setRows] = useState<Appointment[]>([]);
+  const [chatRow, setChatRow] = useState<Appointment | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const hospitalLoggedIn = isLoggedIn() && !session.isPatient();
+  const patientLoggedIn = session.isPatient();
+  const senderType: CareChatRole = patientLoggedIn ? "PATIENT" : session.isDoctor() ? "DOCTOR" : "HOSPITAL";
+  const senderName =
+    session.getUsername() ||
+    session.getPatientName() ||
+    (patientLoggedIn ? "Patient" : session.isDoctor() ? "Doctor" : "Hospital");
 
   useEffect(() => {
     api
@@ -46,6 +60,7 @@ export default function PatientQueuePage() {
   const load = useCallback(async () => {
     if (!hospitalId || !doctorId) {
       setStatus(null);
+      setRows([]);
       return;
     }
     setLoading(true);
@@ -56,6 +71,15 @@ export default function PatientQueuePage() {
           ? await api.queueStatus(hospitalId, doctorId, tokenNo)
           : await api.queueBoard(hospitalId, doctorId);
       setStatus(data);
+      try {
+        const booked = await api.appointments({
+          hospitalId: Number(hospitalId),
+          doctorId,
+        });
+        setRows(booked.appointments || []);
+      } catch {
+        setRows([]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load queue");
     } finally {
@@ -80,8 +104,32 @@ export default function PatientQueuePage() {
     setTokenNo(n);
   }
 
+  const chatAppointmentIds = rows.map((row) => row.id).filter(Boolean);
+  const unread = useCareChatUnread(chatAppointmentIds, senderType);
+
   const selectedDoctor = doctors.find((d) => d.doctorId === doctorId);
   const progressPct = status?.progress?.pct ?? 0;
+  const doctorName = status?.doctorName || selectedDoctor?.doctorName || doctorId;
+  const queueTableRows =
+    rows.length > 0
+      ? rows.map((row) => ({
+          key: row.id,
+          appointmentId: row.id,
+          token: row.tokenNumber,
+          patientName: row.patientName,
+          doctorName: row.doctorName || doctorName,
+          status: row.status,
+          date: row.appointmentDate,
+        }))
+      : (status?.waitingPatients || []).map((p) => ({
+          key: `token-${p.token}`,
+          appointmentId: undefined as string | undefined,
+          token: p.token,
+          patientName: p.patient,
+          doctorName,
+          status: p.status,
+          date: status?.queueDate,
+        }));
 
   return (
     <div className="patient-queue-backdrop">
@@ -95,8 +143,8 @@ export default function PatientQueuePage() {
               and who is with the doctor now.
             </p>
           </div>
-          <Link to="/login" className="patient-booking-signin">
-            Staff sign in
+          <Link to={popupClosePath()} className="patient-booking-signin" aria-label="Close">
+            ×
           </Link>
         </header>
 
@@ -303,18 +351,65 @@ export default function PatientQueuePage() {
               </div>
             )}
 
-            {status?.waitingPatients && status.waitingPatients.length > 0 && (
-              <div className="patient-queue-section">
-                <h2>Waiting list</h2>
-                <ul className="patient-queue-list">
-                  {status.waitingPatients.map((p) => (
-                    <li key={p.token}>
-                      Token {p.token} — {p.patient} ({p.status})
-                    </li>
-                  ))}
-                </ul>
+            <div className="patient-queue-section">
+              <h2>Patient queue</h2>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Token</th>
+                      <th>Patient name</th>
+                      <th>Doctor</th>
+                      <th>Status</th>
+                      <th>Date</th>
+                      <th>Chat</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {queueTableRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="muted">
+                          No patients in this queue yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      queueTableRows.map((row) => (
+                        <tr key={row.key}>
+                          <td>{row.token ?? "—"}</td>
+                          <td>{row.patientName}</td>
+                          <td>{row.doctorName}</td>
+                          <td>{row.status}</td>
+                          <td>{row.date || "—"}</td>
+                          <td>
+                            {row.appointmentId && (hospitalLoggedIn || patientLoggedIn) ? (
+                              <ChatLink
+                                unread={unread[row.appointmentId] ?? 0}
+                                onClick={() =>
+                                  setChatRow({
+                                    id: row.appointmentId as string,
+                                    doctorId,
+                                    patientId: "",
+                                    patientName: row.patientName,
+                                    appointmentDate: row.date || "",
+                                    appointmentTime: "",
+                                    status: row.status,
+                                    createdDate: "",
+                                  })
+                                }
+                              />
+                            ) : (
+                              <Link className="chat-link" to={patientLoggedIn ? "/patient/chat" : "/patient/login"}>
+                                Chat
+                              </Link>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
+            </div>
 
             <p className="lead" style={{ marginBottom: 0, fontSize: "0.85rem" }}>
               Auto-refreshes every 30 seconds.
@@ -323,6 +418,17 @@ export default function PatientQueuePage() {
           </>
         )}
       </section>
+      {chatRow && (
+        <CareChatWindow
+          appointmentId={chatRow.id}
+          title={`${chatRow.patientName} · ${chatRow.doctorName || doctorName}`}
+          subtitle={`Token ${chatRow.tokenNumber ?? "—"} · chat with hospital and doctor`}
+          senderType={senderType}
+          senderName={senderName}
+          phone={patientLoggedIn ? session.getPatientPhone() : undefined}
+          onClose={() => setChatRow(null)}
+        />
+      )}
     </div>
   );
 }

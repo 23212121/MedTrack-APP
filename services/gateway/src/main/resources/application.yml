@@ -6,3 +6,21 @@ medtrack:
   visit-url: http://localhost:8082
   notify-url: http://localhost:8083
   booking-url: http://localhost:8084
+
+spring:
+  application:
+    name: gateway
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+info:
+  app:
+    name: gateway
+    port: 8090

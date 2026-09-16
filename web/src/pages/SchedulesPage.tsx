@@ -1,66 +1,140 @@
-import { FormEvent, useEffect, useState } from "react";
-import { api, DOCTOR_ID, ScheduleSlot } from "../api";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { api, SchedulePerson, ScheduleSlot } from "../api";
+import PeopleMultiSelect from "../components/PeopleMultiSelect";
+import { session } from "../dl/MedTrackSession";
+import { loadHospitalPeople } from "../peopleRoster";
+import { toast } from "../toast";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 type Row = { dayOfWeek: number; startTime: string; endTime: string; slotMinutes: number };
 
+function emptyRow(): Row {
+  return { dayOfWeek: 1, startTime: "09:00", endTime: "13:00", slotMinutes: 15 };
+}
+
+function slotsToRows(schedules: ScheduleSlot[]): Row[] {
+  return schedules.map((s) => ({
+    dayOfWeek: s.dayOfWeek,
+    startTime: s.startTime,
+    endTime: s.endTime,
+    slotMinutes: s.slotMinutes,
+  }));
+}
+
 export default function SchedulesPage() {
+  const [people, setPeople] = useState<SchedulePerson[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loadingPeople, setLoadingPeople] = useState(true);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  async function load() {
-    setLoading(true);
+  const selectedPeople = useMemo(
+    () => people.filter((p) => selectedIds.includes(p.id)),
+    [people, selectedIds],
+  );
+
+  async function loadPeople() {
+    setLoadingPeople(true);
     setError("");
     try {
-      const data = await api.weekly(DOCTOR_ID);
-      setRows(
-        data.schedules.map((s: ScheduleSlot) => ({
-          dayOfWeek: s.dayOfWeek,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          slotMinutes: s.slotMinutes,
-        }))
-      );
+      setPeople(await loadHospitalPeople());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load schedules");
+      setPeople([]);
+      setError(e instanceof Error ? e.message : "Failed to load doctors and staff");
     } finally {
-      setLoading(false);
+      setLoadingPeople(false);
+    }
+  }
+
+  async function loadSlotsFor(ids: string[]) {
+    if (ids.length !== 1) return;
+    setLoadingSlots(true);
+    setError("");
+    try {
+      const data = await api.weekly(ids[0]);
+      const next = slotsToRows(data.schedules ?? []);
+      setRows(next.length ? next : [emptyRow()]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load schedule");
+    } finally {
+      setLoadingSlots(false);
     }
   }
 
   useEffect(() => {
-    load();
+    void loadPeople();
   }, []);
 
+  function togglePerson(id: string) {
+    setSelectedIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      if (next.length === 1) {
+        void loadSlotsFor(next);
+      } else if (next.length === 0) {
+        setRows([]);
+      } else if (rows.length === 0) {
+        setRows([emptyRow()]);
+      }
+      return next;
+    });
+  }
+
   function addRow() {
-    setRows((r) => [...r, { dayOfWeek: 1, startTime: "09:00", endTime: "13:00", slotMinutes: 15 }]);
+    setRows((r) => [...r, emptyRow()]);
   }
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
-    setMessage("");
     setError("");
+    if (selectedIds.length === 0) {
+      setError("Select at least one doctor or staff member.");
+      return;
+    }
+    if (rows.length === 0) {
+      setError("Add at least one time window.");
+      return;
+    }
+    setSaving(true);
     try {
-      await api.saveWeekly(DOCTOR_ID, rows);
-      setMessage("Weekly schedule saved.");
-      await load();
+      const hospitalId = session.getHospitalId();
+      const payload = rows.map((row) => ({
+        ...row,
+        hospitalId: hospitalId ? Number(hospitalId) : undefined,
+      }));
+      try {
+        await api.saveWeeklyBatch(selectedIds, payload, hospitalId || undefined);
+      } catch {
+        await Promise.all(selectedIds.map((id) => api.saveWeekly(id, payload)));
+      }
+      const names = selectedPeople.map((p) => p.name).join(", ");
+      toast.success(`Weekly schedule saved for ${names}.`);
+      if (selectedIds.length === 1) await loadSlotsFor(selectedIds);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
     <section>
       <h1>Doctor schedules</h1>
-      <p className="lead">Weekly working hours for Dr. Mehta. Slots drive booking and the busy chart.</p>
       {error && <div className="msg error">{error}</div>}
-      {message && <div className="msg ok">{message}</div>}
-      <form className="panel" onSubmit={onSave}>
-        {loading ? (
-          <p>Loading…</p>
+
+      <form className="panel stack" onSubmit={onSave}>
+        <PeopleMultiSelect
+          people={people}
+          selectedIds={selectedIds}
+          onToggle={togglePerson}
+          loading={loadingPeople}
+          label="Doctors and staff"
+        />
+
+        {loadingSlots ? (
+          <p>Loading schedule…</p>
         ) : (
           <table className="table">
             <thead>
@@ -137,6 +211,15 @@ export default function SchedulesPage() {
                   </td>
                 </tr>
               ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="muted">
+                    {selectedIds.length === 0
+                      ? "Select a doctor or staff member, then add a time window."
+                      : "No windows yet. Click Add window."}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}
@@ -144,7 +227,9 @@ export default function SchedulesPage() {
           <button type="button" className="secondary" onClick={addRow}>
             Add window
           </button>
-          <button type="submit">Save schedule</button>
+          <button type="submit" disabled={saving || selectedIds.length === 0}>
+            {saving ? "Saving…" : "Save schedule"}
+          </button>
         </div>
       </form>
     </section>

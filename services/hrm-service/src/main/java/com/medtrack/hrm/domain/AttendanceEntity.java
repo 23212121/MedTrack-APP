@@ -6,7 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = "hrm_attendance", uniqueConstraints = {
+@Table(schema = "svc", name = "hrm_attendance", uniqueConstraints = {
     @UniqueConstraint(name = "uk_hrm_att_emp_date", columnNames = {"employee_id", "attendance_date", "doctor_id"})
 })
 public class AttendanceEntity extends AuditableEntity {

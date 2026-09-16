@@ -15,20 +15,20 @@ export function isPatientLoggedIn(): boolean {
   return session.isPatient();
 }
 
-export function getPatientPhone(): string {
-  return session.getPatientPhone();
-}
-
-export function getPatientId(): string {
-  return session.getPatientId();
-}
-
 export function getSession(): MedTrackSessionData | null {
   return session.get();
 }
 
 export function getHospitalId(): string {
   return session.getHospitalId();
+}
+
+export function getPatientPhone(): string {
+  return session.getPatientPhone();
+}
+
+export function getPatientId(): string {
+  return session.getPatientId();
 }
 
 export function checkAuth(username: string, password: string): boolean {
@@ -45,9 +45,11 @@ export function login(
     loginType?: string;
     userId?: string;
     role?: string;
+    accessToken?: string;
     patientPhone?: string;
     patientName?: string;
     patientId?: string;
+    medicalStoreId?: string;
   },
 ): void {
   session.login({
@@ -59,9 +61,11 @@ export function login(
     loginType: extras?.loginType,
     userId: extras?.userId,
     role: extras?.role,
+    accessToken: extras?.accessToken,
     patientId: extras?.patientId,
     patientPhone: extras?.patientPhone,
     patientName: extras?.patientName,
+    medicalStoreId: extras?.medicalStoreId,
   });
 }
 
@@ -75,16 +79,24 @@ export const PUBLIC_PATHS = new Set([
   "/logout",
   "/forgot-password",
   "/hospital-register",
-  "/book", // patient booking — no login required
-  "/queue", // patient queue board — no login required
-  "/track", // track appointment by mobile — no login required
-  "/download-file", // download a direct file URL
+  "/book",
+  "/queue",
+  "/track",
+  "/download-file",
   "/patient/login",
   "/patient/register",
 ]);
 
 export function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;
-  // /book/10001 style share links
-  return pathname.startsWith("/book/");
+  if (pathname.startsWith("/book/")) return true;
+  return false;
+}
+
+/** Where an X close on a public popup should return. */
+export function popupClosePath(): string {
+  if (isPatientLoggedIn()) return "/patient";
+  if (session.isMedical()) return "/medical";
+  if (isLoggedIn()) return "/";
+  return "/login";
 }

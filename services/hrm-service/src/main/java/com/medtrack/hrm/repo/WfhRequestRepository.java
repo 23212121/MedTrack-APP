@@ -7,4 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface WfhRequestRepository extends JpaRepository<WfhRequestEntity, String> {
   List<WfhRequestEntity> findByHospitalIdAndDoctorIdOrderByCreationDateDesc(
       Long hospitalId, String doctorId);
+
+  List<WfhRequestEntity> findByHospitalIdAndStatusOrderByCreationDateDesc(
+      Long hospitalId, String status);
 }

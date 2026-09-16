@@ -29,4 +29,7 @@ public interface AppointmentRepository extends JpaRepository<AppointmentEntity, 
 
   long countByHospitalIdAndDoctorIdAndAppointmentDateAndStatusNot(
       Long hospitalId, String doctorId, LocalDate date, String status);
+
+  long countByHospitalIdAndDoctorIdAndAppointmentDateAndStatus(
+      Long hospitalId, String doctorId, LocalDate date, String status);
 }

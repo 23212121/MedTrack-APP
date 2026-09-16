@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "hrm_payslips", uniqueConstraints = {
+@Table(schema = "svc", name = "hrm_payslips", uniqueConstraints = {
     @UniqueConstraint(name = "uk_hrm_payslip", columnNames = {"employee_id", "pay_month", "pay_year", "doctor_id"})
 })
 public class PayslipEntity extends AuditableEntity {

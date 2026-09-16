@@ -10,6 +10,7 @@ import com.medtrack.booking.event.BookingCreatedEvent;
 import com.medtrack.booking.repo.AppointmentRepository;
 import com.medtrack.booking.repo.BookingRepository;
 import com.medtrack.booking.repo.PatientRepository;
+import com.medtrack.common.port.DoctorBusyPort;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -18,6 +19,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ public class BookingAppService {
   private final AppointmentEnrichmentService enrichment;
   private final UserRegistrationService userRegistrationService;
   private final ApplicationEventPublisher events;
+  private final DoctorBusyPort doctorBusyPort;
 
   public BookingAppService(
       BookingRepository bookingRepo,
@@ -43,7 +46,8 @@ public class BookingAppService {
       AppointmentAppService appointmentService,
       AppointmentEnrichmentService enrichment,
       UserRegistrationService userRegistrationService,
-      ApplicationEventPublisher events) {
+      ApplicationEventPublisher events,
+      @Lazy DoctorBusyPort doctorBusyPort) {
     this.bookingRepo = bookingRepo;
     this.patientRepo = patientRepo;
     this.appointmentRepo = appointmentRepo;
@@ -51,6 +55,7 @@ public class BookingAppService {
     this.enrichment = enrichment;
     this.userRegistrationService = userRegistrationService;
     this.events = events;
+    this.doctorBusyPort = doctorBusyPort;
   }
 
   /** GET — fetch all bookings (newest first). */
@@ -282,6 +287,14 @@ public class BookingAppService {
     String phone = req.getPatientPhone().replaceAll("\\D", "");
     if (phone.length() < 8) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid patientPhone");
+    }
+    if (doctorBusyPort != null
+        && req.getDoctorId() != null
+        && req.getAppointmentDate() != null
+        && doctorBusyPort.isBusyOnDate(req.getDoctorId(), req.getAppointmentDate())) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "Doctor is busy on " + req.getAppointmentDate() + ". Please choose another date.");
     }
 
     long existing = 0;

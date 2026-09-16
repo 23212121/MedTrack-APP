@@ -2,6 +2,7 @@
 import { Link } from "react-router-dom";
 import { api, DoctorRegistration, DoctorRegistrationBody } from "../api";
 import { session } from "../dl/MedTrackSession";
+import { toast } from "../toast";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -84,7 +85,7 @@ function Field({
   const clean = label.replace(/\s*\*$/, "").trim();
   const showRequired = !optional && (required || /\*$/.test(label.trim()));
   return (
-    <label>
+    <div className="field-block">
       <span>
         {clean}
         {showRequired ? (
@@ -95,7 +96,7 @@ function Field({
         {optional ? " (optional)" : ""}
       </span>
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -116,7 +117,6 @@ export default function DoctorRegistrationPage() {
   });
   const [doctors, setDoctors] = useState<DoctorRegistration[]>([]);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function load() {
@@ -151,7 +151,6 @@ export default function DoctorRegistrationPage() {
     e.preventDefault();
     setSaving(true);
     setError("");
-    setMessage("");
     try {
       if (!form.hospitalId.trim()) {
         throw new Error("Hospital ID is required");
@@ -240,7 +239,7 @@ export default function DoctorRegistrationPage() {
         privacyPolicyAccepted: form.privacyPolicyAccepted,
       };
       const res = await api.registerDoctor(body);
-      setMessage(
+      toast.success(
         `${res.message}. Sign in with User ID ${res.doctor?.doctorId ?? form.doctorUserId} and your password (Hospital ID ${form.hospitalId}).`,
       );
       setForm({ ...emptyForm, hospitalId: sessionHospitalId });
@@ -262,7 +261,6 @@ export default function DoctorRegistrationPage() {
         Set Hospital ID, Doctor user ID, and password first — these are used for User login.
       </p>
       {error && <div className="msg error">{error}</div>}
-      {message && <div className="msg ok">{message}</div>}
 
       <form className="stack" onSubmit={onSubmit}>
         <FormBlock title="0. Login credentials">

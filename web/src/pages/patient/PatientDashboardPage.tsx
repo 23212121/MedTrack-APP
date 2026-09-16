@@ -14,10 +14,22 @@ const PORTAL_TILES = [
     text: "Live queue, your token, and wait time",
   },
   {
+    to: "/patient/chat",
+    group: "Support",
+    title: "Chat",
+    text: "Message the hospital or doctor",
+  },
+  {
     to: "/patient/reports",
     group: "Records",
     title: "Reports",
     text: "Lab reports, prescriptions, and downloads",
+  },
+  {
+    to: "/patient/medicine-orders",
+    group: "Pharmacy",
+    title: "Medicine orders",
+    text: "Upload a prescription and track the pharmacy quote",
   },
 ] as const;
 

@@ -1,6 +1,7 @@
 package com.medtrack.schedule.service;
 
 import com.medtrack.common.dto.ScheduleDayChart;
+import com.medtrack.common.port.DoctorBusyPort;
 import com.medtrack.common.port.VisitChartPort;
 import com.medtrack.schedule.domain.DoctorAvailabilityEntity;
 import com.medtrack.schedule.domain.DoctorScheduleEntity;
@@ -21,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
-public class ScheduleAppService implements ApplicationRunner {
+public class ScheduleAppService implements ApplicationRunner, DoctorBusyPort {
   private final DoctorScheduleRepository scheduleRepo;
   private final DoctorAvailabilityRepository availabilityRepo;
   private final FeeRuleRepository feeRepo;
@@ -92,15 +93,62 @@ public class ScheduleAppService implements ApplicationRunner {
     return scheduleRepo.findByDoctorIdOrderByDayOfWeekAscStartTimeAsc(doctorId);
   }
 
+  public List<DoctorScheduleEntity> hospitalWeekly(Long hospitalId, Collection<String> personIds) {
+    LinkedHashMap<String, DoctorScheduleEntity> byId = new LinkedHashMap<>();
+    if (hospitalId != null) {
+      for (DoctorScheduleEntity s :
+          scheduleRepo.findByHospitalIdOrderByDoctorIdAscDayOfWeekAscStartTimeAsc(hospitalId)) {
+        byId.put(s.getId(), s);
+      }
+    }
+    if (personIds != null && !personIds.isEmpty()) {
+      for (DoctorScheduleEntity s :
+          scheduleRepo.findByDoctorIdInOrderByDoctorIdAscDayOfWeekAscStartTimeAsc(personIds)) {
+        byId.put(s.getId(), s);
+      }
+    }
+    return new ArrayList<>(byId.values());
+  }
+
   @Transactional
   public List<DoctorScheduleEntity> replaceWeekly(String doctorId, List<WeeklySlotRequest> body) {
-    scheduleRepo.findByDoctorIdOrderByDayOfWeekAscStartTimeAsc(doctorId)
-        .forEach(scheduleRepo::delete);
+    return replaceWeekly(doctorId, null, body);
+  }
+
+  @Transactional
+  public List<DoctorScheduleEntity> replaceWeekly(
+      String doctorId, Long hospitalId, List<WeeklySlotRequest> body) {
+    List<DoctorScheduleEntity> existing =
+        scheduleRepo.findByDoctorIdOrderByDayOfWeekAscStartTimeAsc(doctorId);
+    Long fromSlots =
+        body == null
+            ? null
+            : body.stream()
+                .map(WeeklySlotRequest::hospitalId)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    Long resolvedHospital =
+        hospitalId != null
+            ? hospitalId
+            : fromSlots != null
+                ? fromSlots
+                : existing.stream()
+                    .map(DoctorScheduleEntity::getHospitalId)
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+    if (resolvedHospital == null) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Hospital ID is required to save a schedule");
+    }
+    scheduleRepo.deleteByDoctorId(doctorId);
     scheduleRepo.flush();
     List<DoctorScheduleEntity> saved = new ArrayList<>();
     for (WeeklySlotRequest req : body) {
       DoctorScheduleEntity s = new DoctorScheduleEntity();
       s.setDoctorId(doctorId);
+      s.setHospitalId(resolvedHospital);
       s.setDayOfWeek(req.dayOfWeek());
       s.setStartTime(req.startTime());
       s.setEndTime(req.endTime());
@@ -110,8 +158,46 @@ public class ScheduleAppService implements ApplicationRunner {
     return saved;
   }
 
+  @Transactional
+  public List<DoctorScheduleEntity> replaceWeeklyForMany(
+      List<String> personIds, Long hospitalId, List<WeeklySlotRequest> body) {
+    if (personIds == null || personIds.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one person");
+    }
+    List<DoctorScheduleEntity> saved = new ArrayList<>();
+    for (String personId : personIds) {
+      if (personId == null || personId.isBlank()) continue;
+      saved.addAll(replaceWeekly(personId.trim(), hospitalId, body));
+    }
+    return saved;
+  }
+
   public List<DoctorAvailabilityEntity> availability(String doctorId, Instant from, Instant to) {
-    return availabilityRepo.findByDoctorIdAndStartsAtBetweenOrderByStartsAtAsc(doctorId, from, to);
+    return availabilityRepo.findByDoctorIdAndStartsAtLessThanAndEndsAtGreaterThanOrderByStartsAtAsc(
+        doctorId, to, from);
+  }
+
+  public List<DoctorAvailabilityEntity> hospitalAvailability(
+      Long hospitalId, Collection<String> personIds, Instant from, Instant to) {
+    LinkedHashMap<String, DoctorAvailabilityEntity> byId = new LinkedHashMap<>();
+    if (hospitalId != null) {
+      for (DoctorAvailabilityEntity a :
+          availabilityRepo.findByHospitalIdAndStartsAtLessThanAndEndsAtGreaterThanOrderByStartsAtAsc(
+              hospitalId, to, from)) {
+        byId.put(a.getId(), a);
+      }
+    }
+    if (personIds != null && !personIds.isEmpty()) {
+      for (DoctorAvailabilityEntity a :
+          availabilityRepo.findByDoctorIdInAndStartsAtLessThanAndEndsAtGreaterThanOrderByStartsAtAsc(
+              personIds, to, from)) {
+        byId.put(a.getId(), a);
+      }
+      if (hospitalId != null) {
+        byId.values().removeIf(a -> !personIds.contains(a.getDoctorId()));
+      }
+    }
+    return new ArrayList<>(byId.values());
   }
 
   /**
@@ -169,14 +255,7 @@ public class ScheduleAppService implements ApplicationRunner {
                 "reason", a.getReason() == null ? type : a.getReason(),
                 "startsAt", a.getStartsAt().toString(),
                 "endsAt", a.getEndsAt().toString()));
-        // Leave covering most of the day → mark unavailable
-        if ("LEAVE".equals(type) || "UNAVAILABLE".equals(type)) {
-          Instant bs = a.getStartsAt().isBefore(dayStart) ? dayStart : a.getStartsAt();
-          Instant be = a.getEndsAt().isAfter(dayEnd) ? dayEnd : a.getEndsAt();
-          if (Duration.between(bs, be).toHours() >= 6) {
-            fullDayLeave = true;
-          }
-        }
+        fullDayLeave = true;
       }
 
       boolean available = !windows.isEmpty() && !fullDayLeave;
@@ -186,10 +265,14 @@ public class ScheduleAppService implements ApplicationRunner {
       row.put("available", available);
       row.put("windows", windows);
       row.put("blocked", blocked);
+      String busyReason =
+          blocked.isEmpty() ? "Busy / unavailable" : blocked.get(0).get("reason");
       row.put(
           "summary",
           !available
-              ? (windows.isEmpty() ? "Off / no schedule" : "On leave / unavailable")
+              ? (fullDayLeave
+                  ? busyReason
+                  : windows.isEmpty() ? "Off / no schedule" : "On leave / unavailable")
               : windows.stream()
                   .map(w -> w.get("start") + "–" + w.get("end"))
                   .reduce((a, b) -> a + ", " + b)
@@ -213,14 +296,84 @@ public class ScheduleAppService implements ApplicationRunner {
   }
 
   public DoctorAvailabilityEntity addAvailability(AvailabilityRequest body) {
+    return addAvailability(
+        body.doctorId(),
+        body.hospitalId(),
+        body.startsAt(),
+        body.endsAt(),
+        body.availabilityType(),
+        body.reason());
+  }
+
+  @Transactional
+  public List<DoctorAvailabilityEntity> addAvailabilityForMany(AvailabilityBatchRequest body) {
+    if (body.personIds() == null || body.personIds().isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one doctor");
+    }
+    List<DoctorAvailabilityEntity> saved = new ArrayList<>();
+    for (String personId : body.personIds()) {
+      if (personId == null || personId.isBlank()) continue;
+      saved.add(
+          addAvailability(
+              personId.trim(),
+              body.hospitalId(),
+              body.startsAt(),
+              body.endsAt(),
+              body.availabilityType(),
+              body.reason()));
+    }
+    if (saved.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one doctor");
+    }
+    return saved;
+  }
+
+  private DoctorAvailabilityEntity addAvailability(
+      String doctorId,
+      Long hospitalId,
+      String startsAt,
+      String endsAt,
+      String availabilityType,
+      String reason) {
+    if (doctorId == null || doctorId.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Doctor ID is required");
+    }
+    if (hospitalId == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Hospital ID is required");
+    }
+    Instant start = Instant.parse(startsAt);
+    Instant end = Instant.parse(endsAt);
+    if (!end.isAfter(start)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End date must be after start date");
+    }
     DoctorAvailabilityEntity e = new DoctorAvailabilityEntity();
-    e.setDoctorId(body.doctorId());
-    e.setStartsAt(Instant.parse(body.startsAt()));
-    e.setEndsAt(Instant.parse(body.endsAt()));
-    e.setAvailabilityType(
-        body.availabilityType() == null ? "BUSY" : body.availabilityType().toUpperCase());
-    e.setReason(body.reason());
+    e.setDoctorId(doctorId);
+    e.setHospitalId(hospitalId);
+    e.setStartsAt(start);
+    e.setEndsAt(end);
+    e.setAvailabilityType(availabilityType == null ? "BUSY" : availabilityType.toUpperCase());
+    e.setReason(reason);
     return availabilityRepo.save(e);
+  }
+
+  @Override
+  public boolean isBusyOnDate(String doctorId, LocalDate date) {
+    if (doctorId == null || doctorId.isBlank() || date == null) {
+      return false;
+    }
+    ZoneId zone = ZoneId.of("Asia/Kolkata");
+    Instant dayStart = date.atStartOfDay(zone).toInstant();
+    Instant dayEnd = date.plusDays(1).atStartOfDay(zone).toInstant();
+    List<DoctorAvailabilityEntity> blocks =
+        availabilityRepo.findByDoctorIdAndStartsAtLessThanAndEndsAtGreaterThanOrderByStartsAtAsc(
+            doctorId, dayEnd, dayStart);
+    for (DoctorAvailabilityEntity a : blocks) {
+      String type = a.getAvailabilityType() == null ? "" : a.getAvailabilityType().toUpperCase();
+      if (List.of("BUSY", "LEAVE", "BLOCKED", "UNAVAILABLE").contains(type)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public void deleteAvailability(String id) {

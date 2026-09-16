@@ -4,7 +4,7 @@ import PatientUserRegistrationModal from "../components/PatientUserRegistrationM
 import { api } from "../api";
 import { login as saveSession } from "../auth";
 
-type LoginMode = "HOSPITAL" | "USER";
+type LoginMode = "HOSPITAL" | "USER" | "MEDICAL" | "PATIENT";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -15,7 +15,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [showPatientReg, setShowPatientReg] = useState(false);
-  const [showPatientLogin, setShowPatientLogin] = useState(false);
   const [patientUserId, setPatientUserId] = useState("");
   const [patientPassword, setPatientPassword] = useState("");
   const [patientError, setPatientError] = useState("");
@@ -28,7 +27,9 @@ export default function LoginPage() {
       setError(
         mode === "HOSPITAL"
           ? "Enter hospital ID and password"
-          : "Enter user ID and password",
+          : mode === "MEDICAL"
+            ? "Enter medical store ID and password"
+            : "Enter user ID and password",
       );
       return;
     }
@@ -48,12 +49,15 @@ export default function LoginPage() {
         res.hospitalCode,
         {
           loginType: res.loginType,
-          userId: res.userId || res.doctorId,
+          userId: res.userId || res.doctorId || res.medicalStoreId,
           role: res.role,
+          accessToken: res.token,
+          medicalStoreId: res.medicalStoreId,
         },
       );
-      // Doctors land on doctor portal; hospital admins on dashboard
-      if (
+      if (res.loginType === "MEDICAL" || mode === "MEDICAL") {
+        navigate("/medical");
+      } else if (
         res.loginType === "USER" ||
         res.role === "DOCTOR" ||
         mode === "USER"
@@ -112,11 +116,8 @@ export default function LoginPage() {
 
   return (
     <>
-      <section className="panel" style={{ maxWidth: 460, margin: "2rem auto" }}>
+      <section className="panel login-popup" style={{ maxWidth: 460, margin: "2rem auto" }}>
         <h1 style={{ color: "var(--brand-dark)" }}>MedTrack Clinic</h1>
-        <p className="lead" style={{ marginBottom: "0.55rem" }}>
-          Choose how to sign in — with a hospital ID or a user ID.
-        </p>
         <p className="lead" style={{ marginBottom: "0.45rem" }}>
           <Link to="/book" style={{ textDecoration: "underline" }}>
             Book an appointment without login
@@ -132,34 +133,9 @@ export default function LoginPage() {
             Check patient queue
           </Link>
         </p>
-        <p className="lead" style={{ marginBottom: "1rem" }}>
-          <button
-            type="button"
-            className="link-button"
-            onClick={() => {
-              setShowPatientLogin(true);
-              setPatientError("");
-            }}
-          >
-            Login as Patient
-          </button>
-          {" · "}
-          <button
-            type="button"
-            className="link-button"
-            onClick={() => {
-              setMode("USER");
-              setShowPatientReg(false);
-              setShowPatientLogin(false);
-              setError("");
-              setId("");
-              setPassword("");
-            }}
-          >
-            Login as doctor
-          </button>
-        </p>
-        {error && <div className="msg error">{error}</div>}
+        {(error || (mode === "PATIENT" && patientError)) && (
+          <div className="msg error">{mode === "PATIENT" ? patientError || error : error}</div>
+        )}
 
         <div className="login-mode" role="tablist" aria-label="Login type">
           <button
@@ -170,6 +146,7 @@ export default function LoginPage() {
             onClick={() => {
               setMode("HOSPITAL");
               setError("");
+              setPatientError("");
             }}
           >
             Hospital ID
@@ -182,19 +159,95 @@ export default function LoginPage() {
             onClick={() => {
               setMode("USER");
               setError("");
+              setPatientError("");
             }}
           >
             User ID (Doctor)
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "MEDICAL"}
+            className={mode === "MEDICAL" ? "login-mode-btn is-active" : "login-mode-btn"}
+            onClick={() => {
+              setMode("MEDICAL");
+              setError("");
+              setPatientError("");
+            }}
+          >
+            Medical store
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "PATIENT"}
+            className={mode === "PATIENT" ? "login-mode-btn is-active" : "login-mode-btn"}
+            onClick={() => {
+              setMode("PATIENT");
+              setError("");
+              setPatientError("");
+            }}
+          >
+            Patient
+          </button>
         </div>
 
+        {mode === "PATIENT" ? (
+          <form className="stack" onSubmit={onPatientLogin}>
+            <label>
+              Username / Phone Number
+              <input
+                value={patientUserId}
+                onChange={(e) => setPatientUserId(e.target.value)}
+                placeholder="azherkhan or 984394375"
+                autoComplete="username"
+                required
+              />
+            </label>
+            <label>
+              Password
+              <div className="password-field">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={patientPassword}
+                  onChange={(e) => setPatientPassword(e.target.value)}
+                  autoComplete="current-password"
+                  minLength={4}
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-pressed={showPassword}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </label>
+            <button type="submit" disabled={patientSaving}>
+              {patientSaving ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+        ) : (
         <form className="stack" onSubmit={onSubmit}>
           <label>
-            {mode === "HOSPITAL" ? "Hospital ID" : "User ID (Doctor)"}
+            {mode === "HOSPITAL"
+              ? "Hospital ID"
+              : mode === "MEDICAL"
+                ? "Medical store ID"
+                : "User ID (Doctor)"}
             <input
               value={id}
               onChange={(e) => setId(e.target.value)}
-              placeholder={mode === "HOSPITAL" ? "e.g. 10001" : "e.g. DOC-SEED-0001"}
+              placeholder={
+                mode === "HOSPITAL"
+                  ? "e.g. 10001"
+                  : mode === "MEDICAL"
+                    ? "e.g. MED-10001-1"
+                    : "e.g. DOC-SEED-0001"
+              }
               inputMode={mode === "HOSPITAL" ? "numeric" : "text"}
               autoComplete="username"
               required
@@ -208,7 +261,6 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
-                placeholder="123456"
                 required
               />
               <button
@@ -226,65 +278,7 @@ export default function LoginPage() {
             {saving ? "Signing in…" : "Sign in"}
           </button>
         </form>
-
-        <div className="panel login-demo-creds" style={{ marginTop: "1rem", boxShadow: "none" }}>
-          <h2 style={{ fontSize: "1.05rem", marginBottom: "0.4rem" }}>Demo login (password for all: 123456)</h2>
-          {mode === "HOSPITAL" ? (
-            <ul className="login-demo-list">
-              <li>
-                <strong>Hospital ID:</strong> 10001 — Test Hospital
-              </li>
-              <li>
-                <strong>Hospital ID:</strong> 10002 — Sunrise Care Hospital
-              </li>
-              <li>
-                <strong>Hospital ID:</strong> 10003 — City Heart Institute
-              </li>
-            </ul>
-          ) : (
-            <ul className="login-demo-list">
-              <li>
-                <strong>User ID:</strong> DOC-SEED-0001 — Dr. Aarav Sharma (Hospital 10001)
-              </li>
-              <li>
-                <strong>User ID:</strong> DOC-SEED-0002 — Dr. Vivaan Verma (Hospital 10002)
-              </li>
-              <li>
-                <strong>User ID:</strong> DOC-SEED-0005 — Dr. Arjun Nair (Hospital 10005)
-              </li>
-            </ul>
-          )}
-          <p className="muted" style={{ margin: "0.4rem 0 0" }}>
-            Click a User ID / Hospital ID above to fill the form, then Sign in.
-          </p>
-          <div className="row" style={{ marginTop: "0.55rem" }}>
-            {(mode === "HOSPITAL"
-              ? [
-                  { id: "10001", label: "10001" },
-                  { id: "10002", label: "10002" },
-                  { id: "10003", label: "10003" },
-                ]
-              : [
-                  { id: "DOC-SEED-0001", label: "DOC-SEED-0001" },
-                  { id: "DOC-SEED-0002", label: "DOC-SEED-0002" },
-                  { id: "DOC-SEED-0005", label: "DOC-SEED-0005" },
-                ]
-            ).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="secondary"
-                onClick={() => {
-                  setId(item.id);
-                  setPassword("123456");
-                  setError("");
-                }}
-              >
-                Use {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
 
         <p className="lead" style={{ marginTop: "0.85rem", marginBottom: 0 }}>
           <Link to="/forgot-password" style={{ textDecoration: "underline" }}>
@@ -334,7 +328,7 @@ export default function LoginPage() {
             );
             navigate("/patient");
           } catch (err) {
-            setShowPatientLogin(true);
+            setMode("PATIENT");
             setPatientError(
               err instanceof Error
                 ? err.message
@@ -343,86 +337,6 @@ export default function LoginPage() {
           }
         }}
       />
-
-      {showPatientLogin && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setShowPatientLogin(false)}
-        >
-          <div
-            className="modal panel patient-reg-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="patient-login-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header className="modal-header">
-              <div>
-                <p className="modal-eyebrow">Patient Portal</p>
-                <h2 id="patient-login-title">Login as Patient</h2>
-              </div>
-              <button
-                type="button"
-                className="modal-close"
-                aria-label="Close"
-                onClick={() => setShowPatientLogin(false)}
-              >
-                ×
-              </button>
-            </header>
-            {patientError && <div className="msg error">{patientError}</div>}
-            <form className="stack" onSubmit={onPatientLogin}>
-              <label>
-                Username / Phone Number
-                <input
-                  value={patientUserId}
-                  onChange={(e) => setPatientUserId(e.target.value)}
-                  placeholder="azherkhan or 984394375"
-                  autoComplete="username"
-                  required
-                />
-              </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  value={patientPassword}
-                  onChange={(e) => setPatientPassword(e.target.value)}
-                  minLength={4}
-                  required
-                />
-              </label>
-              <div className="modal-actions">
-                <button type="submit" disabled={patientSaving}>
-                  {patientSaving ? "Signing in…" : "Sign in"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowPatientLogin(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-            <p className="lead" style={{ marginBottom: 0 }}>
-              Doctor?{" "}
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => {
-                  setShowPatientLogin(false);
-                  setMode("USER");
-                  setError("");
-                }}
-              >
-                Login as doctor
-              </button>
-            </p>
-          </div>
-        </div>
-      )}
     </>
   );
 }

@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { toast } from "../toast";
 
 type HospitalForm = {
   // 1. Basic
@@ -307,7 +308,7 @@ function Field({
   const clean = label.replace(/\s*\*$/, "").trim();
   const showRequired = !optional && (required || /\*$/.test(label.trim()));
   return (
-    <label>
+    <div className="field-block">
       <span>
         {clean}
         {showRequired ? (
@@ -318,7 +319,7 @@ function Field({
         {optional ? " (optional)" : ""}
       </span>
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -357,7 +358,6 @@ export default function HospitalRegistrationPage() {
   const [openSection, setOpenSection] = useState<SectionId | null>("basic");
   const [completed, setCompleted] = useState<Set<SectionId>>(new Set());
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [popupError, setPopupError] = useState("");
 
@@ -416,7 +416,6 @@ export default function HospitalRegistrationPage() {
 
   function openPopup(id: SectionId) {
     setError("");
-    setMessage("");
     setPopupError("");
     if (!isUnlocked(id)) {
       setError("Complete Basic Hospital Information first to open the next forms.");
@@ -429,7 +428,6 @@ export default function HospitalRegistrationPage() {
 
   function openTab(tab: string) {
     setError("");
-    setMessage("");
     if (
       tab !== "Basic Information" &&
       tab !== "Review & Submit" &&
@@ -474,7 +472,7 @@ export default function HospitalRegistrationPage() {
     setCompleted((prev) => new Set(prev).add(openSection));
     setPopupError("");
     setOpenSection(null);
-    setMessage(`${SECTIONS.find((s) => s.id === openSection)?.title} saved.`);
+    toast.success(`${SECTIONS.find((s) => s.id === openSection)?.title} saved.`);
   }
 
   function goNextFromPopup() {
@@ -485,6 +483,7 @@ export default function HospitalRegistrationPage() {
       return;
     }
     setCompleted((prev) => new Set(prev).add(openSection));
+    toast.success(`${SECTIONS.find((s) => s.id === openSection)?.title} saved.`);
     const idx = sectionIndex[openSection];
     const next = SECTIONS[idx + 1];
     setPopupError("");
@@ -517,11 +516,10 @@ export default function HospitalRegistrationPage() {
 
     setSaving(true);
     setError("");
-    setMessage("");
     try {
       const res = await api.registerHospital(form);
       const assignedId = res.hospital?.id ?? res.hospital?.hospitalId;
-      setMessage(
+      toast.success(
         res.message ||
           `Hospital registered with ID ${assignedId ?? form.hospitalId}. Pending Super Admin verification.`
       );
@@ -575,7 +573,6 @@ export default function HospitalRegistrationPage() {
         <Link to="/login">← Back to sign in</Link>
       </p>
       {error && <div className="msg error">{error}</div>}
-      {message && <div className="msg ok">{message}</div>}
 
       {activeTab === "Review & Submit" && !openSection && (
         <div className="panel stack hospital-reg-review">
@@ -651,9 +648,10 @@ export default function HospitalRegistrationPage() {
               <button
                 type="button"
                 className="secondary"
+                aria-label="Close"
                 onClick={() => setOpenSection(null)}
               >
-                Close
+                ×
               </button>
             </header>
 

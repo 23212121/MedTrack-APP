@@ -39,6 +39,11 @@ public class AuditContext {
     return h == null || h.isBlank() ? defaultUser : h.trim();
   }
 
+  public String loginType() {
+    String h = header("X-Login-Type");
+    return h == null ? "" : h.trim();
+  }
+
   private String header(String name) {
     RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
     if (attrs instanceof ServletRequestAttributes sra) {

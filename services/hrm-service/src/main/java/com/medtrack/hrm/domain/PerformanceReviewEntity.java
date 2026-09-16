@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "hrm_performance_reviews")
+@Table(schema = "svc", name = "hrm_performance_reviews")
 public class PerformanceReviewEntity extends AuditableEntity {
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)

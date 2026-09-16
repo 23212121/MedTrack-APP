@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "../api";
+import { toast } from "../toast";
 
 type Props = {
   open: boolean;
@@ -22,13 +23,11 @@ export default function PatientUserRegistrationModal({
 }: Props) {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setError("");
-      setSuccess("");
       setForm(emptyForm);
     }
   }, [open]);
@@ -36,7 +35,6 @@ export default function PatientUserRegistrationModal({
   function onReset() {
     setForm(emptyForm);
     setError("");
-    setSuccess("");
   }
 
   function onCancel() {
@@ -47,7 +45,6 @@ export default function PatientUserRegistrationModal({
   async function onSave(e: FormEvent) {
     e.preventDefault();
     setError("");
-    setSuccess("");
     if (!form.userName.trim()) {
       setError("User Name cannot be blank");
       return;
@@ -75,7 +72,7 @@ export default function PatientUserRegistrationModal({
         password,
         createdBy: "SELF",
       });
-      setSuccess(res.message);
+      toast.success(res.message);
       onRegistered?.({
         userId: res.userId,
         userName: res.userName,
@@ -116,7 +113,6 @@ export default function PatientUserRegistrationModal({
         </header>
 
         {error && <div className="msg error">{error}</div>}
-        {success && <div className="msg ok">{success}</div>}
 
         <form className="stack" onSubmit={onSave}>
           <label>

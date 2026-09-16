@@ -3,7 +3,7 @@ package com.medtrack.hrm.domain;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "hrm_leave_types", uniqueConstraints = {
+@Table(schema = "svc", name = "hrm_leave_types", uniqueConstraints = {
     @UniqueConstraint(name = "uk_hrm_leave_type_doctor", columnNames = {"doctor_id", "name"})
 })
 public class LeaveTypeEntity extends AuditableEntity {

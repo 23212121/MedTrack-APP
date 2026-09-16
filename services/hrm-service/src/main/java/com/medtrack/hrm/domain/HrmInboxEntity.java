@@ -5,6 +5,7 @@ import java.time.Instant;
 
 @Entity
 @Table(
+    schema = "svc",
     name = "hrm_inbox",
     indexes = {
       @Index(name = "idx_hrm_inbox_hospital_doctor", columnList = "hospital_id, doctor_id"),

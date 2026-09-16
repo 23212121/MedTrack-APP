@@ -3,7 +3,7 @@ package com.medtrack.hrm.domain;
 import jakarta.persistence.*;
 
 @Entity(name = "HrmDepartmentEntity")
-@Table(name = "hrm_departments", uniqueConstraints = {
+@Table(schema = "svc", name = "hrm_departments", uniqueConstraints = {
     @UniqueConstraint(name = "uk_hrm_dept_name_doctor", columnNames = {"doctor_id", "name"})
 })
 public class DepartmentEntity extends AuditableEntity {

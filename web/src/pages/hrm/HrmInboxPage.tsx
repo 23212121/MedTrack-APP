@@ -6,6 +6,7 @@ import {
   downloadInboxItem,
   getHrmInbox,
 } from "../../api";
+import { toast } from "../../toast";
 
 type ViewTab = "action" | "notifications" | "archive";
 
@@ -141,6 +142,7 @@ export default function HrmInboxPage() {
     setBusy(true);
     try {
       await acknowledgeInboxItem(selected.id);
+      toast.success("Inbox item acknowledged.");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Acknowledge failed");

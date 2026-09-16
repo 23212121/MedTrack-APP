@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "hrm_wfh_requests")
+@Table(schema = "svc", name = "hrm_wfh_requests")
 public class WfhRequestEntity {
 
   @Id

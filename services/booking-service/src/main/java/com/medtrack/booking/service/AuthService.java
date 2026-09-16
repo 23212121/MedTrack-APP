@@ -1,403 +1,311 @@
 package com.medtrack.booking.service;
 
-import com.medtrack.booking.domain.DoctorClinicEntity;
-import com.medtrack.booking.domain.DoctorContactEntity;
-import com.medtrack.booking.domain.DoctorPersonalEntity;
 import com.medtrack.booking.domain.HospitalEntity;
 import com.medtrack.booking.domain.LoginEntity;
+import com.medtrack.booking.domain.MedicalStoreEntity;
 import com.medtrack.booking.domain.PatientEntity;
 import com.medtrack.booking.domain.UserDetailsEntity;
-import com.medtrack.booking.repo.DoctorClinicRepository;
-import com.medtrack.booking.repo.DoctorContactRepository;
-import com.medtrack.booking.repo.DoctorPersonalRepository;
 import com.medtrack.booking.repo.HospitalRepository;
 import com.medtrack.booking.repo.LoginRepository;
+import com.medtrack.booking.repo.MedicalStoreRepository;
 import com.medtrack.booking.repo.PatientRepository;
+import com.medtrack.booking.repo.UserDetailsRepository;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AuthService {
-  private final HospitalRepository hospitalRepo;
   private final LoginRepository loginRepo;
-  private final DoctorPersonalRepository personalRepo;
-  private final DoctorContactRepository contactRepo;
-  private final DoctorClinicRepository clinicRepo;
+  private final HospitalRepository hospitalRepo;
   private final PatientRepository patientRepo;
-  private final UserRegistrationService userRegistrationService;
+  private final UserDetailsRepository userDetailsRepo;
+  private final MedicalStoreRepository storeRepo;
+  private final AuthTokenService tokenService;
 
   public AuthService(
-      HospitalRepository hospitalRepo,
       LoginRepository loginRepo,
-      DoctorPersonalRepository personalRepo,
-      DoctorContactRepository contactRepo,
-      DoctorClinicRepository clinicRepo,
+      HospitalRepository hospitalRepo,
       PatientRepository patientRepo,
-      UserRegistrationService userRegistrationService) {
-    this.hospitalRepo = hospitalRepo;
+      UserDetailsRepository userDetailsRepo,
+      MedicalStoreRepository storeRepo,
+      AuthTokenService tokenService) {
     this.loginRepo = loginRepo;
-    this.personalRepo = personalRepo;
-    this.contactRepo = contactRepo;
-    this.clinicRepo = clinicRepo;
+    this.hospitalRepo = hospitalRepo;
     this.patientRepo = patientRepo;
-    this.userRegistrationService = userRegistrationService;
+    this.userDetailsRepo = userDetailsRepo;
+    this.storeRepo = storeRepo;
+    this.tokenService = tokenService;
   }
 
-  /**
-   * Login with either hospital ID or user ID (doctor id / email).
-   *
-   * <pre>
-   * { "loginType": "HOSPITAL"|"USER", "id": "...", "password": "..." }
-   * </pre>
-   */
   public Map<String, Object> login(Map<String, Object> body) {
     String loginType = text(body, "loginType");
     String id = text(body, "id");
     String password = text(body, "password");
-    if (id == null || id.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "id is required");
-    }
-    if (password == null || password.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "password is required");
-    }
     if (loginType == null || loginType.isBlank()) {
-      loginType = looksLikeHospitalId(id) ? "HOSPITAL" : "USER";
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "loginType is required");
     }
-
+    if (id == null || id.isBlank() || password == null || password.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "id and password are required");
+    }
     return switch (loginType.trim().toUpperCase()) {
       case "HOSPITAL" -> loginHospital(id.trim(), password);
-      case "USER" -> loginUser(id.trim(), password);
+      case "USER" -> loginDoctor(id.trim(), password);
       case "PATIENT" -> loginPatient(id.trim(), password);
-      default ->
-          throw new ResponseStatusException(
-              HttpStatus.BAD_REQUEST, "loginType must be HOSPITAL, USER, or PATIENT");
+      case "MEDICAL" -> loginMedical(id.trim(), password);
+      default -> throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "loginType must be HOSPITAL, USER, PATIENT, or MEDICAL");
     };
   }
 
-  /** Register a patient portal account (phone + password). */
+  @Transactional
   public Map<String, Object> registerPatient(Map<String, Object> body) {
-    String phone = normalizePhone(text(body, "phone"));
+    String phone = digits(text(body, "phone"));
     String password = text(body, "password");
     String name = text(body, "name");
-    if (phone == null || phone.length() < 8) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid phone is required");
+    if (phone.isBlank() || password == null || password.isBlank() || name == null || name.isBlank()) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "phone, password, and name are required");
     }
-    if (password == null || password.length() < 4) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password must be at least 4 characters");
+    if (password.length() < 4) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Password must be at least 4 characters");
     }
-    if (name == null || name.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name is required");
+    if (patientRepo.findByPhone(phone).isPresent()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Phone number is already registered");
     }
-    if (patientRepo.existsByPhone(phone)) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "Phone already registered");
-    }
-
     PatientEntity p = new PatientEntity();
     p.setPhone(phone);
     p.setPassword(password);
     p.setName(name.trim());
-    p.setAge(intOrNull(body.get("age")));
+    p.setAge(toInt(body.get("age")));
     p.setGender(text(body, "gender"));
     p.setEmail(text(body, "email"));
     p.setAddress(text(body, "address"));
-    patientRepo.save(p);
+    PatientEntity saved = patientRepo.save(p);
 
     Map<String, Object> out = new HashMap<>();
-    out.put("message", "Patient account created");
-    out.put("patientId", p.getId());
-    out.put("phone", p.getPhone());
-    out.put("name", p.getName());
+    out.put("message", "Patient registered successfully");
+    out.put("patientId", saved.getId());
+    out.put("phone", saved.getPhone());
+    out.put("name", saved.getName());
     return out;
   }
 
-  private Map<String, Object> loginHospital(String hospitalIdRaw, String password) {
-    Long hospitalId;
-    try {
-      hospitalId = Long.parseLong(hospitalIdRaw);
-    } catch (NumberFormatException ex) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Hospital ID must be a number");
-    }
-
-    // Prefer svc.login (hospital credentials)
-    Optional<LoginEntity> loginOpt =
-        loginRepo.findByLoginTypeAndLoginIdIgnoreCaseAndStatus("HOSPITAL", hospitalIdRaw, "ACTIVE");
-    if (loginOpt.isEmpty()) {
-      loginOpt =
-          loginRepo.findByLoginTypeAndHospitalId("HOSPITAL", hospitalId)
-              .filter(l -> "ACTIVE".equalsIgnoreCase(l.getStatus()));
-    }
-    if (loginOpt.isPresent()) {
-      LoginEntity login = loginOpt.get();
-      if (!login.getPassword().equals(password)) {
-        throw new ResponseStatusException(
-            HttpStatus.UNAUTHORIZED, "Invalid hospital ID or password");
+  private Map<String, Object> loginHospital(String id, String password) {
+    Optional<LoginEntity> login =
+        loginRepo.findByLoginTypeAndLoginIdIgnoreCaseAndStatus("HOSPITAL", id, "ACTIVE");
+    if (login.isEmpty()) {
+      try {
+        login =
+            loginRepo
+                .findByLoginTypeAndHospitalId("HOSPITAL", Long.parseLong(id))
+                .filter(row -> "ACTIVE".equalsIgnoreCase(row.getStatus()));
+      } catch (NumberFormatException ignored) {
+        // not a numeric hospital id
       }
-      HospitalEntity h =
-          hospitalRepo
-              .findById(login.getHospitalId() != null ? login.getHospitalId() : hospitalId)
-              .orElseThrow(
-                  () ->
-                      new ResponseStatusException(
-                          HttpStatus.UNAUTHORIZED, "Invalid hospital ID or password"));
-      return hospitalLoginResponse(h, login.getDisplayName());
     }
+    HospitalEntity hospital = null;
+    if (login.isPresent() && passwordEquals(login.get().getPassword(), password)) {
+      if (login.get().getHospitalId() != null) {
+        hospital = hospitalRepo.findById(login.get().getHospitalId()).orElse(null);
+      }
+    } else {
+      hospital = findHospitalByIdOrCode(id).orElse(null);
+      if (hospital == null
+          || hospital.getAdminPassword() == null
+          || !passwordEquals(hospital.getAdminPassword(), password)) {
+        throw badCredentials();
+      }
+    }
+    if (hospital == null) {
+      throw badCredentials();
+    }
+    Map<String, Object> claims = new HashMap<>();
+    claims.put("loginType", "HOSPITAL");
+    claims.put("role", "HOSPITAL_ADMIN");
+    claims.put("hospitalId", hospital.getId());
+    claims.put("userId", String.valueOf(hospital.getId()));
+    Map<String, Object> out = baseResult("HOSPITAL", hospital.getHospitalName(), hospital);
+    out.put("role", "HOSPITAL_ADMIN");
+    out.put("userId", String.valueOf(hospital.getId()));
+    out.put("token", tokenService.issue(claims));
+    return out;
+  }
 
-    // Legacy fallback: hospitals.admin_password
-    HospitalEntity h =
-        hospitalRepo
-            .findById(hospitalId)
+  private Map<String, Object> loginDoctor(String id, String password) {
+    Optional<LoginEntity> login =
+        loginRepo.findByLoginTypeAndLoginIdIgnoreCaseAndStatus("USER", id, "ACTIVE");
+    if (login.isEmpty()) {
+      List<LoginEntity> byDoctor = loginRepo.findByLoginTypeAndDoctorIdAndStatus("USER", id, "ACTIVE");
+      if (!byDoctor.isEmpty()) {
+        login = Optional.of(byDoctor.get(0));
+      }
+    }
+    if (login.isEmpty() || !passwordEquals(login.get().getPassword(), password)) {
+      throw badCredentials();
+    }
+    LoginEntity row = login.get();
+    HospitalEntity hospital =
+        row.getHospitalId() == null ? null : hospitalRepo.findById(row.getHospitalId()).orElse(null);
+    String doctorId =
+        row.getDoctorId() != null && !row.getDoctorId().isBlank() ? row.getDoctorId() : row.getLoginId();
+    Map<String, Object> claims = new HashMap<>();
+    claims.put("loginType", "USER");
+    claims.put("role", "DOCTOR");
+    claims.put("doctorId", doctorId);
+    claims.put("userId", doctorId);
+    if (row.getHospitalId() != null) {
+      claims.put("hospitalId", row.getHospitalId());
+    }
+    Map<String, Object> out =
+        baseResult(
+            "USER",
+            row.getDisplayName() != null && !row.getDisplayName().isBlank()
+                ? row.getDisplayName()
+                : doctorId,
+            hospital);
+    out.put("role", "DOCTOR");
+    out.put("userId", doctorId);
+    out.put("doctorId", doctorId);
+    out.put("token", tokenService.issue(claims));
+    return out;
+  }
+
+  private Map<String, Object> loginMedical(String id, String password) {
+    Optional<LoginEntity> login =
+        loginRepo.findByLoginTypeAndLoginIdIgnoreCaseAndStatus("MEDICAL", id, "ACTIVE");
+    if (login.isEmpty() || !passwordEquals(login.get().getPassword(), password)) {
+      throw badCredentials();
+    }
+    LoginEntity row = login.get();
+    MedicalStoreEntity store =
+        storeRepo
+            .findByStoreCodeIgnoreCase(row.getLoginId())
             .orElseThrow(
                 () ->
                     new ResponseStatusException(
-                        HttpStatus.UNAUTHORIZED, "Invalid hospital ID or password"));
-    if (h.getAdminPassword() == null || h.getAdminPassword().isBlank()) {
-      throw new ResponseStatusException(
-          HttpStatus.UNAUTHORIZED,
-          "No password set for this hospital. Re-register admin credentials.");
+                        HttpStatus.UNAUTHORIZED, "Medical store is not registered"));
+    if (!"ACTIVE".equalsIgnoreCase(store.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Medical store is inactive");
     }
-    if (!h.getAdminPassword().equals(password)) {
-      throw new ResponseStatusException(
-          HttpStatus.UNAUTHORIZED, "Invalid hospital ID or password");
+    HospitalEntity hospital =
+        row.getHospitalId() == null ? null : hospitalRepo.findById(row.getHospitalId()).orElse(null);
+    Map<String, Object> claims = new HashMap<>();
+    claims.put("loginType", "MEDICAL");
+    claims.put("role", "MEDICAL");
+    claims.put("medicalStoreId", store.getId());
+    claims.put("userId", store.getId());
+    if (row.getHospitalId() != null) {
+      claims.put("hospitalId", row.getHospitalId());
     }
-    return hospitalLoginResponse(h, null);
-  }
-
-  private Map<String, Object> hospitalLoginResponse(HospitalEntity h, String displayName) {
-    Map<String, Object> out = new HashMap<>();
-    out.put("message", "Signed in with hospital ID");
-    out.put("loginType", "HOSPITAL");
-    out.put(
-        "username",
-        displayName != null && !displayName.isBlank()
-            ? displayName
-            : (h.getAdminEmail() != null ? h.getAdminEmail() : String.valueOf(h.getId())));
-    out.put("userId", String.valueOf(h.getId()));
-    out.put("hospitalId", h.getId());
-    out.put("hospitalName", h.getHospitalName());
-    out.put("hospitalCode", h.getHospitalCode());
-    out.put("role", "HOSPITAL_ADMIN");
+    Map<String, Object> out =
+        baseResult(
+            "MEDICAL",
+            row.getDisplayName() != null && !row.getDisplayName().isBlank()
+                ? row.getDisplayName()
+                : store.getStoreName(),
+            hospital);
+    out.put("role", "MEDICAL");
+    out.put("userId", store.getId());
+    out.put("medicalStoreId", store.getId());
+    out.put("storeCode", store.getStoreCode());
+    out.put("storeName", store.getStoreName());
+    out.put("token", tokenService.issue(claims));
     return out;
   }
 
-  private Map<String, Object> loginUser(String userId, String password) {
-    // Prefer svc.login for USER (doctor) credentials
-    var loginOpt =
-        loginRepo.findByLoginTypeAndLoginIdIgnoreCaseAndStatus("USER", userId.trim(), "ACTIVE");
-    if (loginOpt.isPresent()) {
-      LoginEntity login = loginOpt.get();
-      if (!login.getPassword().equals(password)) {
-        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid user ID or password");
-      }
-      String doctorId =
-          login.getDoctorId() != null && !login.getDoctorId().isBlank()
-              ? login.getDoctorId()
-              : login.getLoginId();
-      DoctorPersonalEntity personal =
-          personalRepo
-              .findById(doctorId)
-              .orElseThrow(
-                  () ->
-                      new ResponseStatusException(
-                          HttpStatus.UNAUTHORIZED, "Invalid user ID or password"));
-      Long hospitalId = login.getHospitalId();
-      String hospitalName = null;
-      DoctorClinicEntity clinic = clinicRepo.findById(doctorId).orElse(null);
-      if (hospitalId == null && clinic != null) {
-        hospitalId = clinic.getHospitalId();
-      }
-      if (clinic != null) {
-        hospitalName = clinic.getHospitalName();
-      }
-      if (hospitalId != null) {
-        HospitalEntity h = hospitalRepo.findById(hospitalId).orElse(null);
-        if (h != null && (hospitalName == null || hospitalName.isBlank())) {
-          hospitalName = h.getHospitalName();
-        }
-      }
-      if (hospitalId == null) {
-        throw new ResponseStatusException(
-            HttpStatus.UNAUTHORIZED,
-            "This user is not linked to a hospital. Register under a hospital ID first.");
-      }
-      String display =
-          login.getDisplayName() != null && !login.getDisplayName().isBlank()
-              ? login.getDisplayName()
-              : joinName(personal.getFirstName(), personal.getLastName(), doctorId);
+  private Map<String, Object> loginPatient(String id, String password) {
+    String phone = digits(id);
+    Optional<UserDetailsEntity> user =
+        userDetailsRepo
+            .findByUserId(id)
+            .or(() -> userDetailsRepo.findByUserNameIgnoreCase(id))
+            .or(() -> phone.isBlank() ? Optional.empty() : userDetailsRepo.findByPhone(phone));
+    if (user.isPresent() && passwordEquals(user.get().getPassword(), password)) {
+      UserDetailsEntity u = user.get();
       Map<String, Object> out = new HashMap<>();
-      out.put("message", "Signed in with user ID");
-      out.put("loginType", "USER");
-      out.put("username", display);
-      out.put("userId", doctorId);
-      out.put("doctorId", doctorId);
-      out.put("hospitalId", hospitalId);
-      out.put("hospitalName", hospitalName);
-      out.put("role", "DOCTOR");
+      out.put("message", "Signed in");
+      out.put("loginType", "PATIENT");
+      out.put("username", u.getUserName());
+      out.put("userId", u.getUserId());
+      out.put("patientId", u.getUserId());
+      out.put("patientUserId", u.getUserId());
+      out.put("patientName", u.getUserName());
+      out.put("patientPhone", u.getPhone() != null ? u.getPhone() : "");
+      out.put("role", "PATIENT");
       return out;
     }
-
-    DoctorPersonalEntity personal = resolveDoctor(userId);
-    if (personal.getLoginPassword() == null || personal.getLoginPassword().isBlank()) {
-      throw new ResponseStatusException(
-          HttpStatus.UNAUTHORIZED,
-          "No password set for this user. Set a login password during doctor registration.");
+    Optional<PatientEntity> patient =
+        phone.isBlank() ? Optional.empty() : patientRepo.findByPhone(phone);
+    if (patient.isEmpty() || !passwordEquals(patient.get().getPassword(), password)) {
+      throw badCredentials();
     }
-    if (!personal.getLoginPassword().equals(password)) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid user ID or password");
-    }
-
-    Long hospitalId = null;
-    String hospitalName = null;
-    DoctorClinicEntity clinic = clinicRepo.findById(personal.getDoctorId()).orElse(null);
-    if (clinic != null) {
-      hospitalId = clinic.getHospitalId();
-      hospitalName = clinic.getHospitalName();
-    }
-    if (hospitalId != null) {
-      HospitalEntity h = hospitalRepo.findById(hospitalId).orElse(null);
-      if (h != null && (hospitalName == null || hospitalName.isBlank())) {
-        hospitalName = h.getHospitalName();
-      }
-    }
-    if (hospitalId == null) {
-      throw new ResponseStatusException(
-          HttpStatus.UNAUTHORIZED,
-          "This user is not linked to a hospital. Register under a hospital ID first.");
-    }
-
-    String display =
-        joinName(personal.getFirstName(), personal.getLastName(), personal.getDoctorId());
-
+    PatientEntity p = patient.get();
     Map<String, Object> out = new HashMap<>();
-    out.put("message", "Signed in with user ID");
-    out.put("loginType", "USER");
-    out.put("username", display);
-    out.put("userId", personal.getDoctorId());
-    out.put("doctorId", personal.getDoctorId());
-    out.put("hospitalId", hospitalId);
-    out.put("hospitalName", hospitalName);
-    out.put("role", "DOCTOR");
-    return out;
-  }
-
-  private DoctorPersonalEntity resolveDoctor(String userId) {
-    // Prefer doctor_id exact match
-    if (personalRepo.existsById(userId)) {
-      return personalRepo.findById(userId).orElseThrow();
-    }
-    // Fall back to email
-    DoctorContactEntity contact =
-        contactRepo
-            .findFirstByEmailIgnoreCase(userId)
-            .orElseThrow(
-                () ->
-                    new ResponseStatusException(
-                        HttpStatus.UNAUTHORIZED, "Invalid user ID or password"));
-    return personalRepo
-        .findById(contact.getDoctorId())
-        .orElseThrow(
-            () ->
-                new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED, "Invalid user ID or password"));
-  }
-
-  private static boolean looksLikeHospitalId(String id) {
-    try {
-      long n = Long.parseLong(id.trim());
-      return n >= 10001L;
-    } catch (NumberFormatException ex) {
-      return false;
-    }
-  }
-
-  private static String joinName(String first, String last, String fallback) {
-    StringBuilder sb = new StringBuilder();
-    if (first != null && !first.isBlank()) sb.append(first.trim());
-    if (last != null && !last.isBlank()) {
-      if (!sb.isEmpty()) sb.append(' ');
-      sb.append(last.trim());
-    }
-    return sb.isEmpty() ? fallback : sb.toString();
-  }
-
-  private Map<String, Object> loginPatient(String idRaw, String password) {
-    String raw = idRaw.trim();
-    if (!raw.isEmpty()) {
-      try {
-        UserDetailsEntity u = userRegistrationService.authenticateLogin(raw, password);
-        return patientLoginResponse(u.getUserName(), u.getUserId(), u.getPhone());
-      } catch (ResponseStatusException ex) {
-        if (ex.getStatusCode().value() != HttpStatus.UNAUTHORIZED.value()) {
-          throw ex;
-        }
-        // fall through to legacy patients table (phone-only accounts)
-      }
-    }
-
-    String phone = normalizePhone(idRaw);
-    if (phone.length() < 4) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid user ID or password");
-    }
-    PatientEntity p =
-        patientRepo
-            .findByPhone(phone)
-            .orElseThrow(
-                () ->
-                    new ResponseStatusException(
-                        HttpStatus.UNAUTHORIZED, "Invalid user ID or password"));
-    if (!p.getPassword().equals(password)) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid user ID or password");
-    }
-
-    return patientLoginResponse(p.getName(), p.getId(), p.getPhone());
-  }
-
-  private Map<String, Object> patientLoginResponse(
-      String name, String userId, String phone) {
-    // Patient ID is the login User ID (USR000001) for user_details accounts.
-    String patientId = userId != null && !userId.isBlank() ? userId.trim() : null;
-    if (patientId == null && phone != null && !phone.isBlank()) {
-      patientId =
-          patientRepo
-              .findByPhone(normalizePhone(phone))
-              .map(PatientEntity::getId)
-              .orElse(normalizePhone(phone));
-    }
-    Map<String, Object> out = new HashMap<>();
-    out.put("message", "Signed in as patient");
+    out.put("message", "Signed in");
     out.put("loginType", "PATIENT");
-    out.put("username", name);
-    out.put("userId", userId);
-    out.put("patientId", patientId);
-    out.put("patientUserId", userId);
-    out.put("patientName", name);
-    if (phone != null && !phone.isBlank()) {
-      out.put("patientPhone", phone);
-    }
+    out.put("username", p.getName());
+    out.put("userId", p.getId());
+    out.put("patientId", p.getId());
+    out.put("patientUserId", p.getId());
+    out.put("patientName", p.getName());
+    out.put("patientPhone", p.getPhone());
     out.put("role", "PATIENT");
     return out;
   }
 
-  private static String normalizePhone(String raw) {
-    if (raw == null) return "";
-    return raw.replaceAll("\\D", "");
+  private Map<String, Object> baseResult(String loginType, String username, HospitalEntity hospital) {
+    Map<String, Object> out = new HashMap<>();
+    out.put("message", "Signed in");
+    out.put("loginType", loginType);
+    out.put("username", username);
+    if (hospital != null) {
+      out.put("hospitalId", hospital.getId());
+      out.put("hospitalName", hospital.getHospitalName());
+      out.put("hospitalCode", hospital.getHospitalCode());
+    }
+    return out;
   }
 
-  private static Integer intOrNull(Object v) {
-    if (v == null) return null;
-    if (v instanceof Number n) return n.intValue();
+  private Optional<HospitalEntity> findHospitalByIdOrCode(String id) {
     try {
-      return Integer.parseInt(String.valueOf(v));
+      return hospitalRepo.findById(Long.parseLong(id));
     } catch (NumberFormatException ex) {
-      return null;
+      return hospitalRepo.findByHospitalCode(id);
     }
+  }
+
+  private static boolean passwordEquals(String stored, String given) {
+    return stored != null && stored.equals(given);
+  }
+
+  private static ResponseStatusException badCredentials() {
+    return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid id or password");
   }
 
   private static String text(Map<String, Object> body, String key) {
     Object v = body.get(key);
     return v == null ? null : String.valueOf(v);
+  }
+
+  private static String digits(String raw) {
+    if (raw == null) return "";
+    return raw.replaceAll("\\D", "");
+  }
+
+  private static Integer toInt(Object v) {
+    if (v == null) return null;
+    if (v instanceof Number n) return n.intValue();
+    try {
+      return Integer.parseInt(String.valueOf(v).trim());
+    } catch (NumberFormatException ex) {
+      return null;
+    }
   }
 }

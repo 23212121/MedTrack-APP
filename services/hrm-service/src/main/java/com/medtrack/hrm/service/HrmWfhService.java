@@ -61,6 +61,26 @@ public class HrmWfhService {
     return wfhRepo.save(req);
   }
 
+  @Transactional
+  public WfhRequestEntity decide(String id, String status) {
+    WfhRequestEntity req =
+        wfhRepo
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "WFH request not found"));
+    if (audit.hospitalId() != null && !audit.hospitalId().equals(req.getHospitalId())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "WFH is not in this hospital");
+    }
+    if (!"Pending".equalsIgnoreCase(req.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "WFH is already " + req.getStatus());
+    }
+    if (!"Approved".equalsIgnoreCase(status) && !"Rejected".equalsIgnoreCase(status)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status must be Approved or Rejected");
+    }
+    req.setStatus("Approved".equalsIgnoreCase(status) ? "Approved" : "Rejected");
+    req.touchAudit(audit.hospitalId(), audit.doctorId(), audit.user());
+    return wfhRepo.save(req);
+  }
+
   private static String str(Object o) {
     return o == null ? null : String.valueOf(o).trim();
   }

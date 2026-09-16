@@ -63,6 +63,9 @@ public class AppointmentEnrichmentService {
   }
 
   public String doctorName(String doctorId) {
+    if (doctorId == null || doctorId.isBlank()) {
+      return "";
+    }
     DoctorPersonalEntity personal = personalRepo.findById(doctorId).orElse(null);
     if (personal == null) {
       return doctorId;

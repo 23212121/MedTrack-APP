@@ -1,76 +1,17 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { requestWorkFromHome } from "../../api";
+import {
+  AttendanceBoard,
+  AttendanceLog,
+  clockIn,
+  clockOut,
+  getAttendanceBoard,
+  requestWorkFromHome,
+} from "../../api";
+import { toast } from "../../toast";
 
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"];
-
-type LogRow = {
-  date: string;
-  day: string;
-  weekOff?: boolean;
-  breakTaken: string;
-  grossHours: string;
-  arrival: string;
-  arrivalOk?: boolean;
-  late?: string;
-  visualPct: number;
-};
-
-const SAMPLE_LOGS: LogRow[] = [
-  {
-    date: "04 Aug",
-    day: "Tue",
-    breakTaken: "0h 0m",
-    grossHours: "6h 4m",
-    arrival: "On Time",
-    arrivalOk: true,
-    visualPct: 68,
-  },
-  {
-    date: "03 Aug",
-    day: "Mon",
-    breakTaken: "0h 0m",
-    grossHours: "0h 0m",
-    arrival: "—",
-    visualPct: 0,
-  },
-  {
-    date: "02 Aug",
-    day: "Sun",
-    weekOff: true,
-    breakTaken: "—",
-    grossHours: "—",
-    arrival: "—",
-    visualPct: 0,
-  },
-  {
-    date: "01 Aug",
-    day: "Sat",
-    weekOff: true,
-    breakTaken: "—",
-    grossHours: "—",
-    arrival: "—",
-    visualPct: 0,
-  },
-  {
-    date: "31 Jul",
-    day: "Fri",
-    breakTaken: "0h 32m",
-    grossHours: "8h 41m",
-    arrival: "On Time",
-    arrivalOk: true,
-    visualPct: 92,
-  },
-  {
-    date: "30 Jul",
-    day: "Thu",
-    breakTaken: "0h 15m",
-    grossHours: "9h 2m",
-    arrival: "0:28:26 late",
-    late: "0:28:26 late",
-    visualPct: 95,
-  },
-];
+const SHIFT_START = "10:00";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -84,10 +25,47 @@ function dayCount(from: string, to: string) {
   return Math.floor((b.getTime() - a.getTime()) / 86400000) + 1;
 }
 
+function formatTime(value?: string | null) {
+  if (!value) return "—";
+  return value.slice(0, 5);
+}
+
+function formatHours(value?: number | null) {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  const totalMins = Math.round(Number(value) * 60);
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return `${h}h ${m}m`;
+}
+
+function formatLogDate(iso: string) {
+  const d = new Date(iso + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+function arrivalLabel(inTime?: string | null) {
+  if (!inTime) return "—";
+  return inTime.slice(0, 5) <= SHIFT_START ? "On Time" : "Late";
+}
+
+function visualPct(row: AttendanceLog) {
+  if (row.totalHours == null) return row.inTime ? 40 : 0;
+  return Math.max(8, Math.min(100, Math.round((Number(row.totalHours) / 9) * 100)));
+}
+
 export default function HrmAttendancePage() {
   const [now, setNow] = useState(() => new Date());
   const [logTab, setLogTab] = useState<"log" | "calendar" | "requests">("log");
   const [hour24, setHour24] = useState(true);
+  const [board, setBoard] = useState<AttendanceBoard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [wfhOpen, setWfhOpen] = useState(false);
   const [wfhFrom, setWfhFrom] = useState("");
   const [wfhTo, setWfhTo] = useState("");
@@ -95,12 +73,28 @@ export default function HrmAttendancePage() {
   const [wfhNotify, setWfhNotify] = useState("");
   const [wfhSaving, setWfhSaving] = useState(false);
   const [wfhError, setWfhError] = useState("");
-  const [wfhOk, setWfhOk] = useState("");
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setBoard(await getAttendanceBoard());
+    } catch (e) {
+      setBoard(null);
+      setError(e instanceof Error ? e.message : "Failed to load attendance");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const clock = useMemo(() => {
     let h = now.getHours();
@@ -125,15 +119,36 @@ export default function HrmAttendancePage() {
 
   const todayDow = (now.getDay() + 6) % 7; // Mon=0
   const wfhDays = dayCount(wfhFrom, wfhTo);
+  const logs = board?.logs ?? [];
+  const canClockIn = board?.canClockIn ?? false;
+  const canClockOut = board?.canClockOut ?? false;
 
   function openWfh() {
     setWfhError("");
-    setWfhOk("");
     setWfhFrom("");
     setWfhTo("");
     setWfhNote("");
     setWfhNotify("");
     setWfhOpen(true);
+  }
+
+  async function punch(kind: "in" | "out") {
+    setBusy(true);
+    setError("");
+    try {
+      if (kind === "in") {
+        await clockIn();
+        toast.success("Office in time recorded.");
+      } else {
+        await clockOut();
+        toast.success("Office out time recorded.");
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Clock update failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitWfh(e: FormEvent) {
@@ -155,7 +170,7 @@ export default function HrmAttendancePage() {
         note: wfhNote || undefined,
         notifyTo: wfhNotify || undefined,
       });
-      setWfhOk(`Work from home requested for ${wfhDays} day${wfhDays === 1 ? "" : "s"}.`);
+      toast.success(`Work from home requested for ${wfhDays} day${wfhDays === 1 ? "" : "s"}.`);
       setWfhOpen(false);
     } catch (err) {
       setWfhError(err instanceof Error ? err.message : "Request failed");
@@ -166,7 +181,7 @@ export default function HrmAttendancePage() {
 
   return (
     <div className="hrm-attendance">
-      {wfhOk && <p className="hrm-wfh-toast">{wfhOk}</p>}
+      {error && <p className="error">{error}</p>}
       <div className="hrm-cards">
         <section className="hrm-card">
           <div className="hrm-card-head">
@@ -180,32 +195,32 @@ export default function HrmAttendancePage() {
             <div className="hrm-stat-block">
               <div className="hrm-stat-who">
                 <span className="hrm-mini-avatar">ME</span>
-                <strong>Me</strong>
+                <strong>{board?.employeeName || "Me"}</strong>
               </div>
               <div className="hrm-stat-metrics">
                 <div>
-                  <span>AVG HRS / DAY</span>
-                  <strong>9h 34m</strong>
+                  <span>TODAY IN</span>
+                  <strong>{formatTime(board?.inTime)}</strong>
                 </div>
                 <div>
-                  <span>ON TIME ARRIVAL</span>
-                  <strong>25%</strong>
+                  <span>TODAY OUT</span>
+                  <strong>{formatTime(board?.outTime)}</strong>
                 </div>
               </div>
             </div>
             <div className="hrm-stat-block">
               <div className="hrm-stat-who">
-                <span className="hrm-mini-avatar hrm-mini-avatar--team">TM</span>
-                <strong>My Team</strong>
+                <span className="hrm-mini-avatar hrm-mini-avatar--team">HR</span>
+                <strong>Hours</strong>
               </div>
               <div className="hrm-stat-metrics">
                 <div>
-                  <span>AVG HRS / DAY</span>
-                  <strong>8h 12m</strong>
+                  <span>GROSS TODAY</span>
+                  <strong>{formatHours(board?.totalHours)}</strong>
                 </div>
                 <div>
-                  <span>ON TIME ARRIVAL</span>
-                  <strong>62%</strong>
+                  <span>LOGS</span>
+                  <strong>{logs.length}</strong>
                 </div>
               </div>
             </div>
@@ -227,11 +242,16 @@ export default function HrmAttendancePage() {
             ))}
           </div>
           <p className="hrm-shift-label">Today (10:00 AM - 7:00 PM)</p>
-          <div className="hrm-shift-bar" aria-hidden="true">
-            <div className="hrm-shift-fill" style={{ width: "72%" }} />
-            <span className="hrm-shift-break" title="Break" />
+          <div className="hrm-office-times">
+            <div>
+              <span className="muted">Office in</span>
+              <strong>{loading ? "…" : formatTime(board?.inTime)}</strong>
+            </div>
+            <div>
+              <span className="muted">Office out</span>
+              <strong>{loading ? "…" : formatTime(board?.outTime)}</strong>
+            </div>
           </div>
-          <p className="hrm-shift-hours">9h 0m</p>
         </section>
 
         <section className="hrm-card hrm-card--actions">
@@ -244,7 +264,22 @@ export default function HrmAttendancePage() {
           </div>
           <ul className="hrm-action-list">
             <li>
-              <button type="button">Web Clock-In</button>
+              <button
+                type="button"
+                disabled={busy || !canClockIn}
+                onClick={() => void punch("in")}
+              >
+                {canClockIn ? "Web Clock-In" : "Clocked in"}
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                disabled={busy || !canClockOut}
+                onClick={() => void punch("out")}
+              >
+                {canClockOut ? "Web Clock-Out" : "Clock out"}
+              </button>
             </li>
             <li>
               <button type="button" onClick={openWfh}>
@@ -252,13 +287,12 @@ export default function HrmAttendancePage() {
               </button>
             </li>
             <li>
-              <button type="button">On Duty</button>
-            </li>
-            <li>
               <Link to="/hrm/leave">Request leave</Link>
             </li>
             <li>
-              <button type="button">Attendance Policy</button>
+              <button type="button" className="secondary" onClick={() => void load()} disabled={loading}>
+                {loading ? "Loading…" : "Refresh times"}
+              </button>
             </li>
           </ul>
         </section>
@@ -301,82 +335,71 @@ export default function HrmAttendancePage() {
           </button>
         </div>
 
-        <div className="hrm-log-filters">
-          <span>Last 30 Days</span>
-          <div className="hrm-month-strip">
-            {["FEB", "MAR", "APR", "MAY", "JUN", "JUL"].map((m) => (
-              <button type="button" key={m} className="hrm-month-btn">
-                {m}
-              </button>
-            ))}
-            <button type="button" className="hrm-month-btn is-active">
-              30 DAYS
-            </button>
-          </div>
-        </div>
-
         {logTab === "log" && (
           <div className="table-scroll">
             <table className="table hrm-log-table">
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Attendance Visual</th>
-                  <th>Break Taken</th>
+                  <th>Office in</th>
+                  <th>Office out</th>
                   <th>Gross Hours</th>
                   <th>Arrival</th>
                   <th>Log</th>
                 </tr>
               </thead>
               <tbody>
-                {SAMPLE_LOGS.map((row) => (
-                  <tr key={`${row.day}-${row.date}`}>
-                    <td>
-                      <strong>
-                        {row.day}, {row.date}
-                      </strong>
-                      {row.weekOff && <span className="hrm-woff">W-OFF</span>}
-                    </td>
-                    <td>
-                      {row.weekOff ? (
-                        <span className="hrm-full-woff">Full day Weekly-off</span>
-                      ) : (
-                        <div className="hrm-visual-track">
-                          <div
-                            className="hrm-visual-fill"
-                            style={{ width: `${row.visualPct}%` }}
-                          />
-                        </div>
-                      )}
-                    </td>
-                    <td>{row.breakTaken}</td>
-                    <td>{row.grossHours}</td>
-                    <td>
-                      {row.arrivalOk ? (
-                        <span className="hrm-on-time">✓ On Time</span>
-                      ) : row.late ? (
-                        <span className="hrm-late">{row.late}</span>
-                      ) : (
-                        row.arrival
-                      )}
-                    </td>
-                    <td>
-                      {row.weekOff ? (
-                        "—"
-                      ) : (
-                        <span className="hrm-log-ok" aria-label="Logged">
-                          ✓
-                        </span>
-                      )}
+                {logs.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="muted">
+                      {loading
+                        ? "Loading attendance…"
+                        : "No office in/out times yet. Use Web Clock-In."}
                     </td>
                   </tr>
-                ))}
+                )}
+                {logs.map((row) => {
+                  const arrival = arrivalLabel(row.inTime);
+                  return (
+                    <tr key={row.id}>
+                      <td>
+                        <strong>{formatLogDate(row.attendanceDate)}</strong>
+                      </td>
+                      <td>{formatTime(row.inTime)}</td>
+                      <td>{formatTime(row.outTime)}</td>
+                      <td>
+                        <div className="hrm-visual-track" title={formatHours(row.totalHours)}>
+                          <div className="hrm-visual-fill" style={{ width: `${visualPct(row)}%` }} />
+                        </div>
+                        {formatHours(row.totalHours)}
+                      </td>
+                      <td>
+                        {arrival === "On Time" ? (
+                          <span className="hrm-on-time">✓ On Time</span>
+                        ) : arrival === "Late" ? (
+                          <span className="hrm-late">Late</span>
+                        ) : (
+                          arrival
+                        )}
+                      </td>
+                      <td>
+                        {row.inTime ? (
+                          <span className="hrm-log-ok" aria-label="Logged">
+                            ✓
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
         {logTab === "calendar" && (
-          <p className="lead">Calendar view — coming soon. Use Attendance Log for now.</p>
+          <p className="lead">Calendar view — coming soon. Use Attendance Log for office times.</p>
         )}
         {logTab === "requests" && (
           <p className="lead">No attendance requests pending.</p>

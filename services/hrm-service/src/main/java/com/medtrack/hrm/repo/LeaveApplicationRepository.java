@@ -11,5 +11,8 @@ public interface LeaveApplicationRepository extends JpaRepository<LeaveApplicati
   List<LeaveApplicationEntity> findByHospitalIdAndDoctorIdAndStatusOrderByCreationDateDesc(
       Long hospitalId, String doctorId, String status);
 
+  List<LeaveApplicationEntity> findByHospitalIdAndStatusOrderByCreationDateDesc(
+      Long hospitalId, String status);
+
   long countByHospitalIdAndDoctorIdAndStatus(Long hospitalId, String doctorId, String status);
 }

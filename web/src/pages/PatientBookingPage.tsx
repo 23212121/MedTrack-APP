@@ -1,4 +1,5 @@
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import { popupClosePath } from "../auth";
 import BookingsPage from "./BookingsPage";
 
 /**
@@ -30,8 +31,8 @@ export default function PatientBookingPage() {
               Choose a doctor and preferred time. No login required.
             </p>
           </div>
-          <Link to="/login" className="patient-booking-signin">
-            Staff sign in
+          <Link to={popupClosePath()} className="patient-booking-signin" aria-label="Close">
+            ×
           </Link>
         </header>
         <BookingsPage publicMode hospitalIdFilter={hospitalId || undefined} />

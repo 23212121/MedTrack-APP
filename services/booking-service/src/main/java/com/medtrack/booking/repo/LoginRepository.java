@@ -9,9 +9,13 @@ public interface LoginRepository extends JpaRepository<LoginEntity, String> {
   Optional<LoginEntity> findByLoginTypeAndLoginIdIgnoreCaseAndStatus(
       String loginType, String loginId, String status);
 
+  List<LoginEntity> findByLoginTypeAndDoctorIdAndStatus(
+      String loginType, String doctorId, String status);
+
   List<LoginEntity> findByLoginTypeAndHospitalIdAndStatus(
       String loginType, Long hospitalId, String status);
 
-  Optional<LoginEntity> findByLoginTypeAndHospitalId(
-      String loginType, Long hospitalId);
+  Optional<LoginEntity> findByLoginTypeAndHospitalId(String loginType, Long hospitalId);
+
+  Optional<LoginEntity> findByLoginTypeAndLoginIdIgnoreCase(String loginType, String loginId);
 }

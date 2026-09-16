@@ -5,6 +5,7 @@ import java.time.LocalDate;
 
 @Entity
 @Table(
+    schema = "svc",
     name = "hrm_employees",
     uniqueConstraints = {
       @UniqueConstraint(name = "uk_hrm_employee_code", columnNames = {"employee_id"}),

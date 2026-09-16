@@ -222,6 +222,23 @@ public class HrmAppService {
     return employees.findByDoctorIdOrderByEmployeeIdAsc(audit.doctorId());
   }
 
+  public List<Map<String, Object>> listRosterEmployees() {
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (EmployeeEntity e : employees.findAll()) {
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("employeeId", e.getEmployeeId());
+      row.put("firstName", e.getFirstName());
+      row.put("lastName", e.getLastName());
+      row.put("name", e.getFullName());
+      row.put("employeeType", e.getEmployeeType());
+      row.put("designation", e.getDesignation());
+      row.put("department", e.getDepartment());
+      row.put("doctorLinkId", e.getDoctorLinkId());
+      out.add(row);
+    }
+    return out;
+  }
+
   public EmployeeEntity getEmployee(String id) {
     return or404(employees.findById(id), "Employee not found");
   }
@@ -337,6 +354,92 @@ public class HrmAppService {
     if (body.getSource() == null) body.setSource("Manual");
     applyAudit(body);
     return attendance.save(body);
+  }
+
+  /** Today's office in/out plus recent logs for the logged-in doctor. */
+  @Transactional
+  public Map<String, Object> attendanceBoard() {
+    EmployeeEntity emp = ensureSelfEmployeeWithBalances();
+    LocalDate today = LocalDate.now();
+    List<AttendanceEntity> rows =
+        attendance.findByDoctorIdOrderByAttendanceDateDesc(audit.doctorId()).stream()
+            .filter(a -> emp.getEmployeeId().equals(a.getEmployeeId()))
+            .toList();
+    AttendanceEntity todayRow =
+        rows.stream()
+            .filter(a -> today.equals(a.getAttendanceDate()))
+            .findFirst()
+            .orElse(null);
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put("today", today.toString());
+    out.put("employeeId", emp.getEmployeeId());
+    out.put("employeeName", emp.getFullName());
+    out.put(
+        "inTime",
+        todayRow == null || todayRow.getInTime() == null ? null : todayRow.getInTime().toString());
+    out.put(
+        "outTime",
+        todayRow == null || todayRow.getOutTime() == null ? null : todayRow.getOutTime().toString());
+    out.put("status", todayRow == null ? null : todayRow.getStatus());
+    out.put("totalHours", todayRow == null ? null : todayRow.getTotalHours());
+    out.put("canClockIn", todayRow == null || todayRow.getInTime() == null);
+    out.put(
+        "canClockOut",
+        todayRow != null && todayRow.getInTime() != null && todayRow.getOutTime() == null);
+    out.put("logs", rows);
+    return out;
+  }
+
+  @Transactional
+  public AttendanceEntity clockIn() {
+    EmployeeEntity emp = ensureSelfEmployeeWithBalances();
+    LocalDate today = LocalDate.now();
+    AttendanceEntity row =
+        attendance.findByDoctorIdAndAttendanceDate(audit.doctorId(), today).stream()
+            .filter(a -> emp.getEmployeeId().equals(a.getEmployeeId()))
+            .findFirst()
+            .orElse(null);
+    if (row != null && row.getInTime() != null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Already clocked in today");
+    }
+    if (row == null) {
+      row = new AttendanceEntity();
+      row.setEmployeePk(emp.getId());
+      row.setEmployeeId(emp.getEmployeeId());
+      row.setEmployeeName(emp.getFullName());
+      row.setAttendanceDate(today);
+      row.setStatus("Present");
+      row.setSource("Web");
+    }
+    row.setInTime(LocalTime.now().withNano(0));
+    applyAudit(row);
+    return attendance.save(row);
+  }
+
+  @Transactional
+  public AttendanceEntity clockOut() {
+    EmployeeEntity emp = ensureSelfEmployeeWithBalances();
+    LocalDate today = LocalDate.now();
+    AttendanceEntity row =
+        attendance.findByDoctorIdAndAttendanceDate(audit.doctorId(), today).stream()
+            .filter(a -> emp.getEmployeeId().equals(a.getEmployeeId()))
+            .findFirst()
+            .orElse(null);
+    if (row == null || row.getInTime() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Clock in first");
+    }
+    if (row.getOutTime() != null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Already clocked out today");
+    }
+    LocalTime outTime = LocalTime.now().withNano(0);
+    row.setOutTime(outTime);
+    long mins = ChronoUnit.MINUTES.between(row.getInTime(), outTime);
+    if (mins < 0) mins += 24 * 60;
+    row.setTotalHours(
+        BigDecimal.valueOf(mins).divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP));
+    row.setStatus("Present");
+    applyAudit(row);
+    return attendance.save(row);
   }
 
   // —— Leave ——
@@ -685,7 +788,7 @@ public class HrmAppService {
 
   /**
    * Apply leave into svc.leave_applications (hospital_id, doctor_id, audit columns mandatory).
-   * Body: leaveTypeId, fromDate, toDate, reason, autoApprove (default true).
+   * Body: leaveTypeId, fromDate, toDate, reason, autoApprove (default false — pending for Approver).
    */
   @Transactional
   public LeaveApplicationEntity requestLeaveForSelf(Map<String, Object> body) {
@@ -727,7 +830,8 @@ public class HrmAppService {
     }
 
     boolean autoApprove =
-        body.get("autoApprove") == null || Boolean.parseBoolean(String.valueOf(body.get("autoApprove")));
+        body.get("autoApprove") != null
+            && Boolean.parseBoolean(String.valueOf(body.get("autoApprove")));
 
     LeaveApplicationEntity app = new LeaveApplicationEntity();
     app.setEmployeeId(emp.getEmployeeId());
@@ -755,7 +859,16 @@ public class HrmAppService {
   public LeaveApplicationEntity decideLeaveApplication(String id, String status, String remarks) {
     LeaveApplicationEntity app =
         or404(leaveApplications.findById(id), "Leave application not found");
-    app.setStatus(status);
+    if (audit.hospitalId() != null && !audit.hospitalId().equals(app.getHospitalId())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Leave is not in this hospital");
+    }
+    if (!"Pending".equalsIgnoreCase(app.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Leave is already " + app.getStatus());
+    }
+    if (!"Approved".equalsIgnoreCase(status) && !"Rejected".equalsIgnoreCase(status)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status must be Approved or Rejected");
+    }
+    app.setStatus("Approved".equalsIgnoreCase(status) ? "Approved" : "Rejected");
     app.setApproverRemarks(remarks);
     app.touchAudit(audit.hospitalId(), audit.doctorId(), audit.user());
     if ("Approved".equalsIgnoreCase(status)) {
@@ -1103,9 +1216,10 @@ public class HrmAppService {
 
     Object[][] hols = {
       {"Republic Day", LocalDate.of(LocalDate.now().getYear(), 1, 26)},
+      {"Holi", LocalDate.of(LocalDate.now().getYear(), 3, 14)},
       {"Independence Day", LocalDate.of(LocalDate.now().getYear(), 8, 15)},
-      {"Diwali", LocalDate.of(LocalDate.now().getYear(), 10, 20)},
-      {"Holi", LocalDate.of(LocalDate.now().getYear(), 3, 14)}
+      {"Mahatma Gandhi Jayanti", LocalDate.of(LocalDate.now().getYear(), 10, 2)},
+      {"Diwali", LocalDate.of(LocalDate.now().getYear(), 10, 20)}
     };
     for (Object[] row : hols) {
       HolidayEntity e = new HolidayEntity();

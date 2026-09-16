@@ -9,11 +9,24 @@ React UI talks to the **gateway** (`:8090`), which routes to:
 | `visit-service` | 8082 | Visits, check-in/token, start/late/complete, fee apply |
 | `notification-service` | 8083 | SMS (phone) + email for checkup lifecycle events |
 | `booking-service` | 8084 | REST GET/POST appointments — fetch from & insert into H2 DB |
+| `doctor-service` | 8085 | Doctor registration |
+| `hrm-service` | 8086 | HRM attendance / leave / inbox |
+| `medtrack-app` | 8090 | Unified jar (embeds most modules) — **recommended** |
 
 ```
-web (Vite :5173) → gateway :8090 → schedule / visit / notification / booking
+web (Vite :5173) → gateway / medtrack-app :8090 → schedule / visit / notification / booking
 ```
 
+## Service status (Spring Boot Actuator)
+
+| URL | Purpose |
+|-----|---------|
+| `GET /actuator/health` | Local health (DB, disk, etc.) |
+| `GET /actuator/info` | App info |
+| `GET /api/system/status` | Aggregated status of all configured services |
+| UI `/system-status` | Auto-refresh dashboard |
+
+When using **medtrack-app**, modules marked `embedded: true` show as **EMBEDDED** (running inside :8090). Separate processes on 8081–8086 show **UP** when their own Actuator responds.
 ## Prerequisites
 
 - JDK 17+

@@ -11,6 +11,7 @@ import java.time.LocalDate;
  */
 @Entity
 @Table(
+    schema = "svc",
     name = "leave_applications",
     indexes = {
       @Index(name = "idx_leave_app_hospital_doctor", columnList = "hospital_id, doctor_id"),

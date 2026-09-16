@@ -2,6 +2,7 @@ package com.medtrack.schedule.repo;
 
 import com.medtrack.schedule.domain.DoctorAvailabilityEntity;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -11,4 +12,12 @@ public interface DoctorAvailabilityRepository extends JpaRepository<DoctorAvaila
 
   List<DoctorAvailabilityEntity> findByDoctorIdAndStartsAtBetweenOrderByStartsAtAsc(
       String doctorId, Instant from, Instant to);
+
+  List<DoctorAvailabilityEntity>
+      findByHospitalIdAndStartsAtLessThanAndEndsAtGreaterThanOrderByStartsAtAsc(
+          Long hospitalId, Instant rangeEnd, Instant rangeStart);
+
+  List<DoctorAvailabilityEntity>
+      findByDoctorIdInAndStartsAtLessThanAndEndsAtGreaterThanOrderByStartsAtAsc(
+          Collection<String> doctorIds, Instant rangeEnd, Instant rangeStart);
 }

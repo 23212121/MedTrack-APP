@@ -15,7 +15,7 @@ spring:
     driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.postgresql.Driver}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: false
     properties:
       hibernate:
@@ -54,6 +54,9 @@ medtrack:
   email-from: ${MAIL_FROM:${MAIL_USER:noreply@sunriseclinic.local}}
   # false = do not pretend email was sent when SMTP fails (recommended for real Gmail)
   console-fallback: ${MAIL_CONSOLE_FALLBACK:false}
+  auth:
+    token-secret: ${MEDTRACK_AUTH_SECRET:medtrack-local-auth-secret-change-me}
+    token-ttl-hours: ${MEDTRACK_AUTH_TTL_HOURS:12}
   # Hospital patient test-document uploads (svc.documents)
   upload-dir: ${MEDTRACK_UPLOAD_DIR:uploads/patient-documents}
   # S3 settings are loaded from AWS_Application.properties (aws.s3.*)
@@ -65,3 +68,68 @@ medtrack:
     access-key: ${MEDTRACK_S3_ACCESS_KEY:${aws.s3.access-key:}}
     secret-key: ${MEDTRACK_S3_SECRET_KEY:${aws.s3.secret-key:}}
     prefix: ${MEDTRACK_S3_PREFIX:${aws.s3.prefix:patient-documents}}
+  # Actuator probes for optional standalone microservices
+  status:
+    probe-timeout-ms: 2000
+    services:
+      - name: schedule-service
+        port: 8081
+        url: http://localhost:8081/actuator/health
+        embedded: true
+      - name: visit-service
+        port: 8082
+        url: http://localhost:8082/actuator/health
+        embedded: true
+      - name: notification-service
+        port: 8083
+        url: http://localhost:8083/actuator/health
+        embedded: true
+      - name: booking-service
+        port: 8084
+        url: http://localhost:8084/actuator/health
+        embedded: true
+      - name: doctor-service
+        port: 8085
+        url: http://localhost:8085/actuator/health
+        embedded: false
+      - name: hrm-service
+        port: 8086
+        url: http://localhost:8086/actuator/health
+        embedded: true
+      - name: gateway
+        port: 8090
+        url: http://localhost:8090/actuator/health
+        embedded: true
+
+# ---------------------------------------------------------------------------
+# Spring Boot Actuator — service health / status
+# http://localhost:8090/actuator/health
+# http://localhost:8090/actuator/info
+# http://localhost:8090/api/system/status  (aggregated)
+# ---------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+  health:
+    db:
+      enabled: true
+    mail:
+      enabled: false
+    diskspace:
+      enabled: true
+
+info:
+  app:
+    name: medtrack-app
+    description: MedTrack unified API (booking, visit, schedule, notify, hrm)
+    java: ${java.version:17}

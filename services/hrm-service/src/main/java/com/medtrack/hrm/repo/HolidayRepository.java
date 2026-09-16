@@ -10,4 +10,11 @@ public interface HolidayRepository extends JpaRepository<HolidayEntity, String> 
 
   List<HolidayEntity> findByDoctorIdAndHolidayDateGreaterThanEqualOrderByHolidayDateAsc(
       String doctorId, LocalDate from);
+
+  List<HolidayEntity> findByHospitalIdOrderByHolidayDateAsc(Long hospitalId);
+
+  List<HolidayEntity> findByHospitalIdAndHolidayDateGreaterThanEqualOrderByHolidayDateAsc(
+      Long hospitalId, LocalDate from);
+
+  boolean existsByHospitalIdAndHolidayDate(Long hospitalId, LocalDate holidayDate);
 }

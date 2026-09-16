@@ -2,6 +2,7 @@ package com.medtrack.hrm.web;
 
 import com.medtrack.hrm.domain.LeaveApplicationEntity;
 import com.medtrack.hrm.service.HrmAppService;
+import com.medtrack.hrm.service.HrmRightsService;
 import java.util.Map;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,9 +10,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/hrm/leave")
 public class HrmLeaveController {
   private final HrmAppService hrm;
+  private final HrmRightsService rights;
 
-  public HrmLeaveController(HrmAppService hrm) {
+  public HrmLeaveController(HrmAppService hrm, HrmRightsService rights) {
     this.hrm = hrm;
+    this.rights = rights;
   }
 
   /** Leave summary for the doctor (balances + charts from DB). */
@@ -47,6 +50,7 @@ public class HrmLeaveController {
       @PathVariable String id,
       @RequestParam String status,
       @RequestParam(required = false) String remarks) {
+    rights.requireApprover();
     return hrm.decideLeaveApplication(id, status, remarks);
   }
 

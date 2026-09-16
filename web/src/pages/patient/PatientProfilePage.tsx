@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, PatientProfile } from "../../api";
 import { getPatientPhone } from "../../auth";
+import { toast } from "../../toast";
 
 export default function PatientProfilePage() {
   const phone = getPatientPhone();
@@ -18,7 +19,6 @@ export default function PatientProfilePage() {
     emergencyContact: "",
   });
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export default function PatientProfilePage() {
         emergencyContact: form.emergencyContact,
       });
       setProfile(res.profile);
-      setMessage("Profile updated");
+      toast.success("Profile updated");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");
     } finally {
@@ -70,7 +70,6 @@ export default function PatientProfilePage() {
   return (
     <div className="patient-portal-stack">
       {error && <div className="msg error">{error}</div>}
-      {message && <div className="msg ok">{message}</div>}
 
       <section className="panel">
         <h2>Personal information</h2>

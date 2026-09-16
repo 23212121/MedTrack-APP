@@ -1,6 +1,8 @@
 import { FormEvent, useState } from "react";
 import { api } from "../api";
+import NativeFileInput from "../components/NativeFileInput";
 import { session } from "../dl/MedTrackSession";
+import { toast } from "../toast";
 
 type PatientRow = {
   key: string;
@@ -20,20 +22,29 @@ function newRow(): PatientRow {
   };
 }
 
+function FilePicker({ onPick }: { onPick: (list: File[]) => void }) {
+  return (
+    <NativeFileInput
+      label="Upload documents (max 5)"
+      multiple
+      accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.tif,.tiff"
+      onPick={(list) => onPick(list.slice(0, 5))}
+    />
+  );
+}
+
 export default function PatientDocumentsPage() {
   const hospitalId = session.getHospitalId();
   const [rows, setRows] = useState<PatientRow[]>([newRow()]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
 
   function updateRow(key: string, patch: Partial<PatientRow>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
 
-  function onFilesChange(key: string, fileList: FileList | null) {
-    const files = fileList ? Array.from(fileList).slice(0, 5) : [];
-    updateRow(key, { files });
+  function onFilesChange(key: string, files: File[]) {
+    updateRow(key, { files: files.slice(0, 5) });
   }
 
   function addRow() {
@@ -47,7 +58,6 @@ export default function PatientDocumentsPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
-    setMessage("");
     if (!hospitalId) {
       setError("Hospital session required. Log in as hospital admin.");
       return;
@@ -79,23 +89,37 @@ export default function PatientDocumentsPage() {
     setSaving(true);
     try {
       let saved = 0;
+      let s3Ok = 0;
       for (const row of rows) {
-        await api.uploadPatientDocuments({
+        const result = await api.uploadPatientDocuments({
           patientName: row.patientName.trim(),
           aadhaarNumber: row.aadhaarNumber.replace(/\s+/g, ""),
           phoneNumber: row.phoneNumber.trim(),
           files: row.files,
         });
         saved += 1;
+        const dest = result.document?.destinationPath || result.s3Path || "";
+        if (result.s3Uploaded || dest.startsWith("s3://") || dest.startsWith("patient-documents/")) {
+          s3Ok += 1;
+        }
       }
-      setMessage(
-        saved === 1
-          ? "Patient test documents uploaded successfully."
-          : `${saved} patient document sets uploaded successfully.`,
+      toast.success(
+        s3Ok === saved
+          ? saved === 1
+            ? "Document uploaded to Amazon S3."
+            : `${saved} document sets uploaded to Amazon S3.`
+          : saved === 1
+            ? "Document saved."
+            : `${saved} document sets saved.`,
       );
       setRows([newRow()]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      const raw = err instanceof Error ? err.message : "";
+      setError(
+        /s3|amazon|iam|permissions boundary|PutObject|accesspoint|medtrackdoc/i.test(raw)
+          ? "Could not upload to Amazon S3. IAM user MedTrack-App needs s3:PutObject on bucket medtrackdoc (user policy and permissions boundary)."
+          : raw || "Upload failed",
+      );
     } finally {
       setSaving(false);
     }
@@ -103,10 +127,7 @@ export default function PatientDocumentsPage() {
 
   return (
     <section className="patient-docs-page">
-      <h1>Patient test documents</h1>
-
       {error && <div className="msg error">{error}</div>}
-      {message && <div className="msg ok">{message}</div>}
 
       <form className="panel stack patient-docs-form" onSubmit={onSubmit}>
         {rows.map((row, index) => (
@@ -153,15 +174,7 @@ export default function PatientDocumentsPage() {
                   required
                 />
               </label>
-              <label>
-                Upload documents (max 5)
-                <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.tif,.tiff"
-                  onChange={(e) => onFilesChange(row.key, e.target.files)}
-                />
-              </label>
+              <FilePicker onPick={(list) => onFilesChange(row.key, list)} />
             </div>
             {row.files.length > 0 && (
               <ul className="patient-docs-file-list">
