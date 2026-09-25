@@ -2,10 +2,10 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api, type MedicineOrder } from "../../api";
 import { toast } from "../../toast";
 
-type MedRow = { medicineName: string; price: string };
+type MedRow = { medicineName: string; quantity: string; days: string; price: string };
 
 function emptyRow(): MedRow {
-  return { medicineName: "", price: "" };
+  return { medicineName: "", quantity: "1", days: "30", price: "" };
 }
 
 function money(n?: number | null) {
@@ -30,7 +30,11 @@ export default function MedicalCheckOrderPage() {
   const [savingAmount, setSavingAmount] = useState(false);
 
   const total = useMemo(
-    () => rows.reduce((sum, row) => sum + (Number(row.price) || 0), 0),
+    () =>
+      rows.reduce(
+        (sum, row) => sum + (Number(row.quantity) || 0) * (Number(row.price) || 0),
+        0,
+      ),
     [rows],
   );
 
@@ -74,7 +78,9 @@ export default function MedicalCheckOrderPage() {
         full.items && full.items.length
           ? full.items.map((it) => ({
               medicineName: it.medicineName || "",
-              price: String(it.unitPrice ?? it.lineTotal ?? ""),
+              quantity: String(it.quantity ?? 1),
+              days: String(it.days || 30),
+              price: String(it.unitPrice ?? ""),
             }))
           : [emptyRow()],
       );
@@ -89,7 +95,8 @@ export default function MedicalCheckOrderPage() {
     const items = rows
       .map((row) => ({
         medicineName: row.medicineName.trim(),
-        quantity: 1,
+        quantity: Number(row.quantity) || 1,
+        days: Math.max(1, Number(row.days) || 30),
         unitPrice: Number(row.price) || 0,
       }))
       .filter((row) => row.medicineName);
@@ -114,7 +121,7 @@ export default function MedicalCheckOrderPage() {
         },
         true,
       );
-      toast.success(`Total ${money(items.reduce((s, it) => s + it.unitPrice, 0))} sent to patient`);
+      toast.success(`Total ${money(items.reduce((s, it) => s + it.quantity * it.unitPrice, 0))} sent to patient`);
       setAmountOrder(null);
       await load();
     } catch (err) {
@@ -261,7 +268,8 @@ export default function MedicalCheckOrderPage() {
               </button>
             </div>
             <p className="muted">
-              {amountOrder.patientName} · Total will show to the patient
+              {amountOrder.patientName} · Enter quantity, days on the slip, and unit price. Patient can
+              reduce quantity or days; unit price stays locked.
             </p>
             <form className="stack" onSubmit={(e) => void saveAmount(e)}>
               {rows.map((row, idx) => (
@@ -280,7 +288,37 @@ export default function MedicalCheckOrderPage() {
                     />
                   </label>
                   <label>
-                    Price
+                    Qty
+                    <input
+                      type="number"
+                      min={0.01}
+                      step="0.01"
+                      value={row.quantity}
+                      onChange={(e) =>
+                        setRows((cur) =>
+                          cur.map((r, i) => (i === idx ? { ...r, quantity: e.target.value } : r)),
+                        )
+                      }
+                      required
+                    />
+                  </label>
+                  <label>
+                    Days
+                    <input
+                      type="number"
+                      min={1}
+                      step="1"
+                      value={row.days}
+                      onChange={(e) =>
+                        setRows((cur) =>
+                          cur.map((r, i) => (i === idx ? { ...r, days: e.target.value } : r)),
+                        )
+                      }
+                      required
+                    />
+                  </label>
+                  <label>
+                    Unit price
                     <input
                       type="number"
                       min={0}

@@ -1,0 +1,153 @@
+- generic [active] [ref=f21e1]:
+  - banner [ref=f21e2]:
+    - generic [ref=f21e3]:
+      - generic [ref=f21e4]:
+        - link "Track Your Doctor MedTrack Clinic" [ref=f21e5] [cursor=pointer]:
+          - /url: index.html
+          - generic [aria-hidden] [ref=f21e6]: T
+          - generic [ref=f21e7]:
+            - strong [ref=f21e8]: Track Your Doctor
+            - generic [ref=f21e9]: MedTrack Clinic
+        - generic [ref=f21e10]: Live
+      - navigation [ref=f21e12]:
+        - link "Home" [ref=f21e13] [cursor=pointer]:
+          - /url: index.html
+        - link "About" [ref=f21e14] [cursor=pointer]:
+          - /url: about.html
+        - link "Features" [ref=f21e15] [cursor=pointer]:
+          - /url: features.html
+        - link "Journey" [ref=f21e16] [cursor=pointer]:
+          - /url: journey.html
+        - link "Contact" [ref=f21e17] [cursor=pointer]:
+          - /url: contact.html
+        - link "Get in touch" [ref=f21e18] [cursor=pointer]:
+          - /url: contact.html
+  - main [ref=f21e19]:
+    - generic [ref=f21e21]:
+      - generic [ref=f21e22]:
+        - paragraph [ref=f21e23]: Live clinic visits
+        - heading [level=1] [ref=f21e24]:
+          - text: Know where your
+          - emphasis [ref=f21e25]: doctor
+          - text: stands.
+        - paragraph [ref=f21e26]:
+          - text: Track Your Doctor is the public face of
+          - strong [ref=f21e27]: MedTrack Clinic
+          - text: — bookings, check-in tokens, live queues, delay alerts, pharmacy orders, and HR, in English and Hindi.
+        - generic [ref=f21e28]:
+          - link "See all features" [ref=f21e29] [cursor=pointer]:
+            - /url: features.html
+          - link "What is MedTrack?" [ref=f21e30] [cursor=pointer]:
+            - /url: about.html
+      - complementary "Sample visit ticket" [ref=f21e31]:
+        - generic [aria-hidden]: "14"
+        - generic [ref=f21e32]:
+          - generic [ref=f21e33]: Today’s slip
+          - strong [ref=f21e34]: "#14"
+        - generic [ref=f21e35]:
+          - generic [ref=f21e36]:
+            - term [ref=f21e37]: Doctor
+            - definition [ref=f21e38]: Dr. Mehta
+          - generic [ref=f21e39]:
+            - term [ref=f21e40]: Fixed time
+            - definition [ref=f21e41]: 14:30
+          - generic [ref=f21e42]:
+            - term [ref=f21e43]: Consult when
+            - definition [ref=f21e44]: ~15:05
+          - generic [ref=f21e45]:
+            - term [ref=f21e46]: Department
+            - definition [ref=f21e47]: Medicine
+        - generic [ref=f21e48]: Waiting · doctor running 15 min late
+    - list [ref=f21e51]:
+      - listitem [ref=f21e52]:
+        - strong [ref=f21e53]: "4"
+        - text: Login types
+      - listitem [ref=f21e54]:
+        - strong [ref=f21e55]: 15+
+        - text: Clinic modules
+      - listitem [ref=f21e56]:
+        - strong [ref=f21e57]: "3"
+        - text: Notify channels
+      - listitem [ref=f21e58]:
+        - strong [ref=f21e59]: "2"
+        - text: Languages
+    - generic [ref=f21e60]:
+      - generic [ref=f21e62]:
+        - paragraph [ref=f21e63]: Three beats
+        - heading "How patients track a doctor" [level=2] [ref=f21e64]
+      - paragraph [ref=f21e65]: Doctor name, fixed appointment time, token, and consult-when stay visible for every visit. Staff book from a phone call in under 45 seconds. Doctors run a simple queue.
+      - generic [ref=f21e66]:
+        - article [ref=f21e67]:
+          - generic [ref=f21e68]: "1"
+          - heading "Book" [level=3] [ref=f21e69]
+          - paragraph [ref=f21e70]: Desk staff or the patient books a doctor and slot. Confirmation goes out immediately.
+        - article [ref=f21e71]:
+          - generic [ref=f21e72]: "2"
+          - heading "Arrive & check in" [level=3] [ref=f21e73]
+          - paragraph [ref=f21e74]: A token is issued. The live queue shows wait time and “you’re next”.
+        - article [ref=f21e75]:
+          - generic [ref=f21e76]: "3"
+          - heading "Consult" [level=3] [ref=f21e77]
+          - paragraph [ref=f21e78]: The doctor starts, can mark delay, then completes. Overtime fees notify the patient.
+    - generic [ref=f21e79]:
+      - paragraph [ref=f21e80]: People
+      - heading "Who MedTrack is for" [level=2] [ref=f21e81]
+      - generic [ref=f21e82]:
+        - article [ref=f21e83]:
+          - heading "Hospitals & clinics" [level=3] [ref=f21e84]
+          - paragraph [ref=f21e85]: Register a hospital, manage doctors, bookings, documents, pharmacies, and HR from one desk.
+        - article [ref=f21e86]:
+          - heading "Doctors" [level=3] [ref=f21e87]
+          - paragraph [ref=f21e88]: Open today’s queue, start or complete consults, set weekly slots, and order medicines.
+        - article [ref=f21e89]:
+          - heading "Patients" [level=3] [ref=f21e90]
+          - paragraph [ref=f21e91]: Book or track without login, or use the portal for status, chat, reports, and orders.
+        - article [ref=f21e92]:
+          - heading "Medical stores" [level=3] [ref=f21e93]
+          - paragraph [ref=f21e94]: Accept prescriptions, quote amounts, wait for approval, and mark medicine ready.
+        - article [ref=f21e95]:
+          - heading "Front desk & HR" [level=3] [ref=f21e96]
+          - paragraph [ref=f21e97]: Search by phone, issue tokens, run attendance, leave, holidays, and approvals.
+    - generic [ref=f21e98]:
+      - paragraph [ref=f21e99]: Read next
+      - heading "Start with these pages" [level=2] [ref=f21e100]
+      - generic [ref=f21e101]:
+        - link "Guide About the application What MedTrack is — and what it is not." [ref=f21e102] [cursor=pointer]:
+          - /url: about.html
+          - generic [ref=f21e103]: Guide
+          - strong [ref=f21e104]: About the application
+          - paragraph [ref=f21e105]: What MedTrack is — and what it is not.
+        - link "Product Every module Hospital, doctor, patient, pharmacy, insights, and HRM." [ref=f21e106] [cursor=pointer]:
+          - /url: features.html
+          - generic [ref=f21e107]: Product
+          - strong [ref=f21e108]: Every module
+          - paragraph [ref=f21e109]: Hospital, doctor, patient, pharmacy, insights, and HRM.
+        - link "Flow Visit journey Called → booked → checked in → consult → done." [ref=f21e110] [cursor=pointer]:
+          - /url: journey.html
+          - generic [ref=f21e111]: Flow
+          - strong [ref=f21e112]: Visit journey
+          - paragraph [ref=f21e113]: Called → booked → checked in → consult → done.
+    - generic [ref=f21e115]:
+      - generic [ref=f21e116]:
+        - heading "Ready to talk?" [level=2] [ref=f21e117]
+        - paragraph [ref=f21e118]: Ask about hospital registration, doctor onboarding, or a visit that needs help.
+      - link "Contact the team" [ref=f21e119] [cursor=pointer]:
+        - /url: contact.html
+  - contentinfo [ref=f21e120]:
+    - generic [ref=f21e121]:
+      - generic [ref=f21e122]:
+        - strong [ref=f21e123]: Track Your Doctor
+        - paragraph [ref=f21e124]: Public guide for MedTrack Clinic
+      - paragraph [ref=f21e125]:
+        - link "About" [ref=f21e126] [cursor=pointer]:
+          - /url: about.html
+        - text: ·
+        - link "Features" [ref=f21e127] [cursor=pointer]:
+          - /url: features.html
+        - text: ·
+        - link "Journey" [ref=f21e128] [cursor=pointer]:
+          - /url: journey.html
+        - text: ·
+        - link "Contact" [ref=f21e129] [cursor=pointer]:
+          - /url: contact.html
+      - paragraph [ref=f21e130]: © 2026 MedTrack Clinic

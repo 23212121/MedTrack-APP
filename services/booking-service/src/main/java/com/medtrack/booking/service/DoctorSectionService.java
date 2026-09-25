@@ -162,6 +162,10 @@ public class DoctorSectionService {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "doctorUserId is required for User ID sign-in");
     }
+    String department = text(body, "department");
+    if (department == null || department.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "department is required");
+    }
 
     Map<String, Object> started = initWithId(requestedId);
     String doctorId = String.valueOf(started.get("doctorId"));

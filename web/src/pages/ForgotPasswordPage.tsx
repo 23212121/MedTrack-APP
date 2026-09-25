@@ -1,7 +1,9 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
+import { useT } from "../i18n";
 
 export default function ForgotPasswordPage() {
+  const t = useT();
   const [id, setId] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
@@ -13,21 +15,24 @@ export default function ForgotPasswordPage() {
 
   return (
     <section className="panel" style={{ maxWidth: 460, margin: "2rem auto" }}>
-      <h1 style={{ color: "var(--brand-dark)" }}>Forgot password</h1>
+      <h1 style={{ color: "var(--brand-dark)" }}>{t("Forgot password")}</h1>
       <p className="lead">
-        Enter your hospital ID or user ID. A hospital administrator can reset
-        your password for you.
+        {t(
+          "Enter your hospital ID or user ID. A hospital administrator can reset your password for you.",
+        )}
       </p>
 
       {submitted ? (
         <div className="msg ok">
-          Request noted for <strong>{id.trim()}</strong>. Please contact your
-          hospital administrator to reset the password.
+          {t(
+            "Request noted for {id}. Please contact your hospital administrator to reset the password.",
+            { id: id.trim() },
+          )}
         </div>
       ) : (
         <form className="stack" onSubmit={onSubmit}>
           <label>
-            Hospital ID or User ID
+            {t("Hospital ID or User ID")}
             <input
               value={id}
               onChange={(e) => setId(e.target.value)}
@@ -35,13 +40,13 @@ export default function ForgotPasswordPage() {
               required
             />
           </label>
-          <button type="submit">Continue</button>
+          <button type="submit">{t("Continue")}</button>
         </form>
       )}
 
       <p className="lead" style={{ marginTop: "1rem", marginBottom: 0 }}>
         <Link to="/login" style={{ textDecoration: "underline" }}>
-          Back to sign in
+          {t("Back to sign in")}
         </Link>
       </p>
     </section>

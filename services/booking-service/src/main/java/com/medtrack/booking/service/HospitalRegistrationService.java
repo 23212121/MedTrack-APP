@@ -1,11 +1,13 @@
 package com.medtrack.booking.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medtrack.booking.domain.HospitalEntity;
 import com.medtrack.booking.domain.LoginEntity;
 import com.medtrack.booking.repo.HospitalRepository;
 import com.medtrack.booking.repo.LoginRepository;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -145,6 +147,7 @@ public class HospitalRegistrationService {
     m.put("subscriptionPlan", e.getSubscriptionPlan());
     m.put("status", e.getStatus());
     m.put("createdAt", e.getCreatedAt() == null ? null : e.getCreatedAt().toString());
+    m.put("departments", departmentsFromJson(e.getRegistrationJson()));
     return m;
   }
 
@@ -157,5 +160,23 @@ public class HospitalRegistrationService {
   private static String text(Map<String, Object> body, String key) {
     Object v = body.get(key);
     return v == null ? null : String.valueOf(v);
+  }
+
+  private List<String> departmentsFromJson(String json) {
+    if (json == null || json.isBlank()) return List.of();
+    try {
+      JsonNode node = mapper.readTree(json).get("departments");
+      if (node == null || !node.isArray()) return List.of();
+      List<String> out = new ArrayList<>();
+      for (JsonNode item : node) {
+        String name = item.asText("").trim();
+        if (!name.isEmpty() && !out.contains(name)) {
+          out.add(name);
+        }
+      }
+      return out;
+    } catch (Exception ex) {
+      return List.of();
+    }
   }
 }

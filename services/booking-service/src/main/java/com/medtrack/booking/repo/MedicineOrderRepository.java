@@ -33,7 +33,7 @@ public interface MedicineOrderRepository extends JpaRepository<MedicineOrderEnti
       nativeQuery = true)
   String findMaxOrderNumber(@Param("prefix") String prefix);
 
-  @Modifying
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query(
       value =
           """

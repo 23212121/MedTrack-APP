@@ -1,0 +1,167 @@
+- generic [active] [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - generic [ref=f1e4]:
+      - link "9079743077" [ref=f1e5] [cursor=pointer]:
+        - /url: tel:+919079743077
+      - link "azherkhan061@gmail.com" [ref=f1e6] [cursor=pointer]:
+        - /url: mailto:azherkhan061@gmail.com
+    - generic [ref=f1e7]:
+      - generic [ref=f1e8]:
+        - link "MediCoz-APP Track Your Doctor" [ref=f1e9] [cursor=pointer]:
+          - /url: index.html
+          - generic [aria-hidden] [ref=f1e10]: M
+          - generic [ref=f1e11]:
+            - strong [ref=f1e12]: MediCoz-APP
+            - generic [ref=f1e13]: Track Your Doctor
+        - generic [ref=f1e14]: Live
+      - navigation [ref=f1e16]:
+        - link "Home" [ref=f1e17] [cursor=pointer]:
+          - /url: index.html
+        - link "About" [ref=f1e18] [cursor=pointer]:
+          - /url: about.html
+        - link "Features" [ref=f1e19] [cursor=pointer]:
+          - /url: features.html
+        - link "Journey" [ref=f1e20] [cursor=pointer]:
+          - /url: journey.html
+        - link "Contact" [ref=f1e21] [cursor=pointer]:
+          - /url: contact.html
+        - link "Get in touch" [ref=f1e22] [cursor=pointer]:
+          - /url: contact.html
+  - main [ref=f1e23]:
+    - generic [ref=f1e25]:
+      - generic [ref=f1e26]:
+        - paragraph [ref=f1e27]: Live clinic visits
+        - heading [level=1] [ref=f1e28]:
+          - text: Know where your
+          - emphasis [ref=f1e29]: doctor
+          - text: stands.
+        - paragraph [ref=f1e30]:
+          - text: Track Your Doctor is the public face of
+          - strong [ref=f1e31]: MediCoz-APP
+          - text: — bookings, check-in tokens, live queues, delay alerts, pharmacy orders, and HR, in English and Hindi.
+        - generic [ref=f1e32]:
+          - link "See all features" [ref=f1e33] [cursor=pointer]:
+            - /url: features.html
+          - link "What is MediCoz-APP?" [ref=f1e34] [cursor=pointer]:
+            - /url: about.html
+      - complementary "Sample visit ticket" [ref=f1e35]:
+        - generic [aria-hidden]: "14"
+        - generic [ref=f1e36]:
+          - generic [ref=f1e37]: Today’s slip
+          - strong [ref=f1e38]: "#14"
+        - generic [ref=f1e39]:
+          - generic [ref=f1e40]:
+            - term [ref=f1e41]: Doctor
+            - definition [ref=f1e42]: Dr. Mehta
+          - generic [ref=f1e43]:
+            - term [ref=f1e44]: Fixed time
+            - definition [ref=f1e45]: 14:30
+          - generic [ref=f1e46]:
+            - term [ref=f1e47]: Consult when
+            - definition [ref=f1e48]: ~15:05
+          - generic [ref=f1e49]:
+            - term [ref=f1e50]: Department
+            - definition [ref=f1e51]: Medicine
+        - generic [ref=f1e52]: Waiting · doctor running 15 min late
+    - list [ref=f1e55]:
+      - listitem [ref=f1e56]:
+        - strong [ref=f1e57]: "4"
+        - text: Login types
+      - listitem [ref=f1e58]:
+        - strong [ref=f1e59]: 15+
+        - text: Clinic modules
+      - listitem [ref=f1e60]:
+        - strong [ref=f1e61]: "3"
+        - text: Notify channels
+      - listitem [ref=f1e62]:
+        - strong [ref=f1e63]: "2"
+        - text: Languages
+    - generic [ref=f1e64]:
+      - generic [ref=f1e66]:
+        - paragraph [ref=f1e67]: Three beats
+        - heading "How patients track a doctor" [level=2] [ref=f1e68]
+      - paragraph [ref=f1e69]: Doctor name, fixed appointment time, token, and consult-when stay visible for every visit. Staff book from a phone call in under 45 seconds. Doctors run a simple queue.
+      - generic [ref=f1e70]:
+        - article [ref=f1e71]:
+          - generic [ref=f1e72]: "1"
+          - heading "Book" [level=3] [ref=f1e73]
+          - paragraph [ref=f1e74]: Desk staff or the patient books a doctor and slot. Confirmation goes out immediately.
+        - article [ref=f1e75]:
+          - generic [ref=f1e76]: "2"
+          - heading "Arrive & check in" [level=3] [ref=f1e77]
+          - paragraph [ref=f1e78]: A token is issued. The live queue shows wait time and “you’re next”.
+        - article [ref=f1e79]:
+          - generic [ref=f1e80]: "3"
+          - heading "Consult" [level=3] [ref=f1e81]
+          - paragraph [ref=f1e82]: The doctor starts, can mark delay, then completes. Overtime fees notify the patient.
+    - generic [ref=f1e83]:
+      - paragraph [ref=f1e84]: People
+      - heading "Who MediCoz-APP is for" [level=2] [ref=f1e85]
+      - generic [ref=f1e86]:
+        - article [ref=f1e87]:
+          - heading "Hospitals & clinics" [level=3] [ref=f1e88]
+          - paragraph [ref=f1e89]: Register a hospital, manage doctors, bookings, documents, pharmacies, and HR from one desk.
+        - article [ref=f1e90]:
+          - heading "Doctors" [level=3] [ref=f1e91]
+          - paragraph [ref=f1e92]: Open today’s queue, start or complete consults, set weekly slots, and order medicines.
+        - article [ref=f1e93]:
+          - heading "Patients" [level=3] [ref=f1e94]
+          - paragraph [ref=f1e95]: Book or track without login, or use the portal for status, chat, reports, and orders.
+        - article [ref=f1e96]:
+          - heading "Medical stores" [level=3] [ref=f1e97]
+          - paragraph [ref=f1e98]: Accept prescriptions, quote amounts, wait for approval, and mark medicine ready.
+        - article [ref=f1e99]:
+          - heading "Front desk & HR" [level=3] [ref=f1e100]
+          - paragraph [ref=f1e101]: Search by phone, issue tokens, run attendance, leave, holidays, and approvals.
+    - generic [ref=f1e102]:
+      - paragraph [ref=f1e103]: Read next
+      - heading "Start with these pages" [level=2] [ref=f1e104]
+      - generic [ref=f1e105]:
+        - link "Guide About the application What MediCoz-APP is — and what it is not." [ref=f1e106] [cursor=pointer]:
+          - /url: about.html
+          - generic [ref=f1e107]: Guide
+          - strong [ref=f1e108]: About the application
+          - paragraph [ref=f1e109]: What MediCoz-APP is — and what it is not.
+        - link "Product Every module Hospital, doctor, patient, pharmacy, insights, and HRM." [ref=f1e110] [cursor=pointer]:
+          - /url: features.html
+          - generic [ref=f1e111]: Product
+          - strong [ref=f1e112]: Every module
+          - paragraph [ref=f1e113]: Hospital, doctor, patient, pharmacy, insights, and HRM.
+        - link "Flow Visit journey Called → booked → checked in → consult → done." [ref=f1e114] [cursor=pointer]:
+          - /url: journey.html
+          - generic [ref=f1e115]: Flow
+          - strong [ref=f1e116]: Visit journey
+          - paragraph [ref=f1e117]: Called → booked → checked in → consult → done.
+    - generic [ref=f1e119]:
+      - generic [ref=f1e120]:
+        - heading "Ready to talk?" [level=2] [ref=f1e121]
+        - paragraph [ref=f1e122]: Ask about hospital registration, doctor onboarding, or a visit that needs help.
+      - link "Contact the team" [ref=f1e123] [cursor=pointer]:
+        - /url: contact.html
+  - contentinfo [ref=f1e124]:
+    - generic [ref=f1e125]:
+      - generic [ref=f1e126]:
+        - strong [ref=f1e127]: MediCoz-APP
+        - paragraph [ref=f1e128]: Public guide for MediCoz-APP
+        - paragraph [ref=f1e129]:
+          - link "Phone 9079743077" [ref=f1e130] [cursor=pointer]:
+            - /url: tel:+919079743077
+            - generic [ref=f1e131]: Phone
+            - text: "9079743077"
+          - link "Mail ID azherkhan061@gmail.com" [ref=f1e132] [cursor=pointer]:
+            - /url: mailto:azherkhan061@gmail.com
+            - generic [ref=f1e133]: Mail ID
+            - text: azherkhan061@gmail.com
+      - paragraph [ref=f1e134]:
+        - link "About" [ref=f1e135] [cursor=pointer]:
+          - /url: about.html
+        - text: ·
+        - link "Features" [ref=f1e136] [cursor=pointer]:
+          - /url: features.html
+        - text: ·
+        - link "Journey" [ref=f1e137] [cursor=pointer]:
+          - /url: journey.html
+        - text: ·
+        - link "Contact" [ref=f1e138] [cursor=pointer]:
+          - /url: contact.html
+      - paragraph [ref=f1e139]: © 2026 MediCoz-APP

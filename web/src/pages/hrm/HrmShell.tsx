@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { getHrmRights } from "../../api";
 import { session } from "../../dl/MedTrackSession";
+import { useT } from "../../i18n";
 
 const TAB_DEFS = [
   { code: "HRM_HOME", to: "/hrm", label: "Home", end: true },
@@ -19,6 +20,7 @@ const DEFAULT_CODES = new Set(
 );
 
 export default function HrmShell() {
+  const t = useT();
   const [allowed, setAllowed] = useState<Set<string>>(DEFAULT_CODES);
 
   useEffect(() => {
@@ -49,9 +51,9 @@ export default function HrmShell() {
   return (
     <div className="hrm-shell">
       <header className="hrm-topbar hrm-topbar--no-search">
-        <div className="hrm-brand">MedTrack Clinic</div>
+        <div className="hrm-brand">{t("MedTrack Clinic")}</div>
         <div className="hrm-top-actions">
-          <button type="button" className="hrm-bell" aria-label="Notifications">
+          <button type="button" className="hrm-bell" aria-label={t("Notifications")}>
             <span aria-hidden="true">🔔</span>
             <span className="hrm-bell-badge">10</span>
           </button>
@@ -61,7 +63,7 @@ export default function HrmShell() {
         </div>
       </header>
 
-      <nav className="hrm-tabs" aria-label="HRM modules">
+      <nav className="hrm-tabs" aria-label={t("HRM modules")}>
         {tabs.map((tab) => (
           <NavLink
             key={tab.to}
@@ -77,7 +79,7 @@ export default function HrmShell() {
                 .join(" ")
             }
           >
-            {tab.label}
+            {t(tab.label)}
           </NavLink>
         ))}
       </nav>

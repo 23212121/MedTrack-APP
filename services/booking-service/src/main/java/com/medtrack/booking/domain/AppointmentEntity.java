@@ -67,6 +67,10 @@ public class AppointmentEntity {
   @Column(nullable = false, length = 32)
   private String status = "BOOKED";
 
+  /** Snapshot of doctor clinical department at booking time. */
+  @Column(name = "department", length = 255)
+  private String department;
+
   /** HOSPITAL | PATIENT — who initiated the booking. */
   @Column(name = "booked_by", length = 32)
   private String bookedBy;
@@ -112,6 +116,8 @@ public class AppointmentEntity {
   public void setAddress(String address) { this.address = address; }
   public String getReason() { return reason; }
   public void setReason(String reason) { this.reason = reason; }
+  public String getDepartment() { return department; }
+  public void setDepartment(String department) { this.department = department; }
   public LocalDate getAppointmentDate() { return appointmentDate; }
   public void setAppointmentDate(LocalDate appointmentDate) { this.appointmentDate = appointmentDate; }
   public Instant getAppointmentTime() { return appointmentTime; }

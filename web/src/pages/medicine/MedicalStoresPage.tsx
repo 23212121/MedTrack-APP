@@ -10,6 +10,8 @@ export default function MedicalStoresPage() {
   const [storeName, setStoreName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
   const [password, setPassword] = useState("123456");
   const [saving, setSaving] = useState(false);
 
@@ -35,12 +37,16 @@ export default function MedicalStoresPage() {
         storeName,
         phone,
         address,
+        city,
+        state,
         password,
       });
       toast.success(created.message || `Registered ${created.storeCode}`);
       setStoreName("");
       setPhone("");
       setAddress("");
+      setCity("");
+      setState("");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not register store");
@@ -69,6 +75,16 @@ export default function MedicalStoresPage() {
           Address
           <input value={address} onChange={(e) => setAddress(e.target.value)} />
         </label>
+        <div className="row">
+          <label>
+            State
+            <input value={state} onChange={(e) => setState(e.target.value)} placeholder="Optional" />
+          </label>
+          <label>
+            City
+            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Optional" />
+          </label>
+        </div>
         <label>
           Login password
           <input value={password} onChange={(e) => setPassword(e.target.value)} required />
@@ -84,6 +100,8 @@ export default function MedicalStoresPage() {
             <tr>
               <th>Code</th>
               <th>Name</th>
+              <th>City</th>
+              <th>State</th>
               <th>Phone</th>
               <th>Status</th>
               <th></th>
@@ -94,6 +112,8 @@ export default function MedicalStoresPage() {
               <tr key={s.id}>
                 <td>{s.storeCode}</td>
                 <td>{s.storeName}</td>
+                <td>{s.city || "—"}</td>
+                <td>{s.state || "—"}</td>
                 <td>{s.phone || "—"}</td>
                 <td>{s.status}</td>
                 <td>

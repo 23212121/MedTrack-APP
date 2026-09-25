@@ -67,10 +67,13 @@ function friendlyHttpError(status: number, text: string): string {
 }
 
 function resolveDoctorId(): string {
+  if (session.isMedical() || session.isPatient() || session.getLoginType() === "HOSPITAL") {
+    return "";
+  }
   const userId = session.getUserId();
   if (session.getLoginType() === "USER" && userId) return userId;
   if (userId && userId.startsWith("DOC-")) return userId;
-  return DOCTOR_ID;
+  return "";
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -318,6 +321,7 @@ export type Booking = {
   hospitalName?: string;
   doctorId: string;
   doctorName?: string;
+  department?: string;
   patientName: string;
   patientPhone: string;
   patientAge?: number;
@@ -358,8 +362,11 @@ export type Appointment = {
   hospitalName?: string;
   doctorName?: string;
   doctorId: string;
+  department?: string;
   patientId: string;
   patientName: string;
+  patientPhone?: string;
+  phoneNumber?: string;
   patientAge?: number;
   gender?: string;
   address?: string;
@@ -393,6 +400,7 @@ export type DoctorRegistration = {
   email: string;
   mobileNumber: string;
   specialization: string;
+  department?: string;
   status: string;
   hospitalId?: number;
   hospitalName?: string;
@@ -682,6 +690,21 @@ export const api = {
   },
 
   bookings: () => request<{ count: number; bookings: Booking[] }>("/api/bookings"),
+  searchPatients: (name: string) =>
+    request<{
+      count: number;
+      name: string;
+      patients: Array<{
+        id?: string;
+        name?: string;
+        phone?: string;
+        age?: number | null;
+        gender?: string;
+        email?: string;
+        address?: string;
+        source?: string;
+      }>;
+    }>(`/api/patients/search?name=${encodeURIComponent(name)}`),
   createBooking: (body: CreateBookingBody) =>
     request<{ message: string; booking: Booking; appointment?: Appointment }>(
       "/api/bookings",
@@ -1133,11 +1156,60 @@ export const api = {
       { method: "PUT", body: JSON.stringify(body) },
     ),
 
-  acceptMedicineAmount: (id: string) =>
+  acceptMedicineAmount: (
+    id: string,
+    body?: {
+      requestedDays?: number;
+      items?: { id?: string; quantity: number; requestedDays?: number }[];
+    },
+  ) =>
     request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/amount/accept`, {
       method: "POST",
-      body: "{}",
+      body: JSON.stringify(body || {}),
     }),
+
+  createMedicineRazorpayOrder: (
+    id: string,
+    body?: {
+      requestedDays?: number;
+      items?: { id?: string; quantity: number; requestedDays?: number }[];
+    },
+  ) =>
+    request<{
+      razorpayOrderId?: string;
+      amount: number;
+      currency: string;
+      keyId?: string;
+      razorpayEnabled?: boolean;
+      upiId?: string;
+      upiUri?: string;
+      upiApps?: { id: string; name: string; uri: string }[];
+      order: MedicineOrder;
+    }>(`/api/medicine-orders/${encodeURIComponent(id)}/payment/razorpay/order`, {
+      method: "POST",
+      body: JSON.stringify(body || {}),
+    }),
+
+  verifyMedicineRazorpayPayment: (
+    id: string,
+    body: {
+      requestedDays?: number;
+      items?: { id?: string; quantity: number; requestedDays?: number }[];
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+    },
+  ) =>
+    request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/payment/razorpay/verify`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  uploadMedicinePaymentScreenshot: (id: string, form: FormData) =>
+    requestForm<MedicineOrder>(
+      `/api/medicine-orders/${encodeURIComponent(id)}/payment/screenshot`,
+      form,
+    ),
 
   rejectMedicineAmount: (id: string, reason: string, comments?: string) =>
     request<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/amount/reject`, {
@@ -1178,10 +1250,11 @@ export const api = {
   uploadMedicineDocuments: (id: string, form: FormData) =>
     requestForm<MedicineOrder>(`/api/medicine-orders/${encodeURIComponent(id)}/documents`, form),
 
-  medicalStores: (hospitalId?: string | number, activeOnly = false) => {
+  medicalStores: (hospitalId?: string | number, activeOnly = false, allHospitals = false) => {
     const qs = new URLSearchParams();
     if (hospitalId != null && String(hospitalId)) qs.set("hospitalId", String(hospitalId));
     if (activeOnly) qs.set("activeOnly", "true");
+    if (allHospitals) qs.set("allHospitals", "true");
     const suffix = qs.toString() ? `?${qs}` : "";
     return request<{ count: number; stores: MedicalStore[] }>(`/api/medical-stores${suffix}`);
   },
@@ -1190,6 +1263,8 @@ export const api = {
     storeName: string;
     phone?: string;
     address?: string;
+    city?: string;
+    state?: string;
     password?: string;
   }) =>
     request<MedicalStore & { loginId?: string; message?: string }>("/api/medical-stores", {
@@ -1209,6 +1284,7 @@ export type MedicineOrderDocument = {
   fileName: string;
   contentType?: string;
   latest?: boolean;
+  kind?: string;
   createdAt?: string;
   previewUrl?: string;
 };
@@ -1218,6 +1294,9 @@ export type MedicineOrderItem = {
   prescribedName?: string;
   medicineName: string;
   quantity: number;
+  quotedQuantity?: number;
+  days?: number;
+  requestedDays?: number;
   unitPrice?: number;
   lineTotal?: number;
   availability?: string;
@@ -1226,10 +1305,14 @@ export type MedicineOrderItem = {
 };
 
 export type MedicineOrderItemInput = {
+  id?: string;
   prescribedName?: string;
   medicineName: string;
   quantity: number;
   unitPrice: number;
+  days?: number;
+  requestedDays?: number;
+  quotedQuantity?: number;
   availability?: string;
   substituteName?: string;
   substituteReason?: string;
@@ -1276,6 +1359,13 @@ export type MedicineOrder = {
   currentAmount?: number | null;
   amountVisible?: boolean;
   amountStatus?: string;
+  paymentStatus?: string;
+  paymentMethod?: string;
+  razorpayEnabled?: boolean;
+  upiId?: string;
+  upiUri?: string;
+  upiQrUrl?: string;
+  upiApps?: { id: string; name: string; uri: string }[];
   bookedBy?: string;
   cancelReason?: string;
   cancelledAt?: string;
@@ -1326,10 +1416,13 @@ export type MedicineOrderNotification = {
 export type MedicalStore = {
   id: string;
   hospitalId: number;
+  hospitalName?: string;
   storeCode: string;
   storeName: string;
   phone?: string;
   address?: string;
+  city?: string;
+  state?: string;
   status: string;
   createdAt?: string;
   loginId?: string;
@@ -1622,6 +1715,7 @@ export type HospitalRegistrationSummary = {
   subscriptionPlan?: string;
   status?: string;
   createdAt?: string;
+  departments?: string[];
 };
 
 export type LeaveBalanceRow = {
@@ -1968,5 +2062,19 @@ export function decideApproverWfh(id: string, status: string) {
   return request<WfhRequest>(`/api/hrm/approver/wfh/${id}/decide`, {
     method: "POST",
     body: JSON.stringify({ status }),
+  });
+}
+
+export function submitContactInquiry(body: {
+  name: string;
+  email: string;
+  phone?: string;
+  organization?: string;
+  subject: string;
+  message: string;
+}) {
+  return request<{ ok: boolean; inquiryId: string; message: string }>("/api/contact", {
+    method: "POST",
+    body: JSON.stringify(body),
   });
 }

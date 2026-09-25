@@ -75,6 +75,7 @@ export function logout(): void {
 
 /** Routes that render outside the logged-in app shell (no sidebar). */
 export const PUBLIC_PATHS = new Set([
+  "/about",
   "/login",
   "/logout",
   "/forgot-password",

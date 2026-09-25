@@ -21,6 +21,15 @@ public class MedicalStoreEntity {
 
   private String phone;
   private String address;
+
+  @Column(length = 120)
+  private String city;
+
+  @Column(length = 120)
+  private String state;
+
+  @Column(name = "upi_id")
+  private String upiId;
   private String status = "ACTIVE";
 
   @Column(name = "created_at")
@@ -47,6 +56,12 @@ public class MedicalStoreEntity {
   public void setPhone(String phone) { this.phone = phone; }
   public String getAddress() { return address; }
   public void setAddress(String address) { this.address = address; }
+  public String getCity() { return city; }
+  public void setCity(String city) { this.city = city; }
+  public String getState() { return state; }
+  public void setState(String state) { this.state = state; }
+  public String getUpiId() { return upiId; }
+  public void setUpiId(String upiId) { this.upiId = upiId; }
   public String getStatus() { return status; }
   public void setStatus(String status) { this.status = status; }
   public Instant getCreatedAt() { return createdAt; }

@@ -1,0 +1,90 @@
+- generic [ref=f7e1]:
+  - banner [ref=f7e2]:
+    - generic [ref=f7e3]:
+      - generic [ref=f7e4]:
+        - link "Track Your Doctor MedTrack Clinic" [ref=f7e5] [cursor=pointer]:
+          - /url: index.html
+          - generic [aria-hidden] [ref=f7e6]: T
+          - generic [ref=f7e7]:
+            - strong [ref=f7e8]: Track Your Doctor
+            - generic [ref=f7e9]: MedTrack Clinic
+        - generic [ref=f7e10]: Live
+      - navigation [ref=f7e12]:
+        - link "Home" [ref=f7e13] [cursor=pointer]:
+          - /url: index.html
+        - link "About" [ref=f7e14] [cursor=pointer]:
+          - /url: about.html
+        - link "Features" [ref=f7e15] [cursor=pointer]:
+          - /url: features.html
+        - link "Journey" [ref=f7e16] [cursor=pointer]:
+          - /url: journey.html
+        - link "Contact" [ref=f7e17] [cursor=pointer]:
+          - /url: contact.html
+        - link "Get in touch" [ref=f7e18] [cursor=pointer]:
+          - /url: contact.html
+  - main [ref=f7e19]:
+    - generic [ref=f7e21]:
+      - paragraph [ref=f7e22]: Contact
+      - heading [level=1] [ref=f7e23]:
+        - text: Write to the MedTrack
+        - emphasis [ref=f7e24]: team
+        - text: .
+      - paragraph [ref=f7e25]: Questions about adopting MedTrack, registering a hospital, or a visit that needs help? This HTML site works online with no server — your email app sends the note.
+    - generic [ref=f7e26]:
+      - generic [ref=f7e27]:
+        - heading "Reach us" [level=2] [ref=f7e28]
+        - paragraph [ref=f7e29]:
+          - strong [ref=f7e30]: Email
+          - link "azherkhan061@gmail.com" [ref=f7e31] [cursor=pointer]:
+            - /url: mailto:azherkhan061@gmail.com
+        - paragraph [ref=f7e32]:
+          - strong [ref=f7e33]: Product
+          - text: Track Your Doctor is the public guide for MedTrack Clinic — hospital visit tracking, queues, doctor workflows, pharmacy, and HR.
+        - paragraph [ref=f7e34]:
+          - link "About" [ref=f7e35] [cursor=pointer]:
+            - /url: about.html
+          - text: ·
+          - link "Features" [ref=f7e36] [cursor=pointer]:
+            - /url: features.html
+          - text: ·
+          - link "Journey" [ref=f7e37] [cursor=pointer]:
+            - /url: journey.html
+      - generic [ref=f7e38]:
+        - heading "Send a message" [level=2] [ref=f7e39]
+        - generic [ref=f7e40]:
+          - generic [ref=f7e41]: Full name *
+          - textbox "Full name *" [ref=f7e42]
+        - generic [ref=f7e43]:
+          - generic [ref=f7e44]: Email *
+          - textbox "Email *" [ref=f7e45]
+        - generic [ref=f7e46]:
+          - text: Mobile number
+          - textbox "Mobile number" [ref=f7e47]
+        - generic [ref=f7e48]:
+          - text: Hospital or organization
+          - textbox "Hospital or organization" [ref=f7e49]
+        - generic [ref=f7e50]:
+          - generic [ref=f7e51]: Subject *
+          - textbox "Subject *" [ref=f7e52]
+        - generic [ref=f7e53]:
+          - generic [ref=f7e54]: Message *
+          - textbox "Message *" [ref=f7e55]
+        - button "Send message" [ref=f7e56] [cursor=pointer]
+  - contentinfo [ref=f7e57]:
+    - generic [ref=f7e58]:
+      - generic [ref=f7e59]:
+        - strong [ref=f7e60]: Track Your Doctor
+        - paragraph [ref=f7e61]: Public guide for MedTrack Clinic
+      - paragraph [ref=f7e62]:
+        - link "About" [ref=f7e63] [cursor=pointer]:
+          - /url: about.html
+        - text: ·
+        - link "Features" [ref=f7e64] [cursor=pointer]:
+          - /url: features.html
+        - text: ·
+        - link "Journey" [ref=f7e65] [cursor=pointer]:
+          - /url: journey.html
+        - text: ·
+        - link "Contact" [ref=f7e66] [cursor=pointer]:
+          - /url: contact.html
+      - paragraph [ref=f7e67]: © 2026 MedTrack Clinic

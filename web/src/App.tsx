@@ -2,10 +2,12 @@ import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { useState } from "react";
 import { isLoggedIn, isPatientLoggedIn, isPublicPath, popupClosePath } from "./auth";
 import { session } from "./dl/MedTrackSession";
+import { useT } from "./i18n";
 import AppHeader from "./components/AppHeader";
 import { knownPaths, doctorNavGroups, navGroups, pageTitles } from "./nav";
 import { patientKnownPaths, patientNavGroups, patientPageTitles } from "./patientNav";
 import { medicalKnownPaths, medicalNavGroups, medicalPageTitles } from "./medicalNav";
+import AboutPage from "./pages/AboutPage";
 import HomePage from "./pages/HomePage";
 import SchedulesPage from "./pages/SchedulesPage";
 import AvailabilityPage from "./pages/AvailabilityPage";
@@ -55,6 +57,7 @@ import MedicalStoresPage from "./pages/medicine/MedicalStoresPage";
 import MedicalNotificationsPage from "./pages/medicine/MedicalNotificationsPage";
 
 export default function App() {
+  const t = useT();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const loggedIn = isLoggedIn();
@@ -94,6 +97,7 @@ export default function App() {
       location.pathname.startsWith("/book/");
     const isQueue = location.pathname === "/queue";
     const isTrack = location.pathname === "/track";
+    const isInfo = location.pathname === "/about";
     const widePublic = location.pathname === "/hospital-register";
     const fullBleed = isBook || isQueue || isTrack;
     const isLogin = location.pathname === "/login";
@@ -103,19 +107,24 @@ export default function App() {
       <div
         className={`app-shell app-shell--auth${fullBleed ? " app-shell--book" : ""}${
           isLogin ? " app-shell--login" : ""
-        }`}
+        }${isInfo ? " app-shell--info" : ""}`}
       >
         <AppHeader closeTo={isPopupPage ? popupClosePath() : undefined} />
         <main
           className={`content content--auth${
-            widePublic
-              ? " content--auth-wide"
-              : fullBleed
-                ? " content--auth-book"
-                : " content--error"
+            isInfo
+              ? " content--info"
+              : widePublic
+                ? " content--auth-wide"
+                : fullBleed
+                  ? " content--auth-book"
+                  : isLogin
+                    ? " content--login"
+                    : " content--error"
           }`}
         >
           <Routes>
+            <Route path="/about" element={<AboutPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/logout" element={<LogoutPage />} />
@@ -157,26 +166,26 @@ export default function App() {
           <button
             type="button"
             className="sidebar-backdrop"
-            aria-label="Close menu"
+            aria-label={t("Close menu")}
             onClick={() => setSidebarOpen(false)}
           />
         )}
 
-        <aside className="sidebar sidebar--patient" aria-label="Patient navigation">
+        <aside className="sidebar sidebar--patient" aria-label={t("Patient navigation")}>
           <div className="sidebar-brand">
             <span className="sidebar-mark" aria-hidden="true">
               P
             </span>
             <div>
               <div className="brand">MedTrack</div>
-              <p className="sidebar-tagline">Patient portal</p>
+              <p className="sidebar-tagline">{t("Patient portal")}</p>
             </div>
           </div>
 
           <nav className="sidebar-nav">
             {patientNavGroups.map((group) => (
               <div key={group.title} className="sidebar-group">
-                <p className="sidebar-group-title">{group.title}</p>
+                <p className="sidebar-group-title">{t(group.title)}</p>
                 <ul>
                   {group.items.map((item) => (
                     <li key={item.to}>
@@ -185,8 +194,8 @@ export default function App() {
                         end={item.end}
                         onClick={() => setSidebarOpen(false)}
                       >
-                        <span className="nav-label">{item.label}</span>
-                        <span className="nav-hint">{item.hint}</span>
+                        <span className="nav-label">{t(item.label)}</span>
+                        <span className="nav-hint">{t(item.hint)}</span>
                       </NavLink>
                     </li>
                   ))}
@@ -202,10 +211,10 @@ export default function App() {
               {session.getPatientPhone() || session.getPatientId()}
             </p>
             <NavLink to="/patient/profile" onClick={() => setSidebarOpen(false)}>
-              Profile
+              {t("Profile")}
             </NavLink>
             <NavLink to="/patient/logout" onClick={() => setSidebarOpen(false)}>
-              Sign out
+              {t("Sign out")}
             </NavLink>
           </div>
         </aside>
@@ -234,6 +243,9 @@ export default function App() {
     if (patientLoggedIn) {
       return <Navigate to="/patient" replace />;
     }
+    if (location.pathname === "/") {
+      return <Navigate to="/about" replace />;
+    }
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
@@ -257,24 +269,24 @@ export default function App() {
           <button
             type="button"
             className="sidebar-backdrop"
-            aria-label="Close menu"
+            aria-label={t("Close menu")}
             onClick={() => setSidebarOpen(false)}
           />
         )}
-        <aside className="sidebar" aria-label="Medical store navigation">
+        <aside className="sidebar" aria-label={t("Medical store navigation")}>
           <div className="sidebar-brand">
             <span className="sidebar-mark" aria-hidden="true">
               Rx
             </span>
             <div>
               <div className="brand">MedTrack</div>
-              <p className="sidebar-tagline">Medical store</p>
+              <p className="sidebar-tagline">{t("Medical store")}</p>
             </div>
           </div>
           <nav className="sidebar-nav">
             {medicalNavGroups.map((group) => (
               <div key={group.title} className="sidebar-group">
-                <p className="sidebar-group-title">{group.title}</p>
+                <p className="sidebar-group-title">{t(group.title)}</p>
                 <ul>
                   {group.items.map((item) => (
                     <li key={item.to}>
@@ -283,8 +295,8 @@ export default function App() {
                         end={item.end === true}
                         onClick={() => setSidebarOpen(false)}
                       >
-                        <span className="nav-label">{item.label}</span>
-                        <span className="nav-hint">{item.hint}</span>
+                        <span className="nav-label">{t(item.label)}</span>
+                        <span className="nav-hint">{t(item.hint)}</span>
                       </NavLink>
                     </li>
                   ))}
@@ -296,12 +308,12 @@ export default function App() {
             <p>
               <strong>{session.getUsername()}</strong>
               <br />
-              Hospital {session.getHospitalId()}
+              {t("Hospital {id}", { id: String(session.getHospitalId() || "") })}
               <br />
-              Store {session.getMedicalStoreId()}
+              {t("Store {id}", { id: String(session.getMedicalStoreId() || "") })}
             </p>
             <NavLink to="/logout" onClick={() => setSidebarOpen(false)}>
-              Logout
+              {t("Logout")}
             </NavLink>
           </div>
         </aside>
@@ -378,26 +390,26 @@ export default function App() {
         <button
           type="button"
           className="sidebar-backdrop"
-          aria-label="Close menu"
+          aria-label={t("Close menu")}
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      <aside className="sidebar" aria-label="Main navigation">
+      <aside className="sidebar" aria-label={t("Main navigation")}>
         <div className="sidebar-brand">
           <span className="sidebar-mark" aria-hidden="true">
             M
           </span>
           <div>
             <div className="brand">MedTrack</div>
-            <p className="sidebar-tagline">Clinic visit ops</p>
+            <p className="sidebar-tagline">{t("Clinic visit ops")}</p>
           </div>
         </div>
 
         <nav className="sidebar-nav">
           {sidebarGroups.map((group) => (
             <div key={group.title} className="sidebar-group">
-              <p className="sidebar-group-title">{group.title}</p>
+              <p className="sidebar-group-title">{t(group.title)}</p>
               <ul>
                 {group.items.map((item) => (
                   <li key={item.to}>
@@ -406,8 +418,8 @@ export default function App() {
                       end={item.end === true}
                       onClick={() => setSidebarOpen(false)}
                     >
-                      <span className="nav-label">{item.label}</span>
-                      <span className="nav-hint">{item.hint}</span>
+                      <span className="nav-label">{t(item.label)}</span>
+                      <span className="nav-hint">{t(item.hint)}</span>
                     </NavLink>
                   </li>
                 ))}
@@ -421,15 +433,15 @@ export default function App() {
             <p>
               <strong>{hospitalLabel}</strong>
               <br />
-              Hospital {session.getHospitalId()}
+              {t("Hospital {id}", { id: String(session.getHospitalId() || "") })}
               <br />
-              {session.getLoginType() === "USER" ? "Doctor" : "Admin"} ·{" "}
+              {session.getLoginType() === "USER" ? t("Doctor") : t("Admin")} ·{" "}
               {session.getUserId() || session.getUsername()}
             </p>
           )}
-          {!hospitalLabel && <p>MedTrack session</p>}
+          {!hospitalLabel && <p>{t("MedTrack session")}</p>}
           <NavLink to="/logout" onClick={() => setSidebarOpen(false)}>
-            Logout
+            {t("Logout")}
           </NavLink>
         </div>
       </aside>

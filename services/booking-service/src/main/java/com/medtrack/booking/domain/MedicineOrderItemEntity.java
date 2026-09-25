@@ -28,6 +28,12 @@ public class MedicineOrderItemEntity {
   private String substituteName;
   @Column(name = "substitute_reason")
   private String substituteReason;
+  @Column(name = "days")
+  private int days = 30;
+  @Column(name = "requested_days")
+  private int requestedDays = 30;
+  @Column(name = "quoted_quantity")
+  private double quotedQuantity;
   @Column(name = "sort_order")
   private int sortOrder;
 
@@ -51,6 +57,12 @@ public class MedicineOrderItemEntity {
   public void setSubstituteName(String substituteName) { this.substituteName = substituteName; }
   public String getSubstituteReason() { return substituteReason; }
   public void setSubstituteReason(String substituteReason) { this.substituteReason = substituteReason; }
+  public int getDays() { return days; }
+  public void setDays(int days) { this.days = days; }
+  public int getRequestedDays() { return requestedDays; }
+  public void setRequestedDays(int requestedDays) { this.requestedDays = requestedDays; }
+  public double getQuotedQuantity() { return quotedQuantity; }
+  public void setQuotedQuantity(double quotedQuantity) { this.quotedQuantity = quotedQuantity; }
   public int getSortOrder() { return sortOrder; }
   public void setSortOrder(int sortOrder) { this.sortOrder = sortOrder; }
 }

@@ -1,7 +1,17 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
+  AllCommunityModule,
+  ColDef,
+  ICellRendererParams,
+  ModuleRegistry,
+  themeQuartz,
+} from "ag-grid-community";
+import { AgGridReact } from "ag-grid-react";
+import {
   api,
+  Appointment,
   Booking,
   CreateBookingBody,
   DoctorAvailableDay,
@@ -9,7 +19,44 @@ import {
   HospitalRegistrationSummary,
 } from "../api";
 import { session } from "../dl/MedTrackSession";
+import { useT } from "../i18n";
 import { toast } from "../toast";
+import VoiceBooking from "../voice/VoiceBooking";
+
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+const bookingsTheme = themeQuartz.withParams({
+  accentColor: "#0e7c86",
+  backgroundColor: "#ffffff",
+  borderColor: "#c5d4db",
+  browserColorScheme: "light",
+  chromeBackgroundColor: "#f4f8f9",
+  foregroundColor: "#14212b",
+  headerBackgroundColor: "#f4f8f9",
+  headerFontSize: 13,
+  headerFontWeight: 600,
+  headerTextColor: "#5a6b76",
+  fontFamily: "DM Sans, Segoe UI, sans-serif",
+  fontSize: 14,
+  oddRowBackgroundColor: "#f8fbfb",
+  rowHoverColor: "#e8f1f2",
+  spacing: 6,
+  wrapperBorderRadius: 10,
+});
+
+function StatusCell(params: ICellRendererParams<Booking>) {
+  const status = params.data?.status;
+  if (!status) return "—";
+  return <span className={`badge ${status}`}>{status}</span>;
+}
+
+function genderLabel(gender: string | undefined, t: (key: string) => string) {
+  if (!gender) return "—";
+  if (gender === "FEMALE") return t("Female");
+  if (gender === "MALE") return t("Male");
+  if (gender === "OTHER") return t("Other");
+  return t("Prefer not to say");
+}
 
 function todayYmd() {
   const d = new Date();
@@ -95,6 +142,30 @@ function mapDoctor(d: HospitalDoctor): HospitalDoctor {
   };
 }
 
+function appointmentToBooking(a: Appointment): Booking {
+  return {
+    id: a.id,
+    hospitalId: a.hospitalId ?? 0,
+    hospitalName: a.hospitalName,
+    doctorId: a.doctorId,
+    doctorName: a.doctorName,
+    department: a.department,
+    patientName: a.patientName,
+    patientPhone: a.patientPhone || a.phoneNumber || "",
+    patientAge: a.patientAge,
+    gender: a.gender,
+    address: a.address,
+    reason: a.reason,
+    appointmentDate: a.appointmentDate,
+    appointmentTime: a.appointmentTime,
+    tokenNumber: a.tokenNumber,
+    status: a.status,
+    consultationFee: a.consultationFee,
+    currency: a.currency,
+    createdAt: a.createdDate,
+  };
+}
+
 export default function BookingsPage({
   publicMode = false,
   hospitalIdFilter,
@@ -102,6 +173,7 @@ export default function BookingsPage({
   patientName,
   onBooked,
 }: BookingsPageProps = {}) {
+  const t = useT();
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [hospitals, setHospitals] = useState<HospitalRegistrationSummary[]>([]);
@@ -110,6 +182,7 @@ export default function BookingsPage({
   const [selectedHospitalId, setSelectedHospitalId] = useState(
     hospitalIdFilter ? String(hospitalIdFilter) : "",
   );
+  const [selectedDepartment, setSelectedDepartment] = useState("");
   const [form, setForm] = useState(publicMode ? blankPublicForm : emptyForm);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -121,17 +194,185 @@ export default function BookingsPage({
   const [loadingAvail, setLoadingAvail] = useState(false);
   const [availNote, setAvailNote] = useState("");
   const [dateWarning, setDateWarning] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [voiceList, setVoiceList] = useState<Booking[] | null>(null);
+  const [voiceListNote, setVoiceListNote] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
 
-  const doctors = useMemo(() => {
+  const hospitalDoctors = useMemo(() => {
     if (!selectedHospitalId) return allDoctors;
     return allDoctors.filter(
       (d) => String(d.hospitalId) === String(selectedHospitalId),
     );
   }, [allDoctors, selectedHospitalId]);
 
+  const departmentOptions = useMemo(() => {
+    const names = hospitalDoctors
+      .map((d) => d.department?.trim())
+      .filter((name): name is string => !!name);
+    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+  }, [hospitalDoctors]);
+
+  const doctors = useMemo(() => {
+    if (!selectedDepartment) return hospitalDoctors;
+    return hospitalDoctors.filter(
+      (d) => (d.department?.trim() || "") === selectedDepartment,
+    );
+  }, [hospitalDoctors, selectedDepartment]);
+
+  const loggedInDoctorId = session.isDoctor() ? session.getUserId() : "";
+  const loggedInDoctorName = useMemo(() => {
+    if (!loggedInDoctorId) return "";
+    const found = hospitalDoctors.find((d) => d.doctorId === loggedInDoctorId);
+    return found?.doctorName || session.getUsername() || loggedInDoctorId;
+  }, [hospitalDoctors, loggedInDoctorId]);
+
+  const visibleBookings = voiceList ?? bookings;
+
+  const columnDefs = useMemo<ColDef<Booking>[]>(
+    () => [
+      {
+        headerName: t("Token"),
+        field: "tokenNumber",
+        width: 100,
+        filter: "agNumberColumnFilter",
+        filterParams: {
+          filterOptions: ["equals", "lessThan", "greaterThan"],
+          maxNumConditions: 1,
+          debounceMs: 200,
+          buttons: ["reset"],
+        },
+        valueFormatter: (p) => (p.value == null ? "—" : String(p.value)),
+      },
+      {
+        headerName: t("Patient"),
+        field: "patientName",
+        flex: 1,
+        minWidth: 180,
+      },
+      {
+        headerName: t("Phone"),
+        field: "patientPhone",
+        minWidth: 130,
+      },
+      {
+        headerName: t("Age"),
+        field: "patientAge",
+        width: 90,
+        filter: "agNumberColumnFilter",
+        filterParams: {
+          filterOptions: ["equals", "lessThan", "greaterThan"],
+          maxNumConditions: 1,
+          debounceMs: 200,
+          buttons: ["reset"],
+        },
+        valueFormatter: (p) => (p.value == null ? "—" : String(p.value)),
+      },
+      {
+        headerName: t("Gender"),
+        field: "gender",
+        width: 120,
+        valueFormatter: (p) => genderLabel(p.value as string | undefined, t),
+        filterValueGetter: (p) => genderLabel(p.data?.gender, t),
+      },
+      {
+        headerName: t("Hospital"),
+        field: "hospitalName",
+        minWidth: 150,
+        valueFormatter: (p) => (p.value ? String(p.value) : "—"),
+      },
+      {
+        headerName: t("Department"),
+        field: "department",
+        minWidth: 140,
+        valueFormatter: (p) => (p.value ? t(String(p.value)) : "—"),
+        filterValueGetter: (p) =>
+          p.data?.department ? t(p.data.department) : "",
+      },
+      {
+        headerName: t("Doctor ID"),
+        field: "doctorId",
+        minWidth: 130,
+      },
+      {
+        headerName: t("Date"),
+        field: "appointmentDate",
+        minWidth: 120,
+      },
+      {
+        headerName: t("Time"),
+        field: "appointmentTime",
+        minWidth: 110,
+        valueFormatter: (p) =>
+          p.value ? new Date(String(p.value)).toLocaleTimeString() : "—",
+        filterValueGetter: (p) =>
+          p.data?.appointmentTime
+            ? new Date(p.data.appointmentTime).toLocaleTimeString()
+            : "",
+      },
+      {
+        headerName: t("Reason"),
+        field: "reason",
+        minWidth: 140,
+        valueFormatter: (p) => (p.value ? String(p.value) : "—"),
+      },
+      {
+        headerName: t("Fee"),
+        colId: "fee",
+        minWidth: 110,
+        filter: "agNumberColumnFilter",
+        filterParams: {
+          filterOptions: ["equals", "lessThan", "greaterThan"],
+          maxNumConditions: 1,
+          debounceMs: 200,
+          buttons: ["reset"],
+        },
+        valueGetter: (p) => p.data?.consultationFee,
+        valueFormatter: (p) => {
+          const row = p.data;
+          if (!row || row.consultationFee == null) return "—";
+          return `${row.currency ?? "INR"} ${row.consultationFee}`;
+        },
+      },
+      {
+        headerName: t("Status"),
+        field: "status",
+        minWidth: 120,
+        cellRenderer: StatusCell,
+      },
+      {
+        headerName: t("Address"),
+        field: "address",
+        minWidth: 160,
+        valueFormatter: (p) => (p.value ? String(p.value) : "—"),
+      },
+    ],
+    [t],
+  );
+
+  const defaultColDef = useMemo<ColDef<Booking>>(
+    () => ({
+      sortable: true,
+      resizable: true,
+      filter: "agTextColumnFilter",
+      floatingFilter: false,
+      suppressHeaderMenuButton: true,
+      suppressHeaderFilterButton: false,
+      filterParams: {
+        filterOptions: ["contains"],
+        debounceMs: 200,
+        maxNumConditions: 1,
+        buttons: ["reset"],
+      },
+    }),
+    [],
+  );
+
   async function load() {
     if (publicMode) return;
     setError("");
+    setVoiceList(null);
+    setVoiceListNote("");
     try {
       const data = await api.bookings();
       setBookings(data.bookings);
@@ -142,6 +383,35 @@ export default function BookingsPage({
           : "Failed to load bookings — is booking-service running?"
       );
     }
+  }
+
+  async function handleShowBookings(query: {
+    doctorId: string;
+    doctorName: string;
+    from: string;
+    to: string;
+  }) {
+    setError("");
+    const data = await api.appointments({ doctorId: query.doctorId });
+    const rows = (data.appointments || [])
+      .filter(
+        (a) =>
+          a.appointmentDate >= query.from && a.appointmentDate <= query.to,
+      )
+      .map(appointmentToBooking)
+      .sort((a, b) => {
+        const byDate = a.appointmentDate.localeCompare(b.appointmentDate);
+        if (byDate) return byDate;
+        return String(a.appointmentTime).localeCompare(String(b.appointmentTime));
+      });
+    setVoiceList(rows);
+    const rangeLabel =
+      query.from === query.to ? query.from : `${query.from} → ${query.to}`;
+    setVoiceListNote(`${query.doctorName || query.doctorId} · ${rangeLabel}`);
+    return {
+      count: rows.length,
+      patients: rows.map((r) => r.patientName).filter(Boolean),
+    };
   }
 
   async function loadHospitals() {
@@ -214,6 +484,20 @@ export default function BookingsPage({
   }, [publicMode, patientPhone, patientName]);
 
   useEffect(() => {
+    if (!formOpen || publicMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFormOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [formOpen, publicMode]);
+
+  useEffect(() => {
     load();
     void loadHospitals();
     void loadDoctors();
@@ -245,6 +529,7 @@ export default function BookingsPage({
 
   function onHospitalChange(hospitalId: string) {
     setSelectedHospitalId(hospitalId);
+    setSelectedDepartment("");
     setForm((prev) => ({
       ...prev,
       doctorId: "",
@@ -255,8 +540,32 @@ export default function BookingsPage({
     }));
   }
 
+  function onDepartmentChange(department: string) {
+    setSelectedDepartment(department);
+    setForm((prev) => {
+      if (!prev.doctorId) return prev;
+      const stillThere = hospitalDoctors.some(
+        (d) =>
+          d.doctorId === prev.doctorId &&
+          (!department || (d.department?.trim() || "") === department),
+      );
+      if (stillThere) return prev;
+      return {
+        ...prev,
+        doctorId: "",
+        doctorName: "",
+        hospitalName: "",
+        hospitalId: selectedHospitalId || "",
+        consultationFee: "",
+      };
+    });
+  }
+
   function onDoctorChange(doctorId: string) {
-    const selected = doctors.find((d) => d.doctorId === doctorId);
+    const selected =
+      doctors.find((d) => d.doctorId === doctorId) ||
+      hospitalDoctors.find((d) => d.doctorId === doctorId) ||
+      allDoctors.find((d) => d.doctorId === doctorId);
     if (!selected) {
       setForm((prev) => ({
         ...prev,
@@ -437,11 +746,14 @@ export default function BookingsPage({
     };
   }
 
-  async function onAppointmentDateChange(date: string) {
+  async function onAppointmentDateChange(date: string): Promise<{
+    ok: boolean;
+    message?: string;
+  }> {
     setField("appointmentDate", date);
     setDateWarning("");
     setError("");
-    if (!form.doctorId || !date) return;
+    if (!form.doctorId || !date) return { ok: true };
     const result = await checkAppointmentDateAvailable(
       form.doctorId,
       form.doctorName,
@@ -450,7 +762,9 @@ export default function BookingsPage({
     if (!result.ok) {
       setDateWarning(result.message);
       setField("appointmentDate", "");
+      return { ok: false, message: result.message };
     }
+    return { ok: true };
   }
 
   async function onSubmit(e: FormEvent) {
@@ -512,6 +826,7 @@ export default function BookingsPage({
       if (publicMode) {
         setForm(blankPublicForm);
         if (!hospitalIdFilter) setSelectedHospitalId("");
+        setSelectedDepartment("");
         setAvailDays([]);
         setAvailNote("");
         setDateWarning("");
@@ -526,6 +841,7 @@ export default function BookingsPage({
           hospitalId: form.hospitalId,
           consultationFee: form.consultationFee,
         });
+        setFormOpen(false);
       }
       await load();
     } catch (err) {
@@ -535,24 +851,37 @@ export default function BookingsPage({
     }
   }
 
-  return (
-    <section className={publicMode ? "patient-booking-form" : undefined}>
-      {error && <div className="msg error">{error}</div>}
-
-      <form className={publicMode ? "stack" : "panel stack"} onSubmit={onSubmit}>
-        {!publicMode && (
-          <div className="row" style={{ justifyContent: "flex-end", alignItems: "center" }}>
-            <button type="button" className="secondary" onClick={load}>
-              Refresh list
-            </button>
-          </div>
-        )}
+  const bookingForm = (
+      <form
+        ref={formRef}
+        className="stack"
+        onSubmit={onSubmit}
+      >
+        <VoiceBooking
+          draft={form}
+          doctors={hospitalDoctors}
+          publicMode={publicMode}
+          deskMode={!publicMode}
+          loggedInDoctorId={loggedInDoctorId}
+          loggedInDoctorName={loggedInDoctorName}
+          onPatch={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+          onSelectDoctor={(doctorId) => {
+            const selected = hospitalDoctors.find((d) => d.doctorId === doctorId);
+            setSelectedDepartment(selected?.department?.trim() || "");
+            onDoctorChange(doctorId);
+          }}
+          onSelectDate={(date) => onAppointmentDateChange(date)}
+          onConfirmBook={() => formRef.current?.requestSubmit()}
+          onNeedBookForm={publicMode ? undefined : () => setFormOpen(true)}
+          onShowBookings={publicMode ? undefined : handleShowBookings}
+          onAfterShowBookings={publicMode ? undefined : () => setFormOpen(false)}
+        />
 
         <div className="booking-hospital-doctor-row">
           <label className="booking-doctor-field">
             <span>
-              Hospital{" "}
-              <span style={{ color: "var(--muted)", fontWeight: 500 }}>(optional)</span>
+              {t("Hospital")}{" "}
+              <span style={{ color: "var(--muted)", fontWeight: 500 }}>{t("(optional)")}</span>
             </span>
             <select
               value={selectedHospitalId}
@@ -561,8 +890,8 @@ export default function BookingsPage({
             >
               <option value="">
                 {loadingHospitals
-                  ? "Loading hospitals…"
-                  : "All hospitals — or pick one to filter doctors"}
+                  ? t("Loading hospitals…")
+                  : t("All hospitals — or pick one to filter doctors")}
               </option>
               {hospitals.map((h) => (
                 <option key={h.id ?? h.hospitalId} value={String(h.id ?? h.hospitalId)}>
@@ -575,7 +904,30 @@ export default function BookingsPage({
 
           <label className="booking-doctor-field">
             <span>
-              Doctor
+              {t("Department")}{" "}
+              <span style={{ color: "var(--muted)", fontWeight: 500 }}>{t("(optional)")}</span>
+            </span>
+            <select
+              value={selectedDepartment}
+              onChange={(e) => onDepartmentChange(e.target.value)}
+              disabled={loadingDoctors}
+            >
+              <option value="">
+                {departmentOptions.length === 0
+                  ? t("All departments")
+                  : t("All departments — or pick one to filter doctors")}
+              </option>
+              {departmentOptions.map((name) => (
+                <option key={name} value={name}>
+                  {t(name)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="booking-doctor-field">
+            <span>
+              {t("Doctor")}
               <span className="required-mark" aria-hidden="true">
                 *
               </span>
@@ -588,14 +940,14 @@ export default function BookingsPage({
             >
               <option value="">
                 {loadingDoctors
-                  ? "Loading doctors…"
+                  ? t("Loading doctors…")
                   : doctors.length === 0
-                    ? selectedHospitalId
-                      ? "No doctors for this hospital"
-                      : "No doctors available"
-                    : selectedHospitalId
-                      ? "Select doctor"
-                      : "Select doctor (any hospital)"}
+                    ? selectedDepartment
+                      ? t("No doctors in this department")
+                      : selectedHospitalId
+                        ? t("No doctors for this hospital")
+                        : t("No doctors available")
+                    : t("Select doctor")}
               </option>
               {doctors.map((d) => (
                 <option key={d.doctorId} value={d.doctorId}>
@@ -608,13 +960,15 @@ export default function BookingsPage({
 
         {form.doctorId && (
           <div className="doctor-avail-panel">
-            <h3 className="doctor-avail-title">Doctor availability</h3>
+            <h3 className="doctor-avail-title">{t("Doctor availability")}</h3>
             <p className="lead" style={{ marginBottom: "0.65rem" }}>
-              Choose From / To dates to see when {form.doctorName || "this doctor"} is available.
+              {t("Choose From / To dates to see when {name} is available.", {
+                name: form.doctorName || t("this doctor"),
+              })}
             </p>
             <div className="grid-2">
               <label>
-                From date
+                {t("From date")}
                 <input
                   type="date"
                   value={availFrom}
@@ -623,7 +977,7 @@ export default function BookingsPage({
                 />
               </label>
               <label>
-                To date
+                {t("To date")}
                 <input
                   type="date"
                   value={availTo}
@@ -634,7 +988,7 @@ export default function BookingsPage({
             </div>
             {loadingAvail && (
               <p className="lead" style={{ margin: "0.55rem 0 0" }}>
-                Checking availability…
+                {t("Checking availability…")}
               </p>
             )}
             {availNote && !loadingAvail && (
@@ -678,7 +1032,7 @@ export default function BookingsPage({
         <div className="grid-2">
           <label>
             <span>
-              Patient name
+              {t("Patient name")}
               <span className="required-mark" aria-hidden="true">*</span>
             </span>
             <input
@@ -689,7 +1043,7 @@ export default function BookingsPage({
           </label>
           <label>
             <span>
-              Patient phone
+              {t("Patient phone")}
               <span className="required-mark" aria-hidden="true">*</span>
             </span>
             <input
@@ -701,11 +1055,10 @@ export default function BookingsPage({
           </label>
           <label>
             <span>
-              Patient email
+              {t("Patient email")}
               {publicMode ? (
                 <span style={{ color: "var(--muted)", fontWeight: 500 }}>
-                  {" "}
-                  (for booking confirmation)
+                  {t(" (for booking confirmation)")}
                 </span>
               ) : null}
             </span>
@@ -718,7 +1071,7 @@ export default function BookingsPage({
             />
           </label>
           <label>
-            Age
+            {t("Age")}
             <input
               type="number"
               min={1}
@@ -728,29 +1081,29 @@ export default function BookingsPage({
             />
           </label>
           <label>
-            Gender
+            {t("Gender")}
             <select
               value={form.gender}
               onChange={(e) => setField("gender", e.target.value)}
             >
               <option value="">—</option>
-              <option value="FEMALE">Female</option>
-              <option value="MALE">Male</option>
-              <option value="OTHER">Other</option>
-              <option value="UNKNOWN">Prefer not to say</option>
+              <option value="FEMALE">{t("Female")}</option>
+              <option value="MALE">{t("Male")}</option>
+              <option value="OTHER">{t("Other")}</option>
+              <option value="UNKNOWN">{t("Prefer not to say")}</option>
             </select>
           </label>
         </div>
 
         <label>
-          Address
+          {t("Address")}
           <input
             value={form.address}
             onChange={(e) => setField("address", e.target.value)}
           />
         </label>
         <label>
-          Reason / symptoms
+          {t("Reason / symptoms")}
           <textarea
             rows={2}
             value={form.reason}
@@ -768,7 +1121,7 @@ export default function BookingsPage({
         <div className="grid-2">
           <label>
             <span>
-              Appointment date
+              {t("Appointment date")}
               <span className="required-mark" aria-hidden="true">*</span>
             </span>
             <input
@@ -781,13 +1134,13 @@ export default function BookingsPage({
             />
             {availDays.some((d) => !d.available) && (
               <span className="muted" style={{ display: "block", marginTop: "0.35rem" }}>
-                Grey / disabled days above cannot be booked (doctor is busy).
+                {t("Grey / disabled days above cannot be booked (doctor is busy).")}
               </span>
             )}
           </label>
           <label>
             <span>
-              Appointment time
+              {t("Appointment time")}
               <span className="required-mark" aria-hidden="true">*</span>
             </span>
             <input
@@ -804,7 +1157,7 @@ export default function BookingsPage({
             {dateWarning}
             {availDays.some((d) => d.available) && (
               <div className="doctor-avail-suggest">
-                <span>Suggested available dates:</span>
+                <span>{t("Suggested available dates:")}</span>
                 <div className="doctor-avail-suggest-chips">
                   {availDays
                     .filter((d) => d.available)
@@ -831,71 +1184,127 @@ export default function BookingsPage({
         )}
 
         <button type="submit" disabled={saving || !form.doctorId || !!dateWarning}>
-          {saving ? "Saving…" : publicMode ? "Book appointment" : "Save booking"}
+          {saving ? t("Saving…") : publicMode ? t("Book appointment") : t("Save booking")}
         </button>
       </form>
+  );
+
+  return (
+    <section className={publicMode ? "patient-booking-form" : undefined}>
+      {publicMode && error ? <div className="msg error">{error}</div> : null}
+      {publicMode ? bookingForm : null}
 
       {!publicMode && (
-      <div className="panel">
-        <h2>Bookings ({bookings.length})</h2>
-        <div className="table-scroll">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Token</th>
-                <th>Patient</th>
-                <th>Phone</th>
-                <th>Age</th>
-                <th>Gender</th>
-                <th>Hospital</th>
-                <th>Doctor ID</th>
-                <th>Date</th>
-                <th>Time</th>
-                <th>Reason</th>
-                <th>Fee</th>
-                <th>Status</th>
-                <th>Address</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bookings.map((b) => (
-                <tr key={b.id}>
-                  <td>{b.tokenNumber ?? "—"}</td>
-                  <td>{b.patientName}</td>
-                  <td>{b.patientPhone}</td>
-                  <td>{b.patientAge ?? "—"}</td>
-                  <td>{b.gender || "—"}</td>
-                  <td>{b.hospitalName ?? "—"}</td>
-                  <td>{b.doctorId}</td>
-                  <td>{b.appointmentDate}</td>
-                  <td>
-                    {b.appointmentTime
-                      ? new Date(b.appointmentTime).toLocaleTimeString()
-                      : "—"}
-                  </td>
-                  <td>{b.reason || "—"}</td>
-                  <td>
-                    {b.consultationFee != null
-                      ? `${b.currency ?? "INR"} ${b.consultationFee}`
-                      : "—"}
-                  </td>
-                  <td>
-                    <span className={`badge ${b.status}`}>{b.status}</span>
-                  </td>
-                  <td>{b.address || "—"}</td>
-                </tr>
-              ))}
-              {bookings.length === 0 && (
-                <tr>
-                  <td colSpan={13}>
-                    No bookings yet. Submit the form to create one.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <>
+          {error && !formOpen ? <div className="msg error">{error}</div> : null}
+          <div className="panel bookings-toolbar">
+            <div>
+              <h2>{t("Bookings ({count})", { count: visibleBookings.length })}</h2>
+              {voiceListNote ? (
+                <p className="voice-list-note">
+                  {t("Showing bookings for {note}", { note: voiceListNote })}
+                </p>
+              ) : null}
+            </div>
+            <div className="bookings-toolbar-actions">
+              <button type="button" className="secondary" onClick={() => void load()}>
+                {voiceList ? t("Show all bookings") : t("Refresh list")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setDateWarning("");
+                  setFormOpen(true);
+                }}
+              >
+                {t("Book appointment")}
+              </button>
+            </div>
+            <div className="bookings-toolbar-voice">
+                <VoiceBooking
+                  draft={form}
+                  doctors={hospitalDoctors}
+                  deskMode
+                  loggedInDoctorId={loggedInDoctorId}
+                  loggedInDoctorName={loggedInDoctorName}
+                  onPatch={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+                  onSelectDoctor={(doctorId) => {
+                    const selected = hospitalDoctors.find((d) => d.doctorId === doctorId);
+                    setSelectedDepartment(selected?.department?.trim() || "");
+                    onDoctorChange(doctorId);
+                  }}
+                  onSelectDate={(date) => onAppointmentDateChange(date)}
+                  onConfirmBook={() => {
+                    setFormOpen(true);
+                    window.setTimeout(() => formRef.current?.requestSubmit(), 50);
+                  }}
+                  onNeedBookForm={() => setFormOpen(true)}
+                  onShowBookings={handleShowBookings}
+                  onAfterShowBookings={() => setFormOpen(false)}
+                />
+              </div>
+          </div>
+          <div className="panel bookings-grid-panel">
+            <div className="bookings-grid">
+              <AgGridReact<Booking>
+                theme={bookingsTheme}
+                rowData={visibleBookings}
+                columnDefs={columnDefs}
+                defaultColDef={defaultColDef}
+                getRowId={(p) => p.data.id}
+                rowHeight={46}
+                headerHeight={44}
+                columnMenu="new"
+                overlayNoRowsTemplate={
+                  voiceList
+                    ? t("No bookings for this doctor on that date.")
+                    : "No bookings yet. Click Book appointment to create one."
+                }
+                pagination
+                paginationPageSize={20}
+                paginationPageSizeSelector={[10, 20, 50]}
+                suppressCellFocus
+              />
+            </div>
+          </div>
+          {formOpen &&
+            createPortal(
+              <div
+                className="booking-sheet-backdrop"
+                role="presentation"
+                onMouseDown={(e) => {
+                  if (e.target === e.currentTarget) setFormOpen(false);
+                }}
+              >
+                <div
+                  className="booking-sheet panel"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="booking-sheet-title"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <header className="booking-sheet-head">
+                    <div>
+                      <p className="modal-eyebrow">{t("New booking")}</p>
+                      <h2 id="booking-sheet-title">{t("Book appointment")}</h2>
+                    </div>
+                    <button
+                      type="button"
+                      className="modal-close"
+                      aria-label={t("Close")}
+                      onClick={() => setFormOpen(false)}
+                    >
+                      ×
+                    </button>
+                  </header>
+                  {error ? <div className="msg error">{error}</div> : null}
+                  {bookingForm}
+                </div>
+              </div>,
+              document.body,
+            )}
+        </>
       )}
     </section>
   );

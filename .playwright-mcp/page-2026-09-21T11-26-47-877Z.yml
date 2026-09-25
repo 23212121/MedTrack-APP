@@ -1,0 +1,159 @@
+- generic [ref=f16e1]:
+  - banner [ref=f16e2]:
+    - generic [ref=f16e3]:
+      - generic [ref=f16e4]:
+        - link "MediCoz-APP Track Your Doctor" [ref=f16e5] [cursor=pointer]:
+          - /url: index.html
+          - generic [ref=f16e6]:
+            - strong [ref=f16e7]: MediCoz-APP
+            - generic [ref=f16e8]: Track Your Doctor
+        - generic [ref=f16e9]: Live
+      - navigation [ref=f16e11]:
+        - link "Home" [ref=f16e12] [cursor=pointer]:
+          - /url: index.html
+        - link "About" [ref=f16e13] [cursor=pointer]:
+          - /url: about.html
+        - link "Features" [ref=f16e14] [cursor=pointer]:
+          - /url: features.html
+        - link "Journey" [ref=f16e15] [cursor=pointer]:
+          - /url: journey.html
+        - link "Contact" [ref=f16e16] [cursor=pointer]:
+          - /url: contact.html
+        - link "Get in touch" [ref=f16e17] [cursor=pointer]:
+          - /url: contact.html
+  - main [ref=f16e18]:
+    - generic [ref=f16e20]:
+      - generic [ref=f16e21]:
+        - paragraph [ref=f16e22]: Live clinic visits
+        - heading [level=1] [ref=f16e23]:
+          - text: Know where your
+          - emphasis [ref=f16e24]: doctor
+          - text: stands.
+        - paragraph [ref=f16e25]:
+          - text: Track Your Doctor is the public face of
+          - strong [ref=f16e26]: MediCoz-APP
+          - text: — bookings, check-in tokens, live queues, delay alerts, pharmacy orders, and HR, in English and Hindi.
+        - generic [ref=f16e27]:
+          - link "See all features" [ref=f16e28] [cursor=pointer]:
+            - /url: features.html
+          - link "What is MediCoz-APP?" [ref=f16e29] [cursor=pointer]:
+            - /url: about.html
+      - complementary "Sample visit ticket" [ref=f16e30]:
+        - generic [aria-hidden]: "14"
+        - generic [ref=f16e31]:
+          - generic [ref=f16e32]: Today’s slip
+          - strong [ref=f16e33]: "#14"
+        - generic [ref=f16e34]:
+          - generic [ref=f16e35]:
+            - term [ref=f16e36]: Doctor
+            - definition [ref=f16e37]: Dr. Mehta
+          - generic [ref=f16e38]:
+            - term [ref=f16e39]: Fixed time
+            - definition [ref=f16e40]: 14:30
+          - generic [ref=f16e41]:
+            - term [ref=f16e42]: Consult when
+            - definition [ref=f16e43]: ~15:05
+          - generic [ref=f16e44]:
+            - term [ref=f16e45]: Department
+            - definition [ref=f16e46]: Medicine
+        - generic [ref=f16e47]: Waiting · doctor running 15 min late
+    - list [ref=f16e50]:
+      - listitem [ref=f16e51]:
+        - strong [ref=f16e52]: "4"
+        - text: Login types
+      - listitem [ref=f16e53]:
+        - strong [ref=f16e54]: 15+
+        - text: Clinic modules
+      - listitem [ref=f16e55]:
+        - strong [ref=f16e56]: "3"
+        - text: Notify channels
+      - listitem [ref=f16e57]:
+        - strong [ref=f16e58]: "2"
+        - text: Languages
+    - generic [ref=f16e59]:
+      - generic [ref=f16e61]:
+        - paragraph [ref=f16e62]: Three beats
+        - heading "How patients track a doctor" [level=2] [ref=f16e63]
+      - paragraph [ref=f16e64]: Doctor name, fixed appointment time, token, and consult-when stay visible for every visit. Staff book from a phone call in under 45 seconds. Doctors run a simple queue.
+      - generic [ref=f16e65]:
+        - article [ref=f16e66]:
+          - generic [ref=f16e67]: "1"
+          - heading "Book" [level=3] [ref=f16e68]
+          - paragraph [ref=f16e69]: Desk staff or the patient books a doctor and slot. Confirmation goes out immediately.
+        - article [ref=f16e70]:
+          - generic [ref=f16e71]: "2"
+          - heading "Arrive & check in" [level=3] [ref=f16e72]
+          - paragraph [ref=f16e73]: A token is issued. The live queue shows wait time and “you’re next”.
+        - article [ref=f16e74]:
+          - generic [ref=f16e75]: "3"
+          - heading "Consult" [level=3] [ref=f16e76]
+          - paragraph [ref=f16e77]: The doctor starts, can mark delay, then completes. Overtime fees notify the patient.
+    - generic [ref=f16e78]:
+      - paragraph [ref=f16e79]: People
+      - heading "Who MediCoz-APP is for" [level=2] [ref=f16e80]
+      - generic [ref=f16e81]:
+        - article [ref=f16e82]:
+          - heading "Hospitals & clinics" [level=3] [ref=f16e83]
+          - paragraph [ref=f16e84]: Register a hospital, manage doctors, bookings, documents, pharmacies, and HR from one desk.
+        - article [ref=f16e85]:
+          - heading "Doctors" [level=3] [ref=f16e86]
+          - paragraph [ref=f16e87]: Open today’s queue, start or complete consults, set weekly slots, and order medicines.
+        - article [ref=f16e88]:
+          - heading "Patients" [level=3] [ref=f16e89]
+          - paragraph [ref=f16e90]: Book or track without login, or use the portal for status, chat, reports, and orders.
+        - article [ref=f16e91]:
+          - heading "Medical stores" [level=3] [ref=f16e92]
+          - paragraph [ref=f16e93]: Accept prescriptions, quote amounts, wait for approval, and mark medicine ready.
+        - article [ref=f16e94]:
+          - heading "Front desk & HR" [level=3] [ref=f16e95]
+          - paragraph [ref=f16e96]: Search by phone, issue tokens, run attendance, leave, holidays, and approvals.
+    - generic [ref=f16e97]:
+      - paragraph [ref=f16e98]: Read next
+      - heading "Start with these pages" [level=2] [ref=f16e99]
+      - generic [ref=f16e100]:
+        - link "Guide About the application What MediCoz-APP is — and what it is not." [ref=f16e101] [cursor=pointer]:
+          - /url: about.html
+          - generic [ref=f16e102]: Guide
+          - strong [ref=f16e103]: About the application
+          - paragraph [ref=f16e104]: What MediCoz-APP is — and what it is not.
+        - link "Product Every module Hospital, doctor, patient, pharmacy, insights, and HRM." [ref=f16e105] [cursor=pointer]:
+          - /url: features.html
+          - generic [ref=f16e106]: Product
+          - strong [ref=f16e107]: Every module
+          - paragraph [ref=f16e108]: Hospital, doctor, patient, pharmacy, insights, and HRM.
+        - link "Flow Visit journey Called → booked → checked in → consult → done." [ref=f16e109] [cursor=pointer]:
+          - /url: journey.html
+          - generic [ref=f16e110]: Flow
+          - strong [ref=f16e111]: Visit journey
+          - paragraph [ref=f16e112]: Called → booked → checked in → consult → done.
+    - generic [ref=f16e114]:
+      - generic [ref=f16e115]:
+        - heading "Ready to talk?" [level=2] [ref=f16e116]
+        - paragraph [ref=f16e117]: Ask about hospital registration, doctor onboarding, or a visit that needs help.
+      - link "Contact the team" [ref=f16e118] [cursor=pointer]:
+        - /url: contact.html
+  - contentinfo [ref=f16e119]:
+    - generic [ref=f16e120]:
+      - generic [ref=f16e121]:
+        - strong [ref=f16e122]: MediCoz-APP
+        - paragraph [ref=f16e123]: Public guide for MediCoz-APP
+        - paragraph [ref=f16e124]:
+          - link "9079743077" [ref=f16e125] [cursor=pointer]:
+            - /url: tel:+919079743077
+          - link "azherkhan061@gmail.com" [ref=f16e126] [cursor=pointer]:
+            - /url: mailto:azherkhan061@gmail.com
+          - link "linkedin.com/in/azherkhan061" [ref=f16e127] [cursor=pointer]:
+            - /url: https://www.linkedin.com/in/azherkhan061
+      - paragraph [ref=f16e128]:
+        - link "About" [ref=f16e129] [cursor=pointer]:
+          - /url: about.html
+        - text: ·
+        - link "Features" [ref=f16e130] [cursor=pointer]:
+          - /url: features.html
+        - text: ·
+        - link "Journey" [ref=f16e131] [cursor=pointer]:
+          - /url: journey.html
+        - text: ·
+        - link "Contact" [ref=f16e132] [cursor=pointer]:
+          - /url: contact.html
+      - paragraph [ref=f16e133]: © 2026 MediCoz-APP

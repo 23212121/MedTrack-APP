@@ -68,6 +68,12 @@ medtrack:
     access-key: ${MEDTRACK_S3_ACCESS_KEY:${aws.s3.access-key:}}
     secret-key: ${MEDTRACK_S3_SECRET_KEY:${aws.s3.secret-key:}}
     prefix: ${MEDTRACK_S3_PREFIX:${aws.s3.prefix:patient-documents}}
+  # Razorpay test/live keys. Empty = UPI QR + screenshot still work.
+  razorpay:
+    key-id: ${RAZORPAY_KEY_ID:}
+    key-secret: ${RAZORPAY_KEY_SECRET:}
+  payment:
+    upi-id: ${MEDTRACK_UPI_ID:medtrackpharmacy@upi}
   # Actuator probes for optional standalone microservices
   status:
     probe-timeout-ms: 2000

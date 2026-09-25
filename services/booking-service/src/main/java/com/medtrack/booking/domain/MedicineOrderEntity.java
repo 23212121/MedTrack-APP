@@ -54,6 +54,18 @@ public class MedicineOrderEntity {
   @Column(name = "amount_status")
   private String amountStatus = "NOT_CALCULATED";
 
+  @Column(name = "payment_status")
+  private String paymentStatus = "UNPAID";
+
+  @Column(name = "payment_method")
+  private String paymentMethod;
+
+  @Column(name = "razorpay_order_id")
+  private String razorpayOrderId;
+
+  @Column(name = "razorpay_payment_id")
+  private String razorpayPaymentId;
+
   @Column(name = "booked_by", nullable = false)
   private String bookedBy;
 
@@ -121,6 +133,14 @@ public class MedicineOrderEntity {
   public void setCurrentAmount(Double currentAmount) { this.currentAmount = currentAmount; }
   public String getAmountStatus() { return amountStatus; }
   public void setAmountStatus(String amountStatus) { this.amountStatus = amountStatus; }
+  public String getPaymentStatus() { return paymentStatus; }
+  public void setPaymentStatus(String paymentStatus) { this.paymentStatus = paymentStatus; }
+  public String getPaymentMethod() { return paymentMethod; }
+  public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+  public String getRazorpayOrderId() { return razorpayOrderId; }
+  public void setRazorpayOrderId(String razorpayOrderId) { this.razorpayOrderId = razorpayOrderId; }
+  public String getRazorpayPaymentId() { return razorpayPaymentId; }
+  public void setRazorpayPaymentId(String razorpayPaymentId) { this.razorpayPaymentId = razorpayPaymentId; }
   public String getBookedBy() { return bookedBy; }
   public void setBookedBy(String bookedBy) { this.bookedBy = bookedBy; }
   public String getPendingReason() { return pendingReason; }

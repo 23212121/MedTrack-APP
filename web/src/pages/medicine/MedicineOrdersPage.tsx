@@ -4,7 +4,7 @@ import {
   fetchMedicineDocumentBlob,
   type MedicineOrder,
   type MedicineOrderItemInput,
-  type HospitalRegistrationSummary,
+  type MedicalStore,
 } from "../../api";
 import NativeFileInput from "../../components/NativeFileInput";
 import { session } from "../../dl/MedTrackSession";
@@ -14,7 +14,7 @@ const STATUS_LABEL: Record<string, string> = {
   ORDERED: "Ordered",
   PENDING: "Pending",
   IN_PROCESS: "In process",
-  WAITING_FOR_PATIENT_APPROVAL: "Waiting approval",
+  WAITING_FOR_PATIENT_APPROVAL: "Awaiting approval from patient",
   AMOUNT_ACCEPTED: "Amount accepted",
   MEDICINE_READY: "Medicine ready",
   COMPLETED: "Completed",
@@ -22,6 +22,10 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const OPEN = new Set(["ORDERED", "PENDING"]);
+
+function locKey(v?: string) {
+  return (v || "").trim().toLowerCase();
+}
 
 function hideAwsDump(err: unknown, fallback: string) {
   const raw = err instanceof Error ? err.message : "";
@@ -65,10 +69,108 @@ function emptyItem(): QuoteItem {
     medicineName: "",
     quantity: 1,
     unitPrice: 0,
+    days: 30,
+    requestedDays: 30,
+    quotedQuantity: 1,
     availability: "AVAILABLE",
     substituteName: "",
     substituteReason: "",
   };
+}
+
+function prescribedDaysOf(it: QuoteItem) {
+  return Math.max(1, Number(it.days || 30));
+}
+
+function quotedQtyOf(it: QuoteItem) {
+  const q = Number(it.quotedQuantity);
+  if (q > 0) return q;
+  return Number(it.quantity || 0);
+}
+
+function scaleQty(quoted: number, prescribed: number, requested: number) {
+  if (prescribed <= 0 || requested >= prescribed) return quoted;
+  const raw = quoted * (requested / prescribed);
+  if (Number.isInteger(quoted) && raw >= 1) return Math.round(raw);
+  return Math.max(0.01, Math.round(raw * 100) / 100);
+}
+
+function patientCanEditOrder(status?: string, amountStatus?: string, paymentStatus?: string) {
+  const st = (status || "").toUpperCase();
+  const amt = (amountStatus || "").toUpperCase();
+  const pay = (paymentStatus || "").toUpperCase();
+  if (pay === "PAID") return false;
+  return (
+    st === "WAITING_FOR_PATIENT_APPROVAL" ||
+    amt === "SENT" ||
+    (st === "AMOUNT_ACCEPTED" && pay !== "PAID")
+  );
+}
+
+function qtyStepOf(it: QuoteItem) {
+  return Number.isInteger(quotedQtyOf(it)) ? 1 : 0.01;
+}
+
+type RzpCheckout = {
+  open: () => void;
+  on: (event: string, handler: (res: { error?: { description?: string } }) => void) => void;
+};
+
+async function loadRazorpay(): Promise<new (opts: Record<string, unknown>) => RzpCheckout> {
+  const w = window as unknown as {
+    Razorpay?: new (opts: Record<string, unknown>) => RzpCheckout;
+  };
+  if (w.Razorpay) return w.Razorpay;
+  await new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector("script[data-razorpay]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => reject(new Error("Could not load Razorpay")));
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.async = true;
+    s.dataset.razorpay = "1";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Could not load Razorpay"));
+    document.body.appendChild(s);
+  });
+  if (!w.Razorpay) throw new Error("Razorpay is not available");
+  return w.Razorpay;
+}
+
+type UpiPayApp = { id: string; name: string; uri: string };
+
+function upiPayQuery(upi: string, name: string, amount: number, note: string) {
+  const q = new URLSearchParams({
+    pa: upi,
+    pn: name,
+    am: amount.toFixed(2),
+    cu: "INR",
+    tn: note,
+  });
+  return q.toString();
+}
+
+function defaultUpiApps(upi: string, name: string, amount: number, note: string): UpiPayApp[] {
+  const q = upiPayQuery(upi, name, amount, note);
+  return [
+    { id: "gpay", name: "Google Pay", uri: `tez://upi/pay?${q}` },
+    { id: "phonepe", name: "PhonePe", uri: `phonepe://pay?${q}` },
+    { id: "paytm", name: "Paytm", uri: `paytmmp://pay?${q}` },
+    { id: "bhim", name: "BHIM", uri: `bhim://pay?${q}` },
+    { id: "upi", name: "Other UPI apps", uri: `upi://pay?${q}` },
+  ];
+}
+
+function openUpiApp(uri: string) {
+  const link = document.createElement("a");
+  link.href = uri;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 export default function MedicineOrdersPage({
@@ -93,7 +195,11 @@ export default function MedicineOrdersPage({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  const [hospitals, setHospitals] = useState<HospitalRegistrationSummary[]>([]);
+  const [stores, setStores] = useState<MedicalStore[]>([]);
+  const [storesLoaded, setStoresLoaded] = useState(false);
+  const [filterState, setFilterState] = useState("");
+  const [filterCity, setFilterCity] = useState("");
+  const [storeId, setStoreId] = useState("");
   const [patientName, setPatientName] = useState(session.getPatientName() || "");
   const [patientPhone, setPatientPhone] = useState(session.getPatientPhone() || "");
   const [hospitalId, setHospitalId] = useState(session.getHospitalId() || "");
@@ -117,7 +223,13 @@ export default function MedicineOrdersPage({
     discount: 0,
   });
   const [reviseReason, setReviseReason] = useState("");
+  const [wantedDays, setWantedDays] = useState(30);
   const [extraFiles, setExtraFiles] = useState<File[]>([]);
+  const [payStep, setPayStep] = useState(false);
+  const [payShot, setPayShot] = useState<File[]>([]);
+  const [paying, setPaying] = useState(false);
+  const [payHint, setPayHint] = useState("");
+  const [patientReview, setPatientReview] = useState(false);
 
   useEffect(() => {
     setStatus(defaultStatus || "");
@@ -147,9 +259,12 @@ export default function MedicineOrdersPage({
   }, [status, defaultStatus]);
 
   useEffect(() => {
-    if (isPatient) {
-      void api.hospitals().then((r) => setHospitals(r.hospitals || [])).catch(() => undefined);
-    }
+    if (!isPatient) return;
+    void api
+      .medicalStores(undefined, true, true)
+      .then((r) => setStores(r.stores || []))
+      .catch(() => setStores([]))
+      .finally(() => setStoresLoaded(true));
   }, [isPatient]);
 
   const subtotal = useMemo(
@@ -167,6 +282,222 @@ export default function MedicineOrdersPage({
     return Math.max(0, g);
   }, [subtotal, charges]);
 
+  const slipDays = useMemo(
+    () => quoteItems.reduce((m, it) => Math.max(m, prescribedDaysOf(it)), 30),
+    [quoteItems],
+  );
+
+  const storeStates = useMemo(() => {
+    const names = new Set<string>();
+    stores.forEach((s) => {
+      if (s.state?.trim()) names.add(s.state.trim());
+    });
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [stores]);
+
+  const storeCities = useMemo(() => {
+    const names = new Set<string>();
+    stores.forEach((s) => {
+      if (filterState && locKey(s.state) !== locKey(filterState)) return;
+      if (s.city?.trim()) names.add(s.city.trim());
+    });
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [stores, filterState]);
+
+  const filteredStores = useMemo(() => {
+    return stores.filter((s) => {
+      if (filterState && locKey(s.state) !== locKey(filterState)) return false;
+      if (filterCity && locKey(s.city) !== locKey(filterCity)) return false;
+      return true;
+    });
+  }, [stores, filterState, filterCity]);
+
+  useEffect(() => {
+    if (filterCity && !storeCities.some((c) => locKey(c) === locKey(filterCity))) {
+      setFilterCity("");
+    }
+  }, [filterCity, storeCities]);
+
+  useEffect(() => {
+    if (storeId && !filteredStores.some((s) => s.id === storeId)) {
+      setStoreId("");
+    }
+  }, [storeId, filteredStores]);
+
+  function applyWantedDays(nextDays: number) {
+    const wanted = Math.max(1, Math.min(slipDays, Math.round(nextDays) || 1));
+    setWantedDays(wanted);
+    setQuoteItems((rows) =>
+      rows.map((r) => {
+        const prescribed = prescribedDaysOf(r);
+        const requested = Math.min(wanted, prescribed);
+        return {
+          ...r,
+          requestedDays: requested,
+          quantity: scaleQty(quotedQtyOf(r), prescribed, requested),
+        };
+      }),
+    );
+  }
+
+  function removeQuoteItem(index: number) {
+    setQuoteItems((rows) => {
+      if (rows.length <= 1) {
+        setError("Keep at least one medicine, or reject the amount");
+        return rows;
+      }
+      return rows.filter((_, idx) => idx !== index);
+    });
+  }
+
+  function bumpItemQty(index: number, dir: 1 | -1) {
+    setQuoteItems((rows) =>
+      rows.map((r, idx) => {
+        if (idx !== index) return r;
+        const prescribed = prescribedDaysOf(r);
+        const requested = Math.max(1, Number(r.requestedDays || prescribed));
+        const maxQty = scaleQty(quotedQtyOf(r), prescribed, requested);
+        const step = qtyStepOf(r);
+        const next = Math.round((Number(r.quantity || 0) + dir * step) * 100) / 100;
+        return { ...r, quantity: Math.min(maxQty, Math.max(step, next)) };
+      }),
+    );
+  }
+
+  function bumpItemDays(index: number, dir: 1 | -1) {
+    setQuoteItems((rows) =>
+      rows.map((r, idx) => {
+        if (idx !== index) return r;
+        const prescribed = prescribedDaysOf(r);
+        const days = Math.max(1, Math.min(prescribed, Number(r.requestedDays || prescribed) + dir));
+        return {
+          ...r,
+          requestedDays: days,
+          quantity: scaleQty(quotedQtyOf(r), prescribed, days),
+        };
+      }),
+    );
+  }
+
+  function reviewPayload() {
+    return {
+      requestedDays: wantedDays,
+      items: quoteItems.map((it) => ({
+        id: it.id,
+        quantity: Number(it.quantity) || 0,
+        requestedDays: Number(it.requestedDays || it.days || wantedDays),
+      })),
+    };
+  }
+
+  function payAppsFor(order: MedicineOrder): UpiPayApp[] {
+    if (order.upiApps && order.upiApps.length > 0) return order.upiApps;
+    return defaultUpiApps(
+      order.upiId || "medtrackpharmacy@upi",
+      order.assignedStoreName || "Medical store",
+      grand,
+      order.orderNumber,
+    );
+  }
+
+  async function startUpiApp(app: UpiPayApp) {
+    setError("");
+    setPayHint("");
+    setPaying(true);
+    try {
+      const created = await api.createMedicineRazorpayOrder(detail!.id, reviewPayload());
+      if (created.order) setDetail(created.order);
+      const match = (created.upiApps || payAppsFor(created.order || detail!)).find((row) => row.id === app.id);
+      openUpiApp(match?.uri || app.uri);
+      setPayHint(`Complete payment in ${app.name}, then upload the payment screenshot.`);
+    } catch (err) {
+      openUpiApp(app.uri);
+      setPayHint(`Complete payment in ${app.name}, then upload the payment screenshot.`);
+      setError(err instanceof Error ? err.message : "");
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  async function startRazorpayCheckout() {
+    setPaying(true);
+    setError("");
+    setPayHint("");
+    try {
+      const created = await api.createMedicineRazorpayOrder(detail!.id, reviewPayload());
+      if (created.order) setDetail(created.order);
+      if (!created.razorpayOrderId || !created.keyId) {
+        setPayHint("Use Google Pay, PhonePe, Paytm, or another UPI app below, then upload the screenshot.");
+        return;
+      }
+      const Razorpay = await loadRazorpay();
+      const rzp = new Razorpay({
+        key: created.keyId,
+        amount: created.amount,
+        currency: created.currency || "INR",
+        name: "MedTrack",
+        description: detail!.orderNumber,
+        order_id: created.razorpayOrderId,
+        prefill: {
+          name: session.getPatientName() || session.getUsername(),
+          contact: session.getPatientPhone(),
+          method: "upi",
+        },
+        method: {
+          upi: true,
+          card: true,
+          netbanking: true,
+          wallet: true,
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "UPI apps",
+                instruments: [{ method: "upi" }],
+              },
+              more: {
+                name: "Cards, netbanking & wallets",
+                instruments: [{ method: "card" }, { method: "netbanking" }, { method: "wallet" }],
+              },
+            },
+            sequence: ["block.upi", "block.more"],
+            preferences: { show_default_blocks: true },
+          },
+        },
+        theme: { color: "#0f766e" },
+        handler: (res: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          void run(
+            () =>
+              api.verifyMedicineRazorpayPayment(detail!.id, {
+                ...reviewPayload(),
+                razorpayOrderId: res.razorpay_order_id,
+                razorpayPaymentId: res.razorpay_payment_id,
+                razorpaySignature: res.razorpay_signature,
+              }),
+            "Payment successful",
+          );
+        },
+        modal: {
+          ondismiss: () => setPayHint("Payment window closed. You can still pay with Google Pay, PhonePe, or Paytm."),
+        },
+      });
+      rzp.on("payment.failed", (res) => {
+        setError(res.error?.description || "Payment failed. Try another app.");
+      });
+      rzp.open();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start online payment.");
+      setPayHint("Use Google Pay, PhonePe, Paytm, or scan the QR.");
+    } finally {
+      setPaying(false);
+    }
+  }
+
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -175,8 +506,13 @@ export default function MedicineOrdersPage({
       return;
     }
     const resolvedHospitalId = hospitalId || session.getHospitalId();
-    if (!resolvedHospitalId) {
-      setError(isPatient ? "Select a hospital" : "Hospital is not set for this session");
+    if (isPatient) {
+      if (!storeId) {
+        setError("Select a medical store");
+        return;
+      }
+    } else if (!resolvedHospitalId) {
+      setError("Hospital is not set for this session");
       return;
     }
     if (files.length === 0) {
@@ -186,7 +522,8 @@ export default function MedicineOrdersPage({
     setSaving(true);
     try {
       const form = new FormData();
-      form.set("hospitalId", resolvedHospitalId);
+      if (isPatient && storeId) form.set("storeId", storeId);
+      if (resolvedHospitalId) form.set("hospitalId", resolvedHospitalId);
       form.set("patientName", patientName.trim());
       form.set("patientPhone", patientPhone.trim());
       form.set("fulfillment", fulfillment);
@@ -212,22 +549,39 @@ export default function MedicineOrdersPage({
 
   async function openAmount(order: MedicineOrder) {
     setError("");
+    setPayStep(false);
+    setPayShot([]);
+    setPayHint("");
+    const reviewFromRow =
+      isPatient && patientCanEditOrder(order.status, order.amountStatus, order.paymentStatus);
+    setPatientReview(reviewFromRow);
     try {
       const full = await api.medicineOrder(order.id);
       setDetail(full);
-      setQuoteItems(
-        full.items && full.items.length
-          ? full.items.map((it) => ({
-              prescribedName: it.prescribedName || it.medicineName,
-              medicineName: it.medicineName,
-              quantity: it.quantity,
-              unitPrice: it.unitPrice ?? 0,
-              availability: it.availability || "AVAILABLE",
-              substituteName: it.substituteName || "",
-              substituteReason: it.substituteReason || "",
-            }))
-          : [emptyItem()],
+      setPatientReview(
+        isPatient &&
+          (reviewFromRow || patientCanEditOrder(full.status, full.amountStatus, full.paymentStatus)),
       );
+      const mapped = (full.items || []).map((it) => ({
+        id: it.id,
+        prescribedName: it.prescribedName || it.medicineName,
+        medicineName: it.medicineName,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice ?? 0,
+        days: it.days || 30,
+        requestedDays: it.requestedDays || it.days || 30,
+        quotedQuantity: it.quotedQuantity || it.quantity,
+        availability: it.availability || "AVAILABLE",
+        substituteName: it.substituteName || "",
+        substituteReason: it.substituteReason || "",
+      }));
+      setQuoteItems(mapped.length ? mapped : isPatient ? [] : [emptyItem()]);
+      const slip = (full.items || []).reduce((m, it) => Math.max(m, it.days || 30), 30);
+      const want = (full.items || []).reduce(
+        (m, it) => Math.min(m, it.requestedDays || it.days || slip),
+        slip,
+      );
+      setWantedDays(want || slip);
       setCharges({
         deliveryCharge: full.charges?.deliveryCharge ?? 0,
         packagingCharge: full.charges?.packagingCharge ?? 0,
@@ -271,6 +625,8 @@ export default function MedicineOrdersPage({
       await action();
       toast.success(ok);
       setAmountOpen(false);
+      setPatientReview(false);
+      setPayStep(false);
       await load();
     } catch (err) {
       setError(hideAwsDump(err, "Action failed"));
@@ -302,19 +658,67 @@ export default function MedicineOrdersPage({
               <input value={patientPhone} onChange={(e) => setPatientPhone(e.target.value)} required />
             </label>
           </div>
-          {isPatient && (
-            <label>
-              Hospital
-              <select value={hospitalId} onChange={(e) => setHospitalId(e.target.value)} required>
-                <option value="">Select hospital</option>
-                {hospitals.map((h) => (
-                  <option key={h.id} value={String(h.id)}>
-                    {h.hospitalName} ({h.id})
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          {isPatient ? (
+            <>
+              <div className="row">
+                <label>
+                  State
+                  <select
+                    value={filterState}
+                    onChange={(e) => {
+                      setFilterState(e.target.value);
+                      setFilterCity("");
+                    }}
+                  >
+                    <option value="">All states</option>
+                    {storeStates.map((st) => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  City
+                  <select
+                    value={filterCity}
+                    onChange={(e) => setFilterCity(e.target.value)}
+                  >
+                    <option value="">All cities</option>
+                    {storeCities.map((ct) => (
+                      <option key={ct} value={ct}>
+                        {ct}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label>
+                Medical store
+                <select
+                  value={storeId}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setStoreId(next);
+                    const picked = stores.find((s) => s.id === next);
+                    setHospitalId(picked ? String(picked.hospitalId) : "");
+                  }}
+                  required
+                >
+                  <option value="">Select medical store</option>
+                  {filteredStores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.storeName}
+                      {s.city || s.state ? ` — ${[s.city, s.state].filter(Boolean).join(", ")}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {storesLoaded && filteredStores.length === 0 ? (
+                <p className="muted">No medical stores in this state/city. Clear the filters to see all.</p>
+              ) : null}
+            </>
+          ) : null}
           <div className="row">
             <label>
               Fulfillment
@@ -399,13 +803,14 @@ export default function MedicineOrdersPage({
             <thead>
               <tr>
                 <th>Order</th>
-                <th>Patient</th>
+                {!isPatient && <th>Patient</th>}
                 <th>Prescription</th>
                 <th>Date</th>
                 <th>Store</th>
                 <th>Amount</th>
                 <th>Amount status</th>
                 <th>Order status</th>
+                {isPatient && <th>Approve</th>}
                 <th>Action</th>
               </tr>
             </thead>
@@ -415,10 +820,12 @@ export default function MedicineOrdersPage({
                   <td>
                     <strong>{o.orderNumber}</strong>
                   </td>
-                  <td>
-                    {o.patientName}
-                    <div className="muted">{o.patientPhone}</div>
-                  </td>
+                  {!isPatient && (
+                    <td>
+                      {o.patientName}
+                      <div className="muted">{o.patientPhone}</div>
+                    </td>
+                  )}
                   <td>
                     <button type="button" className="link-button" onClick={() => void openFiles(o)}>
                       View files ({o.prescriptionCount ?? o.documents?.length ?? 0})
@@ -427,7 +834,15 @@ export default function MedicineOrdersPage({
                   <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : "—"}</td>
                   <td>{o.assignedStoreName || "—"}</td>
                   <td>
-                    {o.amountVisible === false && !isMedical ? (
+                    {isPatient && patientCanEditOrder(o.status, o.amountStatus, o.paymentStatus) ? (
+                      <button
+                        type="button"
+                        className="link-button medicine-approve-link"
+                        onClick={() => void openAmount(o)}
+                      >
+                        {o.amountVisible === false ? "Review & pay" : `Total ${money(o.amount)}`}
+                      </button>
+                    ) : o.amountVisible === false && !isMedical ? (
                       "Not calculated"
                     ) : (
                       <button type="button" className="link-button" onClick={() => void openAmount(o)}>
@@ -439,6 +854,21 @@ export default function MedicineOrdersPage({
                   <td>
                     <span className={`badge ${o.status}`}>{STATUS_LABEL[o.status] || o.status}</span>
                   </td>
+                  {isPatient && (
+                    <td>
+                      {patientCanEditOrder(o.status, o.amountStatus, o.paymentStatus) ? (
+                        <button
+                          type="button"
+                          className="link-button medicine-approve-link"
+                          onClick={() => void openAmount(o)}
+                        >
+                          Approve / Pay
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  )}
                   <td className="medicine-actions">
                     {isMedical && OPEN.has(o.status) && !o.assignedStoreId && (
                       <>
@@ -472,11 +902,6 @@ export default function MedicineOrdersPage({
                         Complete
                       </button>
                     )}
-                    {isPatient && o.status === "WAITING_FOR_PATIENT_APPROVAL" && (
-                      <button type="button" onClick={() => void openAmount(o)}>
-                        Review amount
-                      </button>
-                    )}
                     {canCreate && OPEN.has(o.status) && (
                       <button
                         type="button"
@@ -498,11 +923,25 @@ export default function MedicineOrdersPage({
       </div>
 
       {amountOpen && detail && (
-        <div className="modal-backdrop" onClick={() => setAmountOpen(false)}>
+        <div className="modal-backdrop" onClick={() => { if (!isPatient) setAmountOpen(false); }}>
           <div className="modal panel medicine-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Amount · {detail.orderNumber}</h2>
-              <button type="button" className="modal-close" onClick={() => setAmountOpen(false)}>
+              <h2>
+                {patientReview
+                  ? payStep
+                    ? `Pay · ${detail.orderNumber}`
+                    : `Review medicines · ${detail.orderNumber}`
+                  : `Amount · ${detail.orderNumber}`}
+              </h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => {
+                  setAmountOpen(false);
+                  setPatientReview(false);
+                  setPayStep(false);
+                }}
+              >
                 ×
               </button>
             </div>
@@ -510,8 +949,17 @@ export default function MedicineOrdersPage({
               {detail.assignedStoreName || "Store not assigned"} · {detail.patientName}
             </p>
 
-            {isMedical && (detail.status === "IN_PROCESS" || detail.status === "AMOUNT_ACCEPTED" || detail.status === "WAITING_FOR_PATIENT_APPROVAL") ? (
+            {!patientReview && isMedical && (detail.status === "IN_PROCESS" || detail.status === "AMOUNT_ACCEPTED" || detail.status === "WAITING_FOR_PATIENT_APPROVAL") ? (
               <div className="stack">
+                <div className="medicine-quote-row medicine-quote-head">
+                  <span>Prescribed</span>
+                  <span>Medicine</span>
+                  <span>Qty</span>
+                  <span>Days</span>
+                  <span>Unit price</span>
+                  <span>Stock</span>
+                  <span>Total</span>
+                </div>
                 {quoteItems.map((it, idx) => (
                   <div key={idx} className="medicine-quote-row">
                     <input
@@ -532,10 +980,29 @@ export default function MedicineOrdersPage({
                       type="number"
                       min={0}
                       step="0.01"
+                      title="Quantity"
+                      placeholder="Qty"
                       value={it.quantity}
                       onChange={(e) =>
                         setQuoteItems((rows) =>
-                          rows.map((r, i) => (i === idx ? { ...r, quantity: Number(e.target.value) } : r)),
+                          rows.map((r, i) => (i === idx ? { ...r, quantity: Number(e.target.value), quotedQuantity: Number(e.target.value) } : r)),
+                        )
+                      }
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      step="1"
+                      title="Days on slip"
+                      placeholder="Days"
+                      value={it.days ?? 30}
+                      onChange={(e) =>
+                        setQuoteItems((rows) =>
+                          rows.map((r, i) => {
+                            if (i !== idx) return r;
+                            const days = Math.max(1, Number(e.target.value) || 1);
+                            return { ...r, days, requestedDays: days };
+                          }),
                         )
                       }
                     />
@@ -543,6 +1010,8 @@ export default function MedicineOrdersPage({
                       type="number"
                       min={0}
                       step="0.01"
+                      title="Unit price"
+                      placeholder="Price"
                       value={it.unitPrice}
                       onChange={(e) =>
                         setQuoteItems((rows) =>
@@ -675,53 +1144,256 @@ export default function MedicineOrdersPage({
               </div>
             ) : (
               <div className="stack">
+                {patientReview && !payStep ? (
+                  <p className="patient-note">
+                    Medical sent these medicines. Change days or quantity, remove any item you do not want,
+                    then Approve. Unit price is locked. Total updates as you edit.
+                  </p>
+                ) : null}
+                {patientReview && !payStep ? (
+                  <label>
+                    How many days do you want?
+                    <input
+                      type="number"
+                      min={1}
+                      max={slipDays}
+                      value={wantedDays}
+                      onChange={(e) => applyWantedDays(Number(e.target.value))}
+                    />
+                    <span className="muted"> Slip is {slipDays} days. Quantity scales automatically.</span>
+                  </label>
+                ) : null}
+                {payStep && patientReview ? (
+                  <div className="medicine-pay-panel">
+                    <p>
+                      <strong>Pay {money(grand)}</strong> to {detail.assignedStoreName || "the medical store"}
+                    </p>
+                    <div className="medicine-pay-grid">
+                      <div className="medicine-qr-box">
+                        <p className="muted">Scan UPI QR</p>
+                        {(() => {
+                          const upi = detail.upiId || "medtrackpharmacy@upi";
+                          const uri = `upi://pay?pa=${encodeURIComponent(upi)}&pn=${encodeURIComponent(detail.assignedStoreName || "Medical store")}&am=${grand.toFixed(2)}&cu=INR&tn=${encodeURIComponent(detail.orderNumber)}`;
+                          const qr = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(uri)}`;
+                          return (
+                            <>
+                              <img alt="UPI payment QR" src={qr} width={220} height={220} />
+                              <p className="muted">{upi}</p>
+                              <a className="link-button" href={uri}>
+                                Open UPI app
+                              </a>
+                            </>
+                          );
+                        })()}
+                      </div>
+                      <div className="stack">
+                        <p>
+                          <strong>Pay with UPI app</strong>
+                        </p>
+                        <p className="muted">Google Pay, PhonePe, Paytm, BHIM, and other UPI apps.</p>
+                        <div className="pay-app-grid">
+                          {payAppsFor(detail).map((app) => (
+                            <button
+                              key={app.id}
+                              type="button"
+                              className={`pay-app-btn pay-app-btn--${app.id}`}
+                              disabled={paying || quoteItems.length === 0}
+                              onClick={() => void startUpiApp(app)}
+                            >
+                              <span className="pay-app-mark" aria-hidden>
+                                {app.id === "gpay"
+                                  ? "G"
+                                  : app.id === "phonepe"
+                                    ? "Pe"
+                                    : app.id === "paytm"
+                                      ? "Pa"
+                                      : app.id === "bhim"
+                                        ? "B"
+                                        : "U"}
+                              </span>
+                              {app.name}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={paying || quoteItems.length === 0}
+                          onClick={() => void startRazorpayCheckout()}
+                        >
+                          {paying ? "Opening payment…" : "Cards, netbanking & wallets (Razorpay)"}
+                        </button>
+                        {payHint ? <p className="patient-note">{payHint}</p> : null}
+                        <p>
+                          <strong>After paying — upload screenshot</strong>
+                        </p>
+                        <p className="muted">Required for UPI apps. Razorpay success is confirmed automatically.</p>
+                        <FilePicker files={payShot} onPick={setPayShot} />
+                        <button
+                          type="button"
+                          disabled={payShot.length === 0 || paying}
+                          onClick={() => {
+                            const form = new FormData();
+                            payShot.forEach((f) => form.append("files", f));
+                            form.set("payload", JSON.stringify(reviewPayload()));
+                            void run(
+                              () => api.uploadMedicinePaymentScreenshot(detail.id, form),
+                              "Payment screenshot uploaded",
+                            );
+                          }}
+                        >
+                          Upload payment screenshot
+                        </button>
+                      </div>
+                    </div>
+                    <div className="modal-actions">
+                      <button type="button" className="secondary" onClick={() => setPayStep(false)}>
+                        Back to medicines
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                {quoteItems.length === 0 ? (
+                  <p className="muted">No medicines on this quote yet.</p>
+                ) : (
                 <table className="table">
                   <thead>
                     <tr>
                       <th>Medicine</th>
+                      <th>Days</th>
                       <th>Qty</th>
-                      <th>Unit</th>
+                      <th>Unit price</th>
                       <th>Total</th>
                       <th>Availability</th>
+                      {patientReview && <th>Remove</th>}
                     </tr>
                   </thead>
                   <tbody>
-                    {(detail.items || []).map((it, i) => (
-                      <tr key={it.id || i}>
-                        <td>
-                          {it.medicineName}
-                          {it.substituteName ? (
-                            <div className="muted">
-                              Substitute for {it.prescribedName}: {it.substituteName}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td>{it.quantity}</td>
-                        <td>{money(it.unitPrice)}</td>
-                        <td>{money(it.lineTotal)}</td>
-                        <td>{it.availability}</td>
-                      </tr>
-                    ))}
+                    {quoteItems.map((it, i) => {
+                      const prescribed = prescribedDaysOf(it);
+                      const requested = Math.max(1, Number(it.requestedDays || prescribed));
+                      const maxQty = scaleQty(quotedQtyOf(it), prescribed, requested);
+                      const line = Number(it.quantity || 0) * Number(it.unitPrice || 0);
+                      const patientEdit = patientReview;
+                      return (
+                        <tr key={it.id || i}>
+                          <td>
+                            {it.medicineName}
+                            {it.substituteName ? (
+                              <div className="muted">
+                                Substitute for {it.prescribedName}: {it.substituteName}
+                              </div>
+                            ) : null}
+                            {patientEdit ? (
+                              <div className="muted">Slip {prescribed} days · max qty {maxQty}</div>
+                            ) : null}
+                          </td>
+                          <td>
+                            {patientEdit ? (
+                              <div className="qty-stepper">
+                                <button type="button" onClick={() => bumpItemDays(i, -1)} aria-label="Fewer days">
+                                  −
+                                </button>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={prescribed}
+                                  value={requested}
+                                  onChange={(e) => {
+                                    const days = Math.max(
+                                      1,
+                                      Math.min(prescribed, Number(e.target.value) || 1),
+                                    );
+                                    setQuoteItems((rows) =>
+                                      rows.map((r, idx) =>
+                                        idx === i
+                                          ? {
+                                              ...r,
+                                              requestedDays: days,
+                                              quantity: scaleQty(quotedQtyOf(r), prescribedDaysOf(r), days),
+                                            }
+                                          : r,
+                                      ),
+                                    );
+                                  }}
+                                />
+                                <button type="button" onClick={() => bumpItemDays(i, 1)} aria-label="More days">
+                                  +
+                                </button>
+                              </div>
+                            ) : (
+                              `${requested}/${prescribed}`
+                            )}
+                          </td>
+                          <td>
+                            {patientEdit ? (
+                              <div className="qty-stepper">
+                                <button type="button" onClick={() => bumpItemQty(i, -1)} aria-label="Decrease quantity">
+                                  −
+                                </button>
+                                <input
+                                  type="number"
+                                  min={qtyStepOf(it)}
+                                  max={maxQty}
+                                  step={qtyStepOf(it)}
+                                  value={it.quantity}
+                                  onChange={(e) => {
+                                    const raw = Number(e.target.value);
+                                    const qty = Math.min(maxQty, Math.max(qtyStepOf(it), raw || 0));
+                                    setQuoteItems((rows) =>
+                                      rows.map((r, idx) => (idx === i ? { ...r, quantity: qty } : r)),
+                                    );
+                                  }}
+                                />
+                                <button type="button" onClick={() => bumpItemQty(i, 1)} aria-label="Increase quantity">
+                                  +
+                                </button>
+                              </div>
+                            ) : (
+                              it.quantity
+                            )}
+                          </td>
+                          <td>{money(it.unitPrice)}</td>
+                          <td>{money(line)}</td>
+                          <td>{it.availability}</td>
+                          {patientEdit && (
+                            <td>
+                              <button
+                                type="button"
+                                className="link-button danger"
+                                onClick={() => removeQuoteItem(i)}
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+                )}
                 <p>
-                  Subtotal {money(detail.charges?.medicineSubtotal)} · Delivery {money(detail.charges?.deliveryCharge)} ·
-                  Discount -{money(detail.charges?.discount)} · Tax {money(detail.charges?.tax)}
+                  Subtotal {money(subtotal)} · Delivery {money(charges.deliveryCharge)} · Discount -
+                  {money(charges.discount)} · Tax {money(charges.tax)}
                 </p>
                 <p>
-                  <strong>Total {money(detail.charges?.grandTotal ?? detail.amount)}</strong>
+                  <strong>Total {money(grand)}</strong>
                 </p>
-                {isPatient && detail.status === "WAITING_FOR_PATIENT_APPROVAL" && (
+                {patientReview && (
                   <div className="modal-actions">
                     <button
                       type="button"
+                      disabled={quoteItems.length === 0}
                       onClick={() => {
-                        if (window.confirm(`Accept amount ${money(detail.charges?.grandTotal ?? detail.amount)}?`)) {
-                          void run(() => api.acceptMedicineAmount(detail.id), "Amount accepted");
+                        if (quoteItems.length === 0) {
+                          setError("Keep at least one medicine, or reject the amount");
+                          return;
                         }
+                        setPayStep(true);
                       }}
                     >
-                      Accept amount
+                      Approve &amp; pay {money(grand)}
                     </button>
                     <button
                       type="button"
@@ -734,6 +1406,8 @@ export default function MedicineOrdersPage({
                       Reject amount
                     </button>
                   </div>
+                )}
+                  </>
                 )}
                 {detail.amountHistory && detail.amountHistory.length > 0 && (
                   <div>

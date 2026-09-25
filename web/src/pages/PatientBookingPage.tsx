@@ -1,5 +1,6 @@
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { popupClosePath } from "../auth";
+import { useT } from "../i18n";
 import BookingsPage from "./BookingsPage";
 
 /**
@@ -12,6 +13,7 @@ import BookingsPage from "./BookingsPage";
  * Hospital dropdown is optional — patient may pick a doctor directly.
  */
 export default function PatientBookingPage() {
+  const t = useT();
   const { hospitalId: pathHospitalId } = useParams();
   const [params] = useSearchParams();
   const hospitalId =
@@ -25,13 +27,15 @@ export default function PatientBookingPage() {
       <section className="patient-booking-modal panel">
         <header className="patient-booking-head">
           <div>
-            <p className="patient-booking-brand">MedTrack Clinic</p>
-            <h1 id="patient-booking-title">Book an appointment</h1>
+            <p className="patient-booking-brand">{t("MedTrack Clinic")}</p>
+            <h1 id="patient-booking-title">{t("Book an appointment")}</h1>
             <p className="lead patient-booking-lead">
-              Choose a doctor and preferred time. No login required.
+              {t(
+                "Filter by hospital or department, then choose a doctor and time. No login required.",
+              )}
             </p>
           </div>
-          <Link to={popupClosePath()} className="patient-booking-signin" aria-label="Close">
+          <Link to={popupClosePath()} className="patient-booking-signin" aria-label={t("Close")}>
             ×
           </Link>
         </header>

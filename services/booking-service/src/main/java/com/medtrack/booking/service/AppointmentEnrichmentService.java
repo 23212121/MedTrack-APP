@@ -6,11 +6,13 @@ import com.medtrack.booking.domain.AppointmentEntity;
 import com.medtrack.booking.domain.BookingEntity;
 import com.medtrack.booking.domain.DoctorClinicEntity;
 import com.medtrack.booking.domain.DoctorPersonalEntity;
+import com.medtrack.booking.domain.DoctorProfessionalEntity;
 import com.medtrack.booking.domain.HospitalEntity;
 import com.medtrack.booking.domain.UserDetailsEntity;
 import com.medtrack.booking.repo.AppointmentRepository;
 import com.medtrack.booking.repo.DoctorClinicRepository;
 import com.medtrack.booking.repo.DoctorPersonalRepository;
+import com.medtrack.booking.repo.DoctorProfessionalRepository;
 import com.medtrack.booking.repo.HospitalRepository;
 import com.medtrack.booking.repo.UserDetailsRepository;
 import java.util.LinkedHashMap;
@@ -25,6 +27,7 @@ public class AppointmentEnrichmentService {
   private final HospitalRepository hospitalRepo;
   private final DoctorClinicRepository clinicRepo;
   private final DoctorPersonalRepository personalRepo;
+  private final DoctorProfessionalRepository professionalRepo;
   private final AppointmentRepository appointmentRepo;
   private final UserDetailsRepository userDetailsRepo;
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -33,11 +36,13 @@ public class AppointmentEnrichmentService {
       HospitalRepository hospitalRepo,
       DoctorClinicRepository clinicRepo,
       DoctorPersonalRepository personalRepo,
+      DoctorProfessionalRepository professionalRepo,
       AppointmentRepository appointmentRepo,
       UserDetailsRepository userDetailsRepo) {
     this.hospitalRepo = hospitalRepo;
     this.clinicRepo = clinicRepo;
     this.personalRepo = personalRepo;
+    this.professionalRepo = professionalRepo;
     this.appointmentRepo = appointmentRepo;
     this.userDetailsRepo = userDetailsRepo;
   }
@@ -78,11 +83,22 @@ public class AppointmentEnrichmentService {
     return clinicRepo.findById(doctorId).map(DoctorClinicEntity::getConsultationFee).orElse(null);
   }
 
+  public String doctorDepartment(String doctorId) {
+    if (doctorId == null || doctorId.isBlank()) return "";
+    return professionalRepo
+        .findById(doctorId)
+        .map(DoctorProfessionalEntity::getDepartment)
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .orElse("");
+  }
+
   public Map<String, Object> enrichBooking(BookingEntity booking) {
     Map<String, Object> row = entityToMap(booking);
     Long hospitalId = booking.getHospitalId();
     String doctorId = booking.getDoctorId();
     row.put("hospitalName", hospitalName(hospitalId));
+    row.put("department", doctorDepartment(doctorId));
     row.put("consultationFee", consultationFee(doctorId));
     row.put("currency", DEFAULT_CURRENCY);
     return row;
@@ -97,6 +113,7 @@ public class AppointmentEnrichmentService {
     }
     String doctorId = appointment.getDoctorId();
     row.put("hospitalName", hospitalName(hospitalId));
+    row.put("department", firstNonBlank(appointment.getDepartment(), doctorDepartment(doctorId)));
     row.put("consultationFee", consultationFee(doctorId));
     row.put("currency", DEFAULT_CURRENCY);
     return row;
@@ -109,6 +126,7 @@ public class AppointmentEnrichmentService {
     m.put("doctorName", doctorName(booking.getDoctorId()));
     m.put("hospitalId", booking.getHospitalId());
     m.put("hospitalName", hospitalName(booking.getHospitalId()));
+    m.put("department", doctorDepartment(booking.getDoctorId()));
     m.put("patientName", booking.getPatientName());
     m.put("patientPhone", booking.getPatientPhone());
     m.put("patientAge", booking.getPatientAge());
@@ -131,11 +149,6 @@ public class AppointmentEnrichmentService {
             clinic -> {
               m.put("clinicName", nullTo(clinic.getClinicName(), ""));
               m.put("branch", nullTo(clinic.getBranch(), ""));
-              String dept = clinic.getConsultationType();
-              if (dept == null || dept.isBlank()) {
-                dept = clinic.getClinicName();
-              }
-              m.put("department", nullTo(dept, ""));
             });
 
     appointmentRepo
@@ -177,6 +190,12 @@ public class AppointmentEnrichmentService {
 
   private static String nullTo(String value, String fallback) {
     return value == null ? fallback : value;
+  }
+
+  private static String firstNonBlank(String a, String b) {
+    if (a != null && !a.isBlank()) return a.trim();
+    if (b != null && !b.isBlank()) return b.trim();
+    return "";
   }
 
   private String bookedByLabel(AppointmentEntity appt, Long hospitalId) {

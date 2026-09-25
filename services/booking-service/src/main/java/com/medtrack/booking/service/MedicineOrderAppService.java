@@ -62,7 +62,9 @@ public class MedicineOrderAppService {
   private final MedicalStoreRepository storeRepo;
   private final ObjectMapper mapper;
   private final S3DocumentStorageService s3;
+  private final RazorpayGateway razorpay;
   private final Path uploadRoot;
+  private final String defaultUpiId;
 
   public MedicineOrderAppService(
       MedicineOrderRepository orderRepo,
@@ -76,7 +78,9 @@ public class MedicineOrderAppService {
       MedicalStoreRepository storeRepo,
       ObjectMapper mapper,
       S3DocumentStorageService s3,
-      @Value("${medtrack.upload-dir:uploads/patient-documents}") String uploadDir) {
+      RazorpayGateway razorpay,
+      @Value("${medtrack.upload-dir:uploads/patient-documents}") String uploadDir,
+      @Value("${medtrack.payment.upi-id:medtrackpharmacy@upi}") String defaultUpiId) {
     this.orderRepo = orderRepo;
     this.itemRepo = itemRepo;
     this.chargesRepo = chargesRepo;
@@ -88,6 +92,8 @@ public class MedicineOrderAppService {
     this.storeRepo = storeRepo;
     this.mapper = mapper;
     this.s3 = s3;
+    this.razorpay = razorpay;
+    this.defaultUpiId = defaultUpiId == null || defaultUpiId.isBlank() ? "medtrackpharmacy@upi" : defaultUpiId.trim();
     this.uploadRoot = Path.of(uploadDir).toAbsolutePath().normalize().getParent()
         .resolve("medicine-orders");
   }
@@ -132,6 +138,18 @@ public class MedicineOrderAppService {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Medical store cannot create orders");
     }
     Long hospitalId = toLong(body.get("hospitalId"));
+    MedicalStoreEntity requestedStore = null;
+    String requestedStoreId = firstNonBlank(text(body, "storeId"), text(body, "assignedStoreId"));
+    if (requestedStoreId != null) {
+      requestedStore = resolveStore(requestedStoreId);
+      if (requestedStore == null) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Medical store not found");
+      }
+      if (!"ACTIVE".equalsIgnoreCase(requestedStore.getStatus())) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Medical store is inactive");
+      }
+      hospitalId = requestedStore.getHospitalId();
+    }
     if (hospitalId == null) hospitalId = actor.hospitalId();
     if (hospitalId == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "hospitalId is required");
@@ -186,16 +204,27 @@ public class MedicineOrderAppService {
     order.setBookedBy(bookedBy);
     order.setCreatedAt(Instant.now());
     order.setCreatedBy(actor.label());
+    if (requestedStore != null) {
+      order.setAssignedStoreId(requestedStore.getId());
+      order.setAssignedStoreName(requestedStore.getStoreName());
+    }
     orderRepo.save(order);
     addStatus(order.getId(), null, "ORDERED", actor.label(), "Order created");
     addStatus(order.getId(), "ORDERED", "PENDING", "system", "Waiting for medical store");
     storeDocuments(order, selected, actor.label(), true);
 
-    notifyHospitalStores(
-        hospitalId,
-        order.getId(),
-        "New medicine order",
-        "A new medicine order " + order.getOrderNumber() + " has been received. Please review the prescription.");
+    if (requestedStore != null) {
+      notifyStore(
+          order,
+          "New medicine order",
+          "A new medicine order " + order.getOrderNumber() + " was sent to your store. Please review the prescription.");
+    } else {
+      notifyHospitalStores(
+          hospitalId,
+          order.getId(),
+          "New medicine order",
+          "A new medicine order " + order.getOrderNumber() + " has been received. Please review the prescription.");
+    }
 
     return detail(order, actor, false);
   }
@@ -321,9 +350,13 @@ public class MedicineOrderAppService {
           HttpStatus.CONFLICT, "This order has already been accepted by another medical store.");
     }
     MedicineOrderEntity order = require(id);
+    order.setAssignedStoreId(store.getId());
+    order.setAssignedStoreName(store.getStoreName());
     order.setStatus("IN_PROCESS");
     order.setStatusCode(1);
     order.setPendingReason(null);
+    order.setUpdatedAt(Instant.now());
+    order.setUpdatedBy(actor.label());
     orderRepo.save(order);
     addStatus(id, current.getStatus(), "IN_PROCESS", actor.label(), "Accepted by " + store.getStoreName());
     saveResponse(id, store.getId(), "ACCEPT", null);
@@ -416,6 +449,7 @@ public class MedicineOrderAppService {
       }
       double qty = toDouble(row.get("quantity"), 0);
       double unit = toDouble(row.get("unitPrice"), 0);
+      int days = Math.max(1, toInt(row.get("days"), 30));
       if (qty <= 0) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "quantity must be greater than 0");
       }
@@ -430,6 +464,9 @@ public class MedicineOrderAppService {
       item.setPrescribedName(prescribed.trim());
       item.setMedicineName(medicine.trim());
       item.setQuantity(qty);
+      item.setQuotedQuantity(qty);
+      item.setDays(days);
+      item.setRequestedDays(days);
       item.setUnitPrice(unit);
       item.setLineTotal(line);
       item.setAvailability(firstNonBlank(text(row, "availability"), "AVAILABLE"));
@@ -474,6 +511,10 @@ public class MedicineOrderAppService {
     if (send) {
       order.setCurrentAmount(grand);
       order.setAmountStatus("SENT");
+      order.setPaymentStatus("UNPAID");
+      order.setPaymentMethod(null);
+      order.setRazorpayOrderId(null);
+      order.setRazorpayPaymentId(null);
       String prev = order.getStatus();
       order.setStatus("WAITING_FOR_PATIENT_APPROVAL");
       order.setStatusCode(2);
@@ -504,35 +545,136 @@ public class MedicineOrderAppService {
   }
 
   @Transactional
-  public Map<String, Object> acceptAmount(Actor actor, String id) {
+  public Map<String, Object> acceptAmount(Actor actor, String id, Map<String, Object> body) {
     MedicineOrderEntity order = require(id);
     assertPatientOrHospitalRead(actor, order, true);
-    if (!"WAITING_FOR_PATIENT_APPROVAL".equals(order.getStatus())) {
+    assertAwaitingPatientApproval(order);
+    applyPatientQuantity(order, body == null ? Map.of() : body);
+    finishPatientAccept(order, actor, prevStatus(order), "UNPAID", null, null, null);
+    return detail(order, actor, true);
+  }
+
+  private static String prevStatus(MedicineOrderEntity order) {
+    return order.getStatus();
+  }
+
+  private static boolean awaitingPatientApproval(MedicineOrderEntity order) {
+    String st = blankTo(order.getStatus(), "");
+    if ("WAITING_FOR_PATIENT_APPROVAL".equals(st)) return true;
+    String pay = blankTo(order.getPaymentStatus(), "UNPAID");
+    return "AMOUNT_ACCEPTED".equals(st) && !"PAID".equalsIgnoreCase(pay);
+  }
+
+  private static void assertAwaitingPatientApproval(MedicineOrderEntity order) {
+    if (!awaitingPatientApproval(order)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount is not waiting for approval");
     }
-    String prev = order.getStatus();
-    order.setStatus("AMOUNT_ACCEPTED");
-    order.setStatusCode(3);
-    order.setAmountStatus("ACCEPTED");
+  }
+
+  @Transactional
+  public Map<String, Object> createRazorpayOrder(Actor actor, String id, Map<String, Object> body) {
+    MedicineOrderEntity order = require(id);
+    assertPatientOrHospitalRead(actor, order, true);
+    assertAwaitingPatientApproval(order);
+    applyPatientQuantity(order, body == null ? Map.of() : body);
+    order.setPaymentStatus("UNPAID");
     order.setUpdatedAt(Instant.now());
     order.setUpdatedBy(actor.label());
     orderRepo.save(order);
-    addStatus(id, prev, "AMOUNT_ACCEPTED", actor.label(), "Patient accepted amount");
-    markLatestHistory(id, "ACCEPTED");
+    long paise = Math.round(Math.max(0, order.getCurrentAmount() == null ? 0 : order.getCurrentAmount()) * 100.0);
+    Map<String, Object> out = new LinkedHashMap<>();
+    putPayment(out, order);
+    out.put("razorpayEnabled", razorpay.configured());
+    out.put("amount", paise);
+    out.put("currency", "INR");
+    if (razorpay.configured()) {
+      Map<String, Object> created = razorpay.createOrder(paise, order.getOrderNumber(), order.getId());
+      order.setRazorpayOrderId(String.valueOf(created.get("razorpayOrderId")));
+      order.setPaymentMethod("RAZORPAY");
+      orderRepo.save(order);
+      out.putAll(created);
+    }
+    out.put("order", detail(order, actor, true));
+    return out;
+  }
+
+  @Transactional
+  public Map<String, Object> verifyRazorpayPayment(Actor actor, String id, Map<String, Object> body) {
+    MedicineOrderEntity order = require(id);
+    assertPatientOrHospitalRead(actor, order, true);
+    assertAwaitingPatientApproval(order);
+    Map<String, Object> payload = body == null ? Map.of() : body;
+    applyPatientQuantity(order, payload);
+    String rpOrder = firstNonBlank(text(payload, "razorpayOrderId"), text(payload, "razorpay_order_id"));
+    String rpPay = firstNonBlank(text(payload, "razorpayPaymentId"), text(payload, "razorpay_payment_id"));
+    String sig = firstNonBlank(text(payload, "razorpaySignature"), text(payload, "razorpay_signature"));
+    if (!razorpay.verify(rpOrder, rpPay, sig)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay payment could not be verified");
+    }
+    String prev = order.getStatus();
+    finishPatientAccept(order, actor, prev, "PAID", "RAZORPAY", rpOrder, rpPay);
+    return detail(order, actor, true);
+  }
+
+  @Transactional
+  public Map<String, Object> payWithScreenshot(
+      Actor actor, String id, Map<String, Object> body, MultipartFile[] files) {
+    MedicineOrderEntity order = require(id);
+    assertPatientOrHospitalRead(actor, order, true);
+    assertAwaitingPatientApproval(order);
+    applyPatientQuantity(order, body == null ? Map.of() : body);
+    List<MultipartFile> selected = nonEmpty(files);
+    if (selected.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Upload a payment screenshot");
+    }
+    validateFiles(selected);
+    storeDocuments(order, selected, actor.label(), false, "PAYMENT");
+    String prev = order.getStatus();
+    finishPatientAccept(order, actor, prev, "PAID", "UPI_SCREENSHOT", null, null);
+    return detail(order, actor, true);
+  }
+
+  private void finishPatientAccept(
+      MedicineOrderEntity order,
+      Actor actor,
+      String prev,
+      String paymentStatus,
+      String paymentMethod,
+      String razorpayOrderId,
+      String razorpayPaymentId) {
+    order.setStatus("AMOUNT_ACCEPTED");
+    order.setStatusCode(3);
+    order.setAmountStatus("ACCEPTED");
+    order.setPaymentStatus(blankTo(paymentStatus, "UNPAID"));
+    if (paymentMethod != null && !paymentMethod.isBlank()) {
+      order.setPaymentMethod(paymentMethod);
+    }
+    if (razorpayOrderId != null) order.setRazorpayOrderId(razorpayOrderId);
+    if (razorpayPaymentId != null) order.setRazorpayPaymentId(razorpayPaymentId);
+    order.setUpdatedAt(Instant.now());
+    order.setUpdatedBy(actor.label());
+    orderRepo.save(order);
+    addStatus(order.getId(), prev, "AMOUNT_ACCEPTED", actor.label(), "Patient accepted amount");
+    markLatestHistory(order.getId(), "ACCEPTED");
+    String payNote =
+        "PAID".equalsIgnoreCase(order.getPaymentStatus())
+            ? " Payment received (" + blankTo(order.getPaymentMethod(), "UPI") + ")."
+            : "";
     notifyStore(
         order,
         "Amount accepted",
-        "The patient has accepted the medicine amount for " + order.getOrderNumber() + ". You can prepare the order.");
-    return detail(order, actor, true);
+        "The patient has accepted the medicine amount for "
+            + order.getOrderNumber()
+            + "."
+            + payNote
+            + " You can prepare the order.");
   }
 
   @Transactional
   public Map<String, Object> rejectAmount(Actor actor, String id, Map<String, Object> body) {
     MedicineOrderEntity order = require(id);
     assertPatientOrHospitalRead(actor, order, true);
-    if (!"WAITING_FOR_PATIENT_APPROVAL".equals(order.getStatus())) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount is not waiting for approval");
-    }
+    assertAwaitingPatientApproval(order);
     String reason = firstNonBlank(text(body, "reason"), "Rejected");
     String comments = text(body, "comments");
     String note = comments == null || comments.isBlank() ? reason : reason + " — " + comments;
@@ -711,7 +853,7 @@ public class MedicineOrderAppService {
     assertCanView(actor, order);
     if (actor.isMedical()
         && order.getAssignedStoreId() != null
-        && !order.getAssignedStoreId().equals(actor.storeId())) {
+        && !sameStore(actor, order.getAssignedStoreId())) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Prescription is assigned to another store");
     }
     MedicineOrderDocumentEntity doc =
@@ -745,7 +887,8 @@ public class MedicineOrderAppService {
   public Map<String, Object> notifications(Actor actor) {
     List<MedicineOrderNotificationEntity> rows;
     if (actor.isMedical()) {
-      rows = notifRepo.findByStoreIdOrderByCreatedAtDesc(actor.storeId());
+      String sid = canonicalStoreId(actor);
+      rows = sid == null ? List.of() : notifRepo.findByStoreIdOrderByCreatedAtDesc(sid);
     } else if (actor.isPatient()) {
       rows = notifRepo.findByPatientPhoneOrderByCreatedAtDesc(digits(actor.patientPhone()));
     } else if (actor.hospitalId() != null) {
@@ -802,9 +945,10 @@ public class MedicineOrderAppService {
     if (actor.isMedical()) {
       if (actor.hospitalId() != null && !actor.hospitalId().equals(o.getHospitalId())) return false;
       if (o.getAssignedStoreId() == null && OPEN_STATUSES.contains(o.getStatus())) {
-        return !responseRepo.existsByOrderIdAndStoreIdAndAction(o.getId(), actor.storeId(), "REJECT");
+        return actor.storeId() == null
+            || !responseRepo.existsByOrderIdAndStoreIdAndAction(o.getId(), canonicalStoreId(actor), "REJECT");
       }
-      return actor.storeId() != null && actor.storeId().equals(o.getAssignedStoreId());
+      return sameStore(actor, o.getAssignedStoreId());
     }
     if (actor.hospitalId() != null) {
       return actor.hospitalId().equals(o.getHospitalId());
@@ -813,9 +957,16 @@ public class MedicineOrderAppService {
   }
 
   private void assertCanView(Actor actor, MedicineOrderEntity o) {
-    if (!visibleTo(actor, o) && !(actor.isMedical() && actor.hospitalId() != null && actor.hospitalId().equals(o.getHospitalId()) && OPEN_STATUSES.contains(o.getStatus()))) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to view this order");
+    if (visibleTo(actor, o)) {
+      return;
     }
+    if (actor.isMedical()
+        && actor.hospitalId() != null
+        && actor.hospitalId().equals(o.getHospitalId())
+        && (OPEN_STATUSES.contains(o.getStatus()) || sameStore(actor, o.getAssignedStoreId()))) {
+      return;
+    }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to view this order");
   }
 
   private void assertPatientOwns(Actor actor, MedicineOrderEntity o) {
@@ -844,7 +995,7 @@ public class MedicineOrderAppService {
   private MedicineOrderEntity requireAssigned(Actor actor, String id) {
     MedicineOrderEntity order = require(id);
     assertSameHospital(actor, order);
-    if (actor.storeId() == null || !actor.storeId().equals(order.getAssignedStoreId())) {
+    if (actor.storeId() == null || !sameStore(actor, order.getAssignedStoreId())) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Order is not assigned to this store");
     }
     return order;
@@ -857,15 +1008,42 @@ public class MedicineOrderAppService {
   }
 
   private MedicalStoreEntity requireActiveStore(Actor actor) {
-    if (actor.storeId() == null) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "medicalStoreId is required");
+    MedicalStoreEntity store = resolveStore(actor.storeId());
+    if (store == null) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          actor.storeId() == null || actor.storeId().isBlank()
+              ? "medicalStoreId is required"
+              : "Medical store not found");
     }
-    MedicalStoreEntity store = storeRepo.findById(actor.storeId())
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Medical store not found"));
     if (!"ACTIVE".equalsIgnoreCase(store.getStatus())) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Medical store is inactive");
     }
     return store;
+  }
+
+  private MedicalStoreEntity resolveStore(String storeKey) {
+    if (storeKey == null || storeKey.isBlank()) return null;
+    String key = storeKey.trim();
+    return storeRepo
+        .findById(key)
+        .or(() -> storeRepo.findByStoreCodeIgnoreCase(key))
+        .orElse(null);
+  }
+
+  private String canonicalStoreId(Actor actor) {
+    MedicalStoreEntity store = resolveStore(actor.storeId());
+    return store != null ? store.getId() : actor.storeId();
+  }
+
+  private boolean sameStore(Actor actor, String assignedStoreId) {
+    if (assignedStoreId == null || assignedStoreId.isBlank()) return false;
+    String assigned = assignedStoreId.trim();
+    String raw = actor.storeId() == null ? "" : actor.storeId().trim();
+    if (!raw.isEmpty() && raw.equalsIgnoreCase(assigned)) return true;
+    MedicalStoreEntity store = resolveStore(raw);
+    if (store == null) return false;
+    return assigned.equalsIgnoreCase(store.getId()) || assigned.equalsIgnoreCase(store.getStoreCode());
   }
 
   private MedicineOrderEntity require(String id) {
@@ -877,11 +1055,18 @@ public class MedicineOrderAppService {
   private Map<String, Object> summary(MedicineOrderEntity o, Actor actor) {
     Map<String, Object> m = baseOrder(o, actor);
     List<MedicineOrderDocumentEntity> docs = docRepo.findByOrderIdOrderByCreatedAtDesc(o.getId());
-    m.put("prescriptionCount", docs.size());
+    long rxCount =
+        docs.stream()
+            .filter(d -> d.getKind() == null || d.getKind().isBlank() || "PRESCRIPTION".equalsIgnoreCase(d.getKind()))
+            .count();
+    m.put("prescriptionCount", rxCount);
     m.put("documents", docs.stream().map(this::docMap).toList());
     boolean showAmount = canSeeAmount(actor, o);
     m.put("amount", showAmount ? o.getCurrentAmount() : null);
     m.put("amountVisible", showAmount);
+    if (showAmount || actor.isMedical() || actor.isPatient()) {
+      putPayment(m, o);
+    }
     return m;
   }
 
@@ -889,14 +1074,14 @@ public class MedicineOrderAppService {
     assertCanView(actor, o);
     Map<String, Object> m = summary(o, actor);
     if (!full) return m;
-    boolean showQuote = canSeeAmount(actor, o) || actor.isMedical();
+    boolean showQuote = canSeeAmount(actor, o) || actor.isMedical() || actor.isPatient();
     List<MedicineOrderItemEntity> items = itemRepo.findByOrderIdOrderBySortOrderAsc(o.getId());
     m.put("items", showQuote ? items.stream().map(it -> itemMap(it, true)).toList() : List.of());
     chargesRepo
         .findById(o.getId())
         .ifPresentOrElse(
             c -> {
-              if (showQuote && (actor.isMedical() || !c.isDraft())) {
+              if (showQuote && (actor.isMedical() || actor.isPatient() || !c.isDraft())) {
                 m.put("charges", chargesMap(c));
               } else {
                 m.put("charges", null);
@@ -922,6 +1107,9 @@ public class MedicineOrderAppService {
       return o.getCurrentAmount() != null && !"DRAFT".equalsIgnoreCase(blankTo(o.getAmountStatus(), ""));
     }
     if (actor.isPatient()) {
+      if ("WAITING_FOR_PATIENT_APPROVAL".equalsIgnoreCase(blankTo(o.getStatus(), ""))) {
+        return true;
+      }
       String st = blankTo(o.getAmountStatus(), "NOT_CALCULATED");
       return Set.of("SENT", "ACCEPTED", "REJECTED").contains(st);
     }
@@ -949,6 +1137,9 @@ public class MedicineOrderAppService {
     m.put("assignedStoreId", o.getAssignedStoreId());
     m.put("assignedStoreName", o.getAssignedStoreName());
     m.put("amountStatus", o.getAmountStatus());
+    m.put("paymentStatus", blankTo(o.getPaymentStatus(), "UNPAID"));
+    m.put("paymentMethod", o.getPaymentMethod());
+    m.put("razorpayEnabled", razorpay.configured());
     m.put("bookedBy", o.getBookedBy());
     m.put("cancelReason", o.getCancelReason());
     m.put("cancelledAt", o.getCancelledAt() != null ? o.getCancelledAt().toString() : null);
@@ -963,6 +1154,9 @@ public class MedicineOrderAppService {
     m.put("prescribedName", it.getPrescribedName());
     m.put("medicineName", it.getMedicineName());
     m.put("quantity", it.getQuantity());
+    m.put("days", it.getDays() <= 0 ? 30 : it.getDays());
+    m.put("requestedDays", it.getRequestedDays() <= 0 ? it.getDays() : it.getRequestedDays());
+    m.put("quotedQuantity", it.getQuotedQuantity() > 0 ? it.getQuotedQuantity() : it.getQuantity());
     m.put("availability", it.getAvailability());
     m.put("substituteName", it.getSubstituteName());
     m.put("substituteReason", it.getSubstituteReason());
@@ -993,6 +1187,7 @@ public class MedicineOrderAppService {
     m.put("fileName", d.getFileName());
     m.put("contentType", d.getContentType());
     m.put("latest", d.isLatest());
+    m.put("kind", blankTo(d.getKind(), "PRESCRIPTION"));
     m.put("createdAt", d.getCreatedAt() != null ? d.getCreatedAt().toString() : null);
     m.put("previewUrl", "/api/medicine-orders/" + d.getOrderId() + "/documents/" + d.getId());
     return m;
@@ -1021,9 +1216,75 @@ public class MedicineOrderAppService {
     return m;
   }
 
+  private void putPayment(Map<String, Object> m, MedicineOrderEntity o) {
+    String upi = storeUpi(o);
+    double amt = o.getCurrentAmount() == null ? 0 : o.getCurrentAmount();
+    String uri =
+        "upi://pay?pa="
+            + urlEnc(upi)
+            + "&pn="
+            + urlEnc(blankTo(o.getAssignedStoreName(), "Medical store"))
+            + "&am="
+            + formatAmt(amt)
+            + "&cu=INR&tn="
+            + urlEnc(blankTo(o.getOrderNumber(), "medicine"));
+    m.put("upiId", upi);
+    m.put("upiUri", uri);
+    m.put(
+        "upiQrUrl",
+        "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + urlEnc(uri));
+    String q =
+        "pa="
+            + urlEnc(upi)
+            + "&pn="
+            + urlEnc(blankTo(o.getAssignedStoreName(), "Medical store"))
+            + "&am="
+            + formatAmt(amt)
+            + "&cu=INR&tn="
+            + urlEnc(blankTo(o.getOrderNumber(), "medicine"));
+    List<Map<String, String>> apps = new ArrayList<>();
+    apps.add(upiApp("gpay", "Google Pay", "tez://upi/pay?" + q));
+    apps.add(upiApp("phonepe", "PhonePe", "phonepe://pay?" + q));
+    apps.add(upiApp("paytm", "Paytm", "paytmmp://pay?" + q));
+    apps.add(upiApp("bhim", "BHIM", "bhim://pay?" + q));
+    apps.add(upiApp("upi", "Other UPI apps", uri));
+    m.put("upiApps", apps);
+  }
+
+  private static Map<String, String> upiApp(String id, String name, String uri) {
+    Map<String, String> row = new LinkedHashMap<>();
+    row.put("id", id);
+    row.put("name", name);
+    row.put("uri", uri);
+    return row;
+  }
+
+  private String storeUpi(MedicineOrderEntity o) {
+    if (o.getAssignedStoreId() != null) {
+      MedicalStoreEntity store = resolveStore(o.getAssignedStoreId());
+      if (store != null && store.getUpiId() != null && !store.getUpiId().isBlank()) {
+        return store.getUpiId().trim();
+      }
+    }
+    return defaultUpiId;
+  }
+
+  private static String urlEnc(String v) {
+    return java.net.URLEncoder.encode(v == null ? "" : v, java.nio.charset.StandardCharsets.UTF_8);
+  }
+
   private void storeDocuments(
       MedicineOrderEntity order, List<MultipartFile> files, String actor, boolean markLatest) {
-    if (markLatest) {
+    storeDocuments(order, files, actor, markLatest, "PRESCRIPTION");
+  }
+
+  private void storeDocuments(
+      MedicineOrderEntity order,
+      List<MultipartFile> files,
+      String actor,
+      boolean markLatest,
+      String kind) {
+    if (markLatest && !"PAYMENT".equalsIgnoreCase(kind)) {
       docRepo.clearLatest(order.getId());
     }
     Path destDir = uploadRoot.resolve(order.getId());
@@ -1069,7 +1330,8 @@ public class MedicineOrderAppService {
       doc.setFileName(original);
       doc.setContentType(file.getContentType());
       doc.setFilePath(storedPath);
-      doc.setLatest(first);
+      doc.setKind(blankTo(kind, "PRESCRIPTION"));
+      doc.setLatest(first && !"PAYMENT".equalsIgnoreCase(kind));
       doc.setCreatedAt(Instant.now());
       doc.setCreatedBy(actor);
       docRepo.save(doc);
@@ -1216,8 +1478,9 @@ public class MedicineOrderAppService {
   }
 
   private long unreadCount(Actor actor) {
-    if (actor.isMedical() && actor.storeId() != null) {
-      return notifRepo.countByStoreIdAndReadFlagFalse(actor.storeId());
+    if (actor.isMedical()) {
+      String sid = canonicalStoreId(actor);
+      return sid == null ? 0 : notifRepo.countByStoreIdAndReadFlagFalse(sid);
     }
     if (actor.isPatient() && actor.patientPhone() != null) {
       return notifRepo.countByPatientPhoneAndReadFlagFalse(digits(actor.patientPhone()));
@@ -1278,6 +1541,131 @@ public class MedicineOrderAppService {
       return Long.parseLong(s);
     } catch (NumberFormatException ex) {
       return null;
+    }
+  }
+
+  private void applyPatientQuantity(MedicineOrderEntity order, Map<String, Object> body) {
+    List<MedicineOrderItemEntity> items = itemRepo.findByOrderIdOrderBySortOrderAsc(order.getId());
+    if (items.isEmpty()) return;
+
+    boolean hasItemsPayload = body != null && body.containsKey("items");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> rows =
+        body != null && body.get("items") instanceof List<?> list
+            ? (List<Map<String, Object>>) list
+            : List.of();
+    Integer orderDays = body == null || body.get("requestedDays") == null ? null : toInt(body.get("requestedDays"), 0);
+    if (orderDays != null && orderDays <= 0) orderDays = null;
+
+    Map<String, Map<String, Object>> byId = new LinkedHashMap<>();
+    for (Map<String, Object> row : rows) {
+      String id = text(row, "id");
+      if (id == null || id.isBlank()) continue;
+      if (truthy(row.get("removed"))) continue;
+      byId.put(id, row);
+    }
+
+    if (hasItemsPayload) {
+      if (byId.isEmpty()) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "Keep at least one medicine, or reject the amount");
+      }
+      List<MedicineOrderItemEntity> keep = new ArrayList<>();
+      for (MedicineOrderItemEntity item : items) {
+        if (byId.containsKey(item.getId())) {
+          keep.add(item);
+        } else {
+          itemRepo.delete(item);
+        }
+      }
+      if (keep.isEmpty()) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "Keep at least one medicine, or reject the amount");
+      }
+      items = keep;
+    }
+
+    double subtotal = 0;
+    for (MedicineOrderItemEntity item : items) {
+      Map<String, Object> row = byId.get(item.getId());
+      int prescribed = item.getDays() <= 0 ? 30 : item.getDays();
+      double quoted = item.getQuotedQuantity() > 0 ? item.getQuotedQuantity() : item.getQuantity();
+      int requested = prescribed;
+      if (row != null && row.get("requestedDays") != null) {
+        requested = toInt(row.get("requestedDays"), prescribed);
+      } else if (orderDays != null) {
+        requested = orderDays;
+      } else if (item.getRequestedDays() > 0) {
+        requested = item.getRequestedDays();
+      }
+      if (requested < 1) requested = 1;
+      if (requested > prescribed) requested = prescribed;
+
+      double maxQty = scaledQuantity(quoted, prescribed, requested);
+      double qty = maxQty;
+      if (row != null && row.get("quantity") != null) {
+        qty = toDouble(row.get("quantity"), maxQty);
+      }
+      if (qty <= 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "quantity must be greater than 0");
+      }
+      if (qty > maxQty + 0.001) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST,
+            "Quantity for " + item.getMedicineName() + " cannot exceed " + formatAmt(maxQty)
+                + " for " + requested + " of " + prescribed + " days");
+      }
+      double unit = item.getUnitPrice();
+      double line = round2(qty * unit);
+      item.setRequestedDays(requested);
+      item.setQuantity(qty);
+      item.setLineTotal(line);
+      itemRepo.save(item);
+      subtotal += line;
+    }
+
+    MedicineOrderChargesEntity charges = chargesRepo.findById(order.getId()).orElse(null);
+    double grand = round2(subtotal);
+    if (charges != null) {
+      charges.setMedicineSubtotal(round2(subtotal));
+      grand =
+          round2(
+              subtotal
+                  + charges.getDeliveryCharge()
+                  + charges.getPackagingCharge()
+                  + charges.getTax()
+                  + charges.getOtherCharges()
+                  - charges.getDiscount());
+      if (grand < 0) grand = 0;
+      charges.setGrandTotal(grand);
+      chargesRepo.save(charges);
+    }
+    order.setCurrentAmount(grand);
+  }
+
+  private static double scaledQuantity(double quotedQty, int prescribedDays, int requestedDays) {
+    if (prescribedDays <= 0 || requestedDays >= prescribedDays) return quotedQty;
+    double raw = quotedQty * ((double) requestedDays / (double) prescribedDays);
+    if (Math.abs(quotedQty - Math.rint(quotedQty)) < 0.001 && raw >= 1) {
+      return Math.round(raw);
+    }
+    return Math.max(0.01, round2(raw));
+  }
+
+  private static boolean truthy(Object v) {
+    if (v == null) return false;
+    if (v instanceof Boolean b) return b;
+    String s = String.valueOf(v).trim();
+    return "true".equalsIgnoreCase(s) || "1".equals(s) || "yes".equalsIgnoreCase(s);
+  }
+
+  private static int toInt(Object v, int fallback) {
+    if (v == null) return fallback;
+    if (v instanceof Number n) return n.intValue();
+    try {
+      return (int) Math.round(Double.parseDouble(String.valueOf(v).trim()));
+    } catch (NumberFormatException ex) {
+      return fallback;
     }
   }
 

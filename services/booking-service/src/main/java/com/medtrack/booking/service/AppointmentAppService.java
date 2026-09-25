@@ -2,11 +2,13 @@ package com.medtrack.booking.service;
 
 import com.medtrack.booking.domain.AppointmentEntity;
 import com.medtrack.booking.domain.BookingEntity;
+import com.medtrack.booking.domain.DoctorProfessionalEntity;
 import com.medtrack.booking.domain.PatientEntity;
 import com.medtrack.booking.dto.BookingContext;
 import com.medtrack.booking.dto.CreateBookingRequest;
 import com.medtrack.booking.dto.RescheduleBookingRequest;
 import com.medtrack.booking.repo.AppointmentRepository;
+import com.medtrack.booking.repo.DoctorProfessionalRepository;
 import com.medtrack.booking.repo.PatientRepository;
 import com.medtrack.booking.repo.UserDetailsRepository;
 import java.time.LocalDate;
@@ -26,14 +28,17 @@ public class AppointmentAppService {
   private final AppointmentRepository appointmentRepo;
   private final PatientRepository patientRepo;
   private final UserDetailsRepository userDetailsRepo;
+  private final DoctorProfessionalRepository professionalRepo;
 
   public AppointmentAppService(
       AppointmentRepository appointmentRepo,
       PatientRepository patientRepo,
-      UserDetailsRepository userDetailsRepo) {
+      UserDetailsRepository userDetailsRepo,
+      DoctorProfessionalRepository professionalRepo) {
     this.appointmentRepo = appointmentRepo;
     this.patientRepo = patientRepo;
     this.userDetailsRepo = userDetailsRepo;
+    this.professionalRepo = professionalRepo;
   }
 
   @Transactional
@@ -66,6 +71,7 @@ public class AppointmentAppService {
       row.setBookingRefId(booking.getId());
       row.setCreatedBy(ctx.createdBy());
       row.setUpdatedBy(ctx.updatedBy());
+      row.setDepartment(doctorDepartment(booking.getDoctorId()));
       return appointmentRepo.save(row);
     } catch (Exception ex) {
       System.err.printf(
@@ -220,5 +226,15 @@ public class AppointmentAppService {
   static String normalizePhone(String raw) {
     if (raw == null) return "";
     return raw.replaceAll("\\D", "");
+  }
+
+  private String doctorDepartment(String doctorId) {
+    if (doctorId == null || doctorId.isBlank()) return null;
+    return professionalRepo
+        .findById(doctorId)
+        .map(DoctorProfessionalEntity::getDepartment)
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .orElse(null);
   }
 }

@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { CLINICAL_DEPARTMENTS } from "../clinicalDepartments";
 import { toast } from "../toast";
 
 type HospitalForm = {
@@ -76,20 +77,6 @@ type HospitalForm = {
   termsAccepted: boolean;
   privacyAccepted: boolean;
 };
-
-const DEPARTMENTS = [
-  "Cardiology",
-  "Neurology",
-  "Orthopedics",
-  "Pediatrics",
-  "Gynecology",
-  "Dermatology",
-  "Oncology",
-  "Emergency",
-  "ICU",
-  "Radiology",
-  "Laboratory",
-] as const;
 
 const SERVICES = [
   "OPD",
@@ -934,7 +921,7 @@ export default function HospitalRegistrationPage() {
                   <div>
                     <p className="field-label">Available Departments</p>
                     <ChipToggle
-                      options={DEPARTMENTS}
+                      options={CLINICAL_DEPARTMENTS}
                       selected={form.departments}
                       onToggle={(v) => toggleList("departments", v)}
                     />

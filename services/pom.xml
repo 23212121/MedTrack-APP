@@ -78,4 +78,36 @@
       </plugin>
     </plugins>
   </build>
+
+  <!--
+    Maven follows JAVA_HOME. If that is Java 8, javac cannot compile `record`
+    types. This profile keeps Java 8 as the system default and forks JDK 17 javac.
+  -->
+  <profiles>
+    <profile>
+      <id>jdk8-fork-jdk17-compiler</id>
+      <activation>
+        <jdk>[1.8,17)</jdk>
+      </activation>
+      <properties>
+        <jdk17.home>C:\Program Files\Microsoft\jdk-17.0.19.10-hotspot</jdk17.home>
+      </properties>
+      <build>
+        <pluginManagement>
+          <plugins>
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-compiler-plugin</artifactId>
+              <configuration>
+                <release>${java.version}</release>
+                <parameters>true</parameters>
+                <fork>true</fork>
+                <executable>${jdk17.home}/bin/javac</executable>
+              </configuration>
+            </plugin>
+          </plugins>
+        </pluginManagement>
+      </build>
+    </profile>
+  </profiles>
 </project>

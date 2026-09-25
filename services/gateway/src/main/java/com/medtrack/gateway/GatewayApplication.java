@@ -117,6 +117,18 @@ public class GatewayApplication {
     return proxy(bookingUrl, request, body);
   }
 
+  @RequestMapping("/api/patients/**")
+  public ResponseEntity<byte[]> patients(
+      HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
+  @RequestMapping(value = "/api/patients", method = {RequestMethod.GET, RequestMethod.POST})
+  public ResponseEntity<byte[]> patientsRoot(
+      HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
   @RequestMapping("/api/auth/**")
   public ResponseEntity<byte[]> auth(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
     return proxy(bookingUrl, request, body);
@@ -124,6 +136,16 @@ public class GatewayApplication {
 
   @RequestMapping(value = "/api/auth", method = {RequestMethod.GET, RequestMethod.POST})
   public ResponseEntity<byte[]> authRoot(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
+  @RequestMapping("/api/contact/**")
+  public ResponseEntity<byte[]> contact(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
+  @RequestMapping(value = "/api/contact", method = {RequestMethod.GET, RequestMethod.POST})
+  public ResponseEntity<byte[]> contactRoot(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
     return proxy(bookingUrl, request, body);
   }
 

@@ -74,6 +74,7 @@ public class MedicineOrderController {
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> create(
       @RequestParam(value = "hospitalId", required = false) String hospitalId,
+      @RequestParam(value = "storeId", required = false) String storeId,
       @RequestParam(value = "patientName", required = false) String patientName,
       @RequestParam(value = "patientPhone", required = false) String patientPhone,
       @RequestParam(value = "patientId", required = false) String patientId,
@@ -86,6 +87,7 @@ public class MedicineOrderController {
       @RequestHeader Map<String, String> headers) {
     Map<String, Object> body = new HashMap<>();
     body.put("hospitalId", hospitalId);
+    body.put("storeId", storeId);
     body.put("patientName", patientName);
     body.put("patientPhone", patientPhone);
     body.put("patientId", patientId);
@@ -130,8 +132,43 @@ public class MedicineOrderController {
 
   @PostMapping("/{id}/amount/accept")
   public Map<String, Object> acceptAmount(
-      @PathVariable("id") String id, @RequestHeader Map<String, String> headers) {
-    return service.acceptAmount(actor(headers), id);
+      @PathVariable("id") String id,
+      @RequestBody(required = false) Map<String, Object> body,
+      @RequestHeader Map<String, String> headers) {
+    return service.acceptAmount(actor(headers), id, body == null ? Map.of() : body);
+  }
+
+  @PostMapping("/{id}/payment/razorpay/order")
+  public Map<String, Object> razorpayOrder(
+      @PathVariable("id") String id,
+      @RequestBody(required = false) Map<String, Object> body,
+      @RequestHeader Map<String, String> headers) {
+    return service.createRazorpayOrder(actor(headers), id, body == null ? Map.of() : body);
+  }
+
+  @PostMapping("/{id}/payment/razorpay/verify")
+  public Map<String, Object> razorpayVerify(
+      @PathVariable("id") String id,
+      @RequestBody(required = false) Map<String, Object> body,
+      @RequestHeader Map<String, String> headers) {
+    return service.verifyRazorpayPayment(actor(headers), id, body == null ? Map.of() : body);
+  }
+
+  @PostMapping(value = "/{id}/payment/screenshot", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public Map<String, Object> paymentScreenshot(
+      @PathVariable("id") String id,
+      @RequestParam("files") MultipartFile[] files,
+      @RequestParam(value = "payload", required = false) String payload,
+      @RequestHeader Map<String, String> headers) {
+    Map<String, Object> body = Map.of();
+    if (payload != null && !payload.isBlank()) {
+      try {
+        body = mapper.readValue(payload, new TypeReference<Map<String, Object>>() {});
+      } catch (Exception ex) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment payload");
+      }
+    }
+    return service.payWithScreenshot(actor(headers), id, body, files);
   }
 
   @PostMapping("/{id}/amount/reject")
@@ -220,6 +257,12 @@ public class MedicineOrderController {
       else if (phone != null && !phone.isBlank() && hospitalId == null) loginType = "PATIENT";
       else if (doctorId != null && !doctorId.isBlank() && user != null) loginType = "USER";
       else loginType = "HOSPITAL";
+    }
+    if ("MEDICAL".equalsIgnoreCase(loginType) && (storeId == null || storeId.isBlank()) && user != null) {
+      storeId = user;
+    }
+    if ("MEDICAL".equalsIgnoreCase(loginType)) {
+      doctorId = null;
     }
     return new Actor(loginType, hospitalId, storeId, doctorId, phone, patientId, patientName, user);
   }

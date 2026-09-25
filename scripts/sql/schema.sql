@@ -308,7 +308,8 @@ CREATE TABLE IF NOT EXISTS svc.appointments (
     token_number integer,
     updated_by character varying(50),
     updated_date timestamp(6) with time zone,
-    phone_number character varying(32)
+    phone_number character varying(32),
+    department character varying(255)
 );
 
 -- svc.visits
@@ -1786,6 +1787,8 @@ CREATE TABLE IF NOT EXISTS svc.medical_stores (
   store_name     VARCHAR(255) NOT NULL,
   phone          VARCHAR(32),
   address        VARCHAR(500),
+  city           VARCHAR(120),
+  state          VARCHAR(120),
   status         VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by     VARCHAR(100),
@@ -1839,6 +1842,9 @@ CREATE TABLE IF NOT EXISTS svc.medicine_order_items (
   availability       VARCHAR(32) NOT NULL DEFAULT 'AVAILABLE',
   substitute_name    VARCHAR(255),
   substitute_reason  VARCHAR(500),
+  days               INTEGER NOT NULL DEFAULT 30,
+  requested_days     INTEGER NOT NULL DEFAULT 30,
+  quoted_quantity    DOUBLE PRECISION NOT NULL DEFAULT 0,
   sort_order         INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_medicine_order_items_order ON svc.medicine_order_items (order_id);

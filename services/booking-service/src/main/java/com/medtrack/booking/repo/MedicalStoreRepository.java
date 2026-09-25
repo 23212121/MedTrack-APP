@@ -12,5 +12,9 @@ public interface MedicalStoreRepository extends JpaRepository<MedicalStoreEntity
 
   List<MedicalStoreEntity> findByHospitalIdAndStatusOrderByStoreNameAsc(Long hospitalId, String status);
 
+  List<MedicalStoreEntity> findByStatusOrderByStoreNameAsc(String status);
+
+  List<MedicalStoreEntity> findAllByOrderByStoreNameAsc();
+
   long countByHospitalId(Long hospitalId);
 }

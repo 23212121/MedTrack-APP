@@ -1,0 +1,99 @@
+- generic [active] [ref=f23e1]:
+  - banner [ref=f23e2]:
+    - generic [ref=f23e3]:
+      - generic [ref=f23e4]:
+        - link "Track Your Doctor MedTrack Clinic" [ref=f23e5] [cursor=pointer]:
+          - /url: index.html
+          - generic [aria-hidden] [ref=f23e6]: T
+          - generic [ref=f23e7]:
+            - strong [ref=f23e8]: Track Your Doctor
+            - generic [ref=f23e9]: MedTrack Clinic
+        - generic [ref=f23e10]: Live
+      - navigation [ref=f23e12]:
+        - link "Home" [ref=f23e13] [cursor=pointer]:
+          - /url: index.html
+        - link "About" [ref=f23e14] [cursor=pointer]:
+          - /url: about.html
+        - link "Features" [ref=f23e15] [cursor=pointer]:
+          - /url: features.html
+        - link "Journey" [ref=f23e16] [cursor=pointer]:
+          - /url: journey.html
+        - link "Contact" [ref=f23e17] [cursor=pointer]:
+          - /url: contact.html
+        - link "Get in touch" [ref=f23e18] [cursor=pointer]:
+          - /url: contact.html
+  - main [ref=f23e19]:
+    - generic [ref=f23e21]:
+      - paragraph [ref=f23e22]: How a visit moves
+      - heading [level=1] [ref=f23e23]:
+        - text: From the first call to the last
+        - emphasis [ref=f23e24]: consult
+        - text: .
+      - paragraph [ref=f23e25]: "Every status change writes a timeline event. When the patient is affected, MedTrack notifies SMS + email + the app. The patient window stays in sync: doctor, fixed time, token, and consult-when."
+    - generic [ref=f23e26]:
+      - heading "Visit statuses" [level=2] [ref=f23e27]
+      - list [ref=f23e28]:
+        - listitem [ref=f23e29]:
+          - strong [ref=f23e30]: Called
+          - generic [ref=f23e31]: Phone intake started; visit not yet booked.
+        - listitem [ref=f23e32]:
+          - strong [ref=f23e33]: Booked
+          - generic [ref=f23e34]: Doctor and slot confirmed; confirmation sent.
+        - listitem [ref=f23e35]:
+          - strong [ref=f23e36]: Checked in
+          - generic [ref=f23e37]: Patient arrived; token / slip issued.
+        - listitem [ref=f23e38]:
+          - strong [ref=f23e39]: In consult
+          - generic [ref=f23e40]: Doctor started the consultation.
+        - listitem [ref=f23e41]:
+          - strong [ref=f23e42]: Completed
+          - generic [ref=f23e43]: Consult ended; next token can be advanced.
+        - listitem [ref=f23e44]:
+          - strong [ref=f23e45]: No-show / Cancelled
+          - generic [ref=f23e46]: Patient did not arrive, or the visit was cancelled.
+    - generic [ref=f23e47]:
+      - generic [ref=f23e48]:
+        - heading "Notifications" [level=2] [ref=f23e49]
+        - paragraph [ref=f23e50]: Clinics can disable an event. Delay alerts are capped (default 2 per visit) so patients are not spammed. Late grace is 10 minutes before an automatic delay alert.
+        - list [ref=f23e51]:
+          - listitem [ref=f23e52]: Booking confirmed
+          - listitem [ref=f23e53]: Reminder 24h and 1h before the slot
+          - listitem [ref=f23e54]: Checked in with token
+          - listitem [ref=f23e55]: Doctor delayed
+          - listitem [ref=f23e56]: Queue delayed for the next patient
+          - listitem [ref=f23e57]: You’re next (queue position 2 or closer)
+          - listitem [ref=f23e58]: Checkup started
+          - listitem [ref=f23e59]: Visit completed
+          - listitem [ref=f23e60]: Overtime fee after the fixed consult time
+      - generic [ref=f23e61]:
+        - heading "Default fee rule" [level=2] [ref=f23e62]
+        - paragraph [ref=f23e63]: Applied when a visit is completed. The patient is notified if overtime is charged.
+        - list [ref=f23e64]:
+          - listitem [ref=f23e65]: "Base consult: INR 500 for 15 minutes"
+          - listitem [ref=f23e66]: "Extra: INR 200 per 15-minute block after the fixed time"
+          - listitem [ref=f23e67]: "Late grace: 10 minutes"
+          - listitem [ref=f23e68]: "You’re-next: position ≤ 2"
+    - generic [ref=f23e70]:
+      - generic [ref=f23e71]:
+        - heading "Questions about a visit?" [level=2] [ref=f23e72]
+        - paragraph [ref=f23e73]: Write to the team — hospital registration, doctor onboarding, or patient support.
+      - link "Contact the team" [ref=f23e74] [cursor=pointer]:
+        - /url: contact.html
+  - contentinfo [ref=f23e75]:
+    - generic [ref=f23e76]:
+      - generic [ref=f23e77]:
+        - strong [ref=f23e78]: Track Your Doctor
+        - paragraph [ref=f23e79]: Public guide for MedTrack Clinic
+      - paragraph [ref=f23e80]:
+        - link "About" [ref=f23e81] [cursor=pointer]:
+          - /url: about.html
+        - text: ·
+        - link "Features" [ref=f23e82] [cursor=pointer]:
+          - /url: features.html
+        - text: ·
+        - link "Journey" [ref=f23e83] [cursor=pointer]:
+          - /url: journey.html
+        - text: ·
+        - link "Contact" [ref=f23e84] [cursor=pointer]:
+          - /url: contact.html
+      - paragraph [ref=f23e85]: © 2026 MedTrack Clinic

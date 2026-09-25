@@ -20,6 +20,9 @@ public interface AppointmentRepository extends JpaRepository<AppointmentEntity, 
 
   List<AppointmentEntity> findByHospitalIdOrderByCreatedDateDesc(Long hospitalId);
 
+  List<AppointmentEntity> findFirst20ByPatientNameContainingIgnoreCaseOrderByCreatedDateDesc(
+      String patientName);
+
   List<AppointmentEntity>
       findByHospitalIdAndDoctorIdAndAppointmentDateAndStatusNotOrderByTokenNumberAscAppointmentTimeAsc(
           Long hospitalId, String doctorId, LocalDate appointmentDate, String status);

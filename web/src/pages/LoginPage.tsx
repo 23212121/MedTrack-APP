@@ -3,10 +3,12 @@ import { Link, useNavigate } from "react-router-dom";
 import PatientUserRegistrationModal from "../components/PatientUserRegistrationModal";
 import { api } from "../api";
 import { login as saveSession } from "../auth";
+import { useT } from "../i18n";
 
 type LoginMode = "HOSPITAL" | "USER" | "MEDICAL" | "PATIENT";
 
 export default function LoginPage() {
+  const t = useT();
   const navigate = useNavigate();
   const [mode, setMode] = useState<LoginMode>("HOSPITAL");
   const [id, setId] = useState("");
@@ -25,11 +27,13 @@ export default function LoginPage() {
     setError("");
     if (!id.trim() || !password) {
       setError(
-        mode === "HOSPITAL"
-          ? "Enter hospital ID and password"
-          : mode === "MEDICAL"
-            ? "Enter medical store ID and password"
-            : "Enter user ID and password",
+        t(
+          mode === "HOSPITAL"
+            ? "Enter hospital ID and password"
+            : mode === "MEDICAL"
+              ? "Enter medical store ID and password"
+              : "Enter user ID and password",
+        ),
       );
       return;
     }
@@ -67,7 +71,7 @@ export default function LoginPage() {
         navigate("/");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign-in failed");
+      setError(err instanceof Error ? err.message : t("Sign-in failed"));
     } finally {
       setSaving(false);
     }
@@ -77,11 +81,11 @@ export default function LoginPage() {
     e.preventDefault();
     setPatientError("");
     if (!patientUserId.trim() || !patientPassword) {
-      setPatientError("Enter username or phone number and password");
+      setPatientError(t("Enter username or phone number and password"));
       return;
     }
     if (patientPassword.length < 4) {
-      setPatientError("Password must be at least 4 characters");
+      setPatientError(t("Password must be at least 4 characters"));
       return;
     }
     setPatientSaving(true);
@@ -108,7 +112,7 @@ export default function LoginPage() {
       );
       navigate("/patient");
     } catch (err) {
-      setPatientError(err instanceof Error ? err.message : "Sign-in failed");
+      setPatientError(err instanceof Error ? err.message : t("Sign-in failed"));
     } finally {
       setPatientSaving(false);
     }
@@ -116,28 +120,33 @@ export default function LoginPage() {
 
   return (
     <>
-      <section className="panel login-popup" style={{ maxWidth: 460, margin: "2rem auto" }}>
-        <h1 style={{ color: "var(--brand-dark)" }}>MedTrack Clinic</h1>
+      <section className="panel login-popup">
+        <h1 style={{ color: "var(--brand-dark)" }}>{t("MedTrack Clinic")}</h1>
+        <p className="lead" style={{ marginBottom: "0.45rem" }}>
+          <Link to="/about" style={{ textDecoration: "underline" }}>
+            {t("About MedTrack — modules, journey, and contact")}
+          </Link>
+        </p>
         <p className="lead" style={{ marginBottom: "0.45rem" }}>
           <Link to="/book" style={{ textDecoration: "underline" }}>
-            Book an appointment without login
+            {t("Book an appointment without login")}
           </Link>
         </p>
         <p className="lead" style={{ marginBottom: "0.45rem" }}>
           <Link to="/track" style={{ textDecoration: "underline" }}>
-            Track appointment by mobile
+            {t("Track appointment by mobile")}
           </Link>
         </p>
         <p className="lead" style={{ marginBottom: "1rem" }}>
           <Link to="/queue" style={{ textDecoration: "underline" }}>
-            Check patient queue
+            {t("Check patient queue")}
           </Link>
         </p>
         {(error || (mode === "PATIENT" && patientError)) && (
           <div className="msg error">{mode === "PATIENT" ? patientError || error : error}</div>
         )}
 
-        <div className="login-mode" role="tablist" aria-label="Login type">
+        <div className="login-mode" role="tablist" aria-label={t("Login type")}>
           <button
             type="button"
             role="tab"
@@ -149,7 +158,7 @@ export default function LoginPage() {
               setPatientError("");
             }}
           >
-            Hospital ID
+            {t("Hospital ID")}
           </button>
           <button
             type="button"
@@ -162,7 +171,7 @@ export default function LoginPage() {
               setPatientError("");
             }}
           >
-            User ID (Doctor)
+            {t("User ID (Doctor)")}
           </button>
           <button
             type="button"
@@ -175,7 +184,7 @@ export default function LoginPage() {
               setPatientError("");
             }}
           >
-            Medical store
+            {t("Medical store")}
           </button>
           <button
             type="button"
@@ -188,14 +197,14 @@ export default function LoginPage() {
               setPatientError("");
             }}
           >
-            Patient
+            {t("Patient")}
           </button>
         </div>
 
         {mode === "PATIENT" ? (
           <form className="stack" onSubmit={onPatientLogin}>
             <label>
-              Username / Phone Number
+              {t("Username / Phone Number")}
               <input
                 value={patientUserId}
                 onChange={(e) => setPatientUserId(e.target.value)}
@@ -205,7 +214,7 @@ export default function LoginPage() {
               />
             </label>
             <label>
-              Password
+              {t("Password")}
               <div className="password-field">
                 <input
                   type={showPassword ? "text" : "password"}
@@ -220,24 +229,26 @@ export default function LoginPage() {
                   className="password-toggle"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-pressed={showPassword}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? t("Hide password") : t("Show password")}
                 >
-                  {showPassword ? "Hide" : "Show"}
+                  {showPassword ? t("Hide") : t("Show")}
                 </button>
               </div>
             </label>
             <button type="submit" disabled={patientSaving}>
-              {patientSaving ? "Signing in…" : "Sign in"}
+              {patientSaving ? t("Signing in…") : t("Sign in")}
             </button>
           </form>
         ) : (
         <form className="stack" onSubmit={onSubmit}>
           <label>
-            {mode === "HOSPITAL"
-              ? "Hospital ID"
-              : mode === "MEDICAL"
-                ? "Medical store ID"
-                : "User ID (Doctor)"}
+            {t(
+              mode === "HOSPITAL"
+                ? "Hospital ID"
+                : mode === "MEDICAL"
+                  ? "Medical store ID"
+                  : "User ID (Doctor)",
+            )}
             <input
               value={id}
               onChange={(e) => setId(e.target.value)}
@@ -254,7 +265,7 @@ export default function LoginPage() {
             />
           </label>
           <label>
-            Password
+            {t("Password")}
             <div className="password-field">
               <input
                 type={showPassword ? "text" : "password"}
@@ -275,24 +286,24 @@ export default function LoginPage() {
             </div>
           </label>
           <button type="submit" disabled={saving}>
-            {saving ? "Signing in…" : "Sign in"}
+            {saving ? t("Signing in…") : t("Sign in")}
           </button>
         </form>
         )}
 
         <p className="lead" style={{ marginTop: "0.85rem", marginBottom: 0 }}>
           <Link to="/forgot-password" style={{ textDecoration: "underline" }}>
-            Forgot password?
+            {t("Forgot password?")}
           </Link>
         </p>
 
         <div className="panel" style={{ marginTop: "1.2rem", boxShadow: "none" }}>
-          <h2 style={{ fontSize: "1.1rem" }}>Hospital not registered yet?</h2>
+          <h2 style={{ fontSize: "1.1rem" }}>{t("Hospital not registered yet?")}</h2>
           <p className="lead" style={{ marginBottom: "0.8rem" }}>
-            Register your hospital in the system.
+            {t("Register your hospital in the system.")}
           </p>
           <Link to="/hospital-register">
-            <button type="button">Hospital registration</button>
+            <button type="button">{t("Hospital registration")}</button>
           </Link>
         </div>
       </section>

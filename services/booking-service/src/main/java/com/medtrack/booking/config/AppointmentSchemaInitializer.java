@@ -46,6 +46,7 @@ public class AppointmentSchemaInitializer {
     dropLegacyBookingColumns();
     widenPatientIdColumn();
     ensurePhoneNumberColumn();
+    ensureDepartmentColumn();
     ensureAppointmentIndexes();
   }
 
@@ -63,6 +64,27 @@ public class AppointmentSchemaInitializer {
         "CREATE INDEX IF NOT EXISTS idx_appointments_doctor_date ON svc.appointments(doctor_id, appointment_date)");
     jdbc.execute(
         "CREATE INDEX IF NOT EXISTS idx_appointments_hospital_doctor ON svc.appointments(hospital_id, doctor_id)");
+    jdbc.execute(
+        "CREATE INDEX IF NOT EXISTS idx_appointments_department ON svc.appointments(department)");
+  }
+
+  private void ensureDepartmentColumn() {
+    jdbc.execute(
+        "ALTER TABLE svc.appointments ADD COLUMN IF NOT EXISTS department VARCHAR(255)");
+    try {
+      jdbc.execute(
+          """
+          UPDATE svc.appointments a
+          SET department = p.department
+          FROM svc.doctor_professional p
+          WHERE a.doctor_id = p.doctor_id
+            AND (a.department IS NULL OR a.department = '')
+            AND p.department IS NOT NULL
+            AND btrim(p.department) <> ''
+          """);
+    } catch (Exception ignored) {
+      // doctor_professional may not exist yet on a fresh DB
+    }
   }
 
   private void ensurePhoneNumberColumn() {

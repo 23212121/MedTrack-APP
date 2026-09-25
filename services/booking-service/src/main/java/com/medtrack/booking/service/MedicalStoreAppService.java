@@ -1,13 +1,17 @@
 package com.medtrack.booking.service;
 
+import com.medtrack.booking.domain.HospitalEntity;
 import com.medtrack.booking.domain.LoginEntity;
 import com.medtrack.booking.domain.MedicalStoreEntity;
+import com.medtrack.booking.repo.HospitalRepository;
 import com.medtrack.booking.repo.LoginRepository;
 import com.medtrack.booking.repo.MedicalStoreRepository;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,25 +21,42 @@ import org.springframework.web.server.ResponseStatusException;
 public class MedicalStoreAppService {
   private final MedicalStoreRepository storeRepo;
   private final LoginRepository loginRepo;
+  private final HospitalRepository hospitalRepo;
 
-  public MedicalStoreAppService(MedicalStoreRepository storeRepo, LoginRepository loginRepo) {
+  public MedicalStoreAppService(
+      MedicalStoreRepository storeRepo, LoginRepository loginRepo, HospitalRepository hospitalRepo) {
     this.storeRepo = storeRepo;
     this.loginRepo = loginRepo;
+    this.hospitalRepo = hospitalRepo;
   }
 
   public List<Map<String, Object>> list(Long hospitalId, boolean activeOnly) {
-    if (hospitalId == null) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "hospitalId is required");
+    List<MedicalStoreEntity> rows;
+    if (hospitalId != null) {
+      rows =
+          activeOnly
+              ? storeRepo.findByHospitalIdAndStatusOrderByStoreNameAsc(hospitalId, "ACTIVE")
+              : storeRepo.findByHospitalIdOrderByStoreNameAsc(hospitalId);
+    } else {
+      rows =
+          activeOnly
+              ? storeRepo.findByStatusOrderByStoreNameAsc("ACTIVE")
+              : storeRepo.findAllByOrderByStoreNameAsc();
     }
-    List<MedicalStoreEntity> rows =
-        activeOnly
-            ? storeRepo.findByHospitalIdAndStatusOrderByStoreNameAsc(hospitalId, "ACTIVE")
-            : storeRepo.findByHospitalIdOrderByStoreNameAsc(hospitalId);
-    return rows.stream().map(this::toMap).toList();
+    Map<Long, HospitalEntity> hospitals = new HashMap<>();
+    List<Long> ids =
+        rows.stream().map(MedicalStoreEntity::getHospitalId).filter(Objects::nonNull).distinct().toList();
+    if (!ids.isEmpty()) {
+      hospitalRepo.findAllById(ids).forEach(h -> hospitals.put(h.getId(), h));
+    }
+    return rows.stream().map(s -> toMap(s, hospitals.get(s.getHospitalId()))).toList();
   }
 
   public Map<String, Object> get(String id) {
-    return toMap(require(id));
+    MedicalStoreEntity store = require(id);
+    HospitalEntity hospital =
+        store.getHospitalId() == null ? null : hospitalRepo.findById(store.getHospitalId()).orElse(null);
+    return toMap(store, hospital);
   }
 
   @Transactional
@@ -69,6 +90,9 @@ public class MedicalStoreAppService {
     store.setStoreName(name.trim());
     store.setPhone(text(body, "phone"));
     store.setAddress(text(body, "address"));
+    HospitalEntity hospital = hospitalRepo.findById(hospitalId).orElse(null);
+    store.setCity(firstNonBlank(text(body, "city"), hospital == null ? null : hospital.getCity()));
+    store.setState(firstNonBlank(text(body, "state"), hospital == null ? null : hospital.getState()));
     store.setStatus("ACTIVE");
     store.setCreatedAt(Instant.now());
     store.setCreatedBy(blank(actor));
@@ -86,7 +110,7 @@ public class MedicalStoreAppService {
     login.setCreationUser(blank(actor));
     loginRepo.save(login);
 
-    Map<String, Object> out = toMap(store);
+    Map<String, Object> out = toMap(store, hospital);
     out.put("loginId", storeCode);
     out.put("message", "Medical store registered. Login with store code " + storeCode);
     return out;
@@ -115,7 +139,7 @@ public class MedicalStoreAppService {
               login.setUpdateUser(blank(actor));
               loginRepo.save(login);
             });
-    return toMap(store);
+    return toMap(store, hospitalRepo.findById(store.getHospitalId()).orElse(null));
   }
 
   public MedicalStoreEntity require(String id) {
@@ -125,13 +149,24 @@ public class MedicalStoreAppService {
   }
 
   public Map<String, Object> toMap(MedicalStoreEntity s) {
+    HospitalEntity hospital =
+        s.getHospitalId() == null ? null : hospitalRepo.findById(s.getHospitalId()).orElse(null);
+    return toMap(s, hospital);
+  }
+
+  public Map<String, Object> toMap(MedicalStoreEntity s, HospitalEntity hospital) {
+    String city = firstNonBlank(s.getCity(), hospital == null ? null : hospital.getCity());
+    String state = firstNonBlank(s.getState(), hospital == null ? null : hospital.getState());
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("id", s.getId());
     m.put("hospitalId", s.getHospitalId());
+    m.put("hospitalName", hospital == null ? null : hospital.getHospitalName());
     m.put("storeCode", s.getStoreCode());
     m.put("storeName", s.getStoreName());
     m.put("phone", s.getPhone());
     m.put("address", s.getAddress());
+    m.put("city", city);
+    m.put("state", state);
     m.put("status", s.getStatus());
     m.put("createdAt", s.getCreatedAt() != null ? s.getCreatedAt().toString() : null);
     return m;
@@ -140,6 +175,12 @@ public class MedicalStoreAppService {
   private static String text(Map<String, Object> body, String key) {
     Object v = body.get(key);
     return v == null ? null : String.valueOf(v);
+  }
+
+  private static String firstNonBlank(String a, String b) {
+    if (a != null && !a.isBlank()) return a.trim();
+    if (b != null && !b.isBlank()) return b.trim();
+    return null;
   }
 
   private static String blank(String v) {

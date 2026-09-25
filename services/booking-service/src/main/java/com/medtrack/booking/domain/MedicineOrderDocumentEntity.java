@@ -24,6 +24,9 @@ public class MedicineOrderDocumentEntity {
 
   private boolean latest = true;
 
+  @Column(length = 32)
+  private String kind = "PRESCRIPTION";
+
   @Column(name = "created_at")
   private Instant createdAt = Instant.now();
 
@@ -42,6 +45,8 @@ public class MedicineOrderDocumentEntity {
   public void setFilePath(String filePath) { this.filePath = filePath; }
   public boolean isLatest() { return latest; }
   public void setLatest(boolean latest) { this.latest = latest; }
+  public String getKind() { return kind; }
+  public void setKind(String kind) { this.kind = kind; }
   public Instant getCreatedAt() { return createdAt; }
   public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
   public String getCreatedBy() { return createdBy; }

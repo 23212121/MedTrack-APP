@@ -1,0 +1,113 @@
+- generic [active] [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - generic [ref=f1e4]:
+        - link "Track Your Doctor MedTrack Clinic" [ref=f1e5] [cursor=pointer]:
+          - /url: index.html
+          - generic [aria-hidden] [ref=f1e6]: T
+          - generic [ref=f1e7]:
+            - strong [ref=f1e8]: Track Your Doctor
+            - generic [ref=f1e9]: MedTrack Clinic
+        - generic [ref=f1e10]: Live
+      - navigation [ref=f1e12]:
+        - link "Home" [ref=f1e13] [cursor=pointer]:
+          - /url: index.html
+        - link "About" [ref=f1e14] [cursor=pointer]:
+          - /url: about.html
+        - link "Features" [ref=f1e15] [cursor=pointer]:
+          - /url: features.html
+        - link "Journey" [ref=f1e16] [cursor=pointer]:
+          - /url: journey.html
+        - link "Contact" [ref=f1e17] [cursor=pointer]:
+          - /url: contact.html
+        - link "Get in touch" [ref=f1e18] [cursor=pointer]:
+          - /url: contact.html
+  - main [ref=f1e19]:
+    - generic [ref=f1e21]:
+      - paragraph [ref=f1e22]: About
+      - heading [level=1] [ref=f1e23]:
+        - text: The operational spine of a hospital
+        - emphasis [ref=f1e24]: visit
+        - text: .
+      - paragraph [ref=f1e25]: "Track Your Doctor explains the full MedTrack application: a medical visit tracker for clinics and hospitals. It is not a full EHR, lab system, insurance engine, or telemedicine app."
+    - generic [ref=f1e26]:
+      - heading "What MedTrack is" [level=2] [ref=f1e27]
+      - paragraph [ref=f1e28]: MedTrack is built so front-desk staff can create a visit from a phone call in under 45 seconds, doctors can run a minimal queue, and patients always see doctor name, fixed appointment time, token, and when the consult is likely.
+      - paragraph [ref=f1e29]:
+        - text: The product covers schedules, bookings, tokens, delays, fees, documents, chat, medicine orders, and hospital HR. Status changes that affect the patient notify on
+        - strong [ref=f1e30]: SMS + email + application
+        - text: .
+    - generic [ref=f1e31]:
+      - heading "Roles" [level=2] [ref=f1e32]
+      - generic [ref=f1e33]:
+        - article [ref=f1e34]:
+          - generic [ref=f1e35]: Hospital
+          - heading "Hospital admin" [level=3] [ref=f1e36]
+          - paragraph [ref=f1e37]: Register the hospital, manage users, departments, doctor schedules, notification settings, and clinic defaults.
+        - article [ref=f1e38]:
+          - generic [ref=f1e39]: Desk
+          - heading "Employee / front desk" [level=3] [ref=f1e40]
+          - paragraph [ref=f1e41]: Search or create a patient by phone, book a visit, check in, issue a token, mark late, and advance the next token.
+        - article [ref=f1e42]:
+          - generic [ref=f1e43]: Clinic
+          - heading "Doctor" [level=3] [ref=f1e44]
+          - paragraph [ref=f1e45]: See today’s queue, start / mark late / complete, add clinical notes plus a patient-safe summary, set weekly time slots.
+        - article [ref=f1e46]:
+          - generic [ref=f1e47]: Public
+          - heading "Patient" [level=3] [ref=f1e48]
+          - paragraph [ref=f1e49]: Book or track by mobile, use the portal for status, chat, reports, medicine orders, and profile. Never see other patients’ data.
+        - article [ref=f1e50]:
+          - generic [ref=f1e51]: Pharmacy
+          - heading "Medical store" [level=3] [ref=f1e52]
+          - paragraph [ref=f1e53]: "Pharmacy login with order buckets: new, in process, waiting approval, medicine ready, completed, canceled."
+    - generic [ref=f1e54]:
+      - heading "Languages & voice" [level=2] [ref=f1e55]
+      - paragraph [ref=f1e56]: The MedTrack UI switches between English and Hindi. Voice booking understands spoken appointment details so desk staff and patients can fill a booking without typing every field.
+    - generic [ref=f1e57]:
+      - heading "Clinical departments" [level=2] [ref=f1e58]
+      - paragraph [ref=f1e59]: Hospitals pick specialties during setup. Doctors register against the same list.
+      - list [ref=f1e60]:
+        - listitem [ref=f1e61]: Cardiology
+        - listitem [ref=f1e62]: Neurology
+        - listitem [ref=f1e63]: Orthopedics
+        - listitem [ref=f1e64]: Pediatrics
+        - listitem [ref=f1e65]: Gynecology
+        - listitem [ref=f1e66]: Dermatology
+        - listitem [ref=f1e67]: Oncology
+        - listitem [ref=f1e68]: Emergency
+        - listitem [ref=f1e69]: ICU
+        - listitem [ref=f1e70]: Radiology
+        - listitem [ref=f1e71]: Laboratory
+        - listitem [ref=f1e72]: ENT
+        - listitem [ref=f1e73]: Ophthalmology
+        - listitem [ref=f1e74]: Psychiatry
+        - listitem [ref=f1e75]: General Medicine
+        - listitem [ref=f1e76]: General Surgery
+        - listitem [ref=f1e77]: Urology
+        - listitem [ref=f1e78]: Nephrology
+        - listitem [ref=f1e79]: Gastroenterology
+        - listitem [ref=f1e80]: Pulmonology
+    - generic [ref=f1e82]:
+      - generic [ref=f1e83]:
+        - heading "See every module" [level=2] [ref=f1e84]
+        - paragraph [ref=f1e85]: Hospital, doctor, patient, pharmacy, insights, and HR — listed in one place.
+      - link "Browse features" [ref=f1e86] [cursor=pointer]:
+        - /url: features.html
+  - contentinfo [ref=f1e87]:
+    - generic [ref=f1e88]:
+      - generic [ref=f1e89]:
+        - strong [ref=f1e90]: Track Your Doctor
+        - paragraph [ref=f1e91]: Public guide for MedTrack Clinic
+      - paragraph [ref=f1e92]:
+        - link "About" [ref=f1e93] [cursor=pointer]:
+          - /url: about.html
+        - text: ·
+        - link "Features" [ref=f1e94] [cursor=pointer]:
+          - /url: features.html
+        - text: ·
+        - link "Journey" [ref=f1e95] [cursor=pointer]:
+          - /url: journey.html
+        - text: ·
+        - link "Contact" [ref=f1e96] [cursor=pointer]:
+          - /url: contact.html
+      - paragraph [ref=f1e97]: © 2026 MedTrack Clinic

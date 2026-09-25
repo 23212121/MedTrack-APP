@@ -29,8 +29,12 @@ public class MedicalStoreController {
   public Map<String, Object> list(
       @RequestParam(value = "hospitalId", required = false) Long hospitalId,
       @RequestParam(value = "activeOnly", defaultValue = "false") boolean activeOnly,
-      @RequestHeader(value = "X-Hospital-Id", required = false) String hospitalHeader) {
-    Long hid = hospitalId != null ? hospitalId : parseLong(hospitalHeader);
+      @RequestParam(value = "allHospitals", defaultValue = "false") boolean allHospitals,
+      @RequestHeader(value = "X-Hospital-Id", required = false) String hospitalHeader,
+      @RequestHeader(value = "X-Login-Type", required = false) String loginType) {
+    boolean directory =
+        allHospitals || (loginType != null && "PATIENT".equalsIgnoreCase(loginType.trim()));
+    Long hid = directory ? hospitalId : (hospitalId != null ? hospitalId : parseLong(hospitalHeader));
     List<Map<String, Object>> rows = service.list(hid, activeOnly);
     return Map.of("count", rows.size(), "stores", rows);
   }

@@ -25,6 +25,8 @@ public class MedicineOrderSchemaInitializer {
           store_name     VARCHAR(255) NOT NULL,
           phone          VARCHAR(32),
           address        VARCHAR(500),
+          city            VARCHAR(120),
+          state           VARCHAR(120),
           status         VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
           created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
           created_by     VARCHAR(100),
@@ -77,6 +79,31 @@ public class MedicineOrderSchemaInitializer {
         "CREATE INDEX IF NOT EXISTS idx_medicine_order_phone ON svc.medicine_orders (patient_phone)");
     jdbc.execute(
         "ALTER TABLE svc.medicine_orders ADD COLUMN IF NOT EXISTS pending_reason VARCHAR(500)");
+    jdbc.execute(
+        "ALTER TABLE svc.medicine_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(32) DEFAULT 'UNPAID'");
+    jdbc.execute(
+        "ALTER TABLE svc.medicine_orders ADD COLUMN IF NOT EXISTS payment_method VARCHAR(32)");
+    jdbc.execute(
+        "ALTER TABLE svc.medicine_orders ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(80)");
+    jdbc.execute(
+        "ALTER TABLE svc.medicine_orders ADD COLUMN IF NOT EXISTS razorpay_payment_id VARCHAR(80)");
+    jdbc.execute(
+        "ALTER TABLE svc.medical_stores ADD COLUMN IF NOT EXISTS upi_id VARCHAR(120)");
+    jdbc.execute(
+        "ALTER TABLE svc.medical_stores ADD COLUMN IF NOT EXISTS city VARCHAR(120)");
+    jdbc.execute(
+        "ALTER TABLE svc.medical_stores ADD COLUMN IF NOT EXISTS state VARCHAR(120)");
+    jdbc.execute(
+        """
+        UPDATE svc.medical_stores s
+           SET city = h.city,
+               state = h.state
+          FROM svc.hospitals h
+         WHERE s.hospital_id = h.id
+           AND (s.city IS NULL OR btrim(s.city) = '')
+        """);
+    jdbc.execute(
+        "ALTER TABLE svc.medicine_order_documents ADD COLUMN IF NOT EXISTS kind VARCHAR(32) NOT NULL DEFAULT 'PRESCRIPTION'");
 
     jdbc.execute(
         """
@@ -91,11 +118,20 @@ public class MedicineOrderSchemaInitializer {
           availability       VARCHAR(32) NOT NULL DEFAULT 'AVAILABLE',
           substitute_name    VARCHAR(255),
           substitute_reason  VARCHAR(500),
+          days               INTEGER NOT NULL DEFAULT 30,
+          requested_days     INTEGER NOT NULL DEFAULT 30,
+          quoted_quantity    DOUBLE PRECISION NOT NULL DEFAULT 0,
           sort_order         INTEGER NOT NULL DEFAULT 0
         )
         """);
-    jdbc.execute(
+        jdbc.execute(
         "CREATE INDEX IF NOT EXISTS idx_medicine_order_items_order ON svc.medicine_order_items (order_id)");
+    jdbc.execute(
+        "ALTER TABLE svc.medicine_order_items ADD COLUMN IF NOT EXISTS days INTEGER NOT NULL DEFAULT 30");
+    jdbc.execute(
+        "ALTER TABLE svc.medicine_order_items ADD COLUMN IF NOT EXISTS requested_days INTEGER NOT NULL DEFAULT 30");
+    jdbc.execute(
+        "ALTER TABLE svc.medicine_order_items ADD COLUMN IF NOT EXISTS quoted_quantity DOUBLE PRECISION NOT NULL DEFAULT 0");
 
     jdbc.execute(
         """
@@ -205,6 +241,11 @@ public class MedicineOrderSchemaInitializer {
         """);
     jdbc.update(
         """
+        UPDATE svc.medical_stores SET upi_id = 'medtrackpharmacy@upi'
+        WHERE id = 'store-10001-1' AND (upi_id IS NULL OR upi_id = '')
+        """);
+    jdbc.update(
+        """
         INSERT INTO svc.login (
           id, login_type, login_id, password, hospital_id, display_name,
           status, creation_date, creation_user
@@ -217,6 +258,22 @@ public class MedicineOrderSchemaInitializer {
           hospital_id = EXCLUDED.hospital_id,
           display_name = EXCLUDED.display_name,
           status = 'ACTIVE'
+        """);
+    jdbc.update(
+        """
+        UPDATE svc.medical_stores s
+           SET city = h.city,
+               state = h.state
+          FROM svc.hospitals h
+         WHERE s.hospital_id = h.id
+           AND (s.city IS NULL OR btrim(s.city) = '')
+        """);
+    jdbc.update(
+        """
+        UPDATE svc.medical_stores
+           SET city = COALESCE(NULLIF(btrim(city), ''), 'Hyderabad'),
+               state = COALESCE(NULLIF(btrim(state), ''), 'Telangana')
+         WHERE id = 'store-10001-1'
         """);
   }
 }

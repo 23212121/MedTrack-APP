@@ -1,6 +1,7 @@
 ﻿import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, DoctorRegistration, DoctorRegistrationBody } from "../api";
+import { api, DoctorRegistration, DoctorRegistrationBody, HospitalRegistrationSummary } from "../api";
+import { CLINICAL_DEPARTMENTS, mergeDepartmentOptions } from "../clinicalDepartments";
 import { session } from "../dl/MedTrackSession";
 import { toast } from "../toast";
 
@@ -116,8 +117,25 @@ export default function DoctorRegistrationPage() {
     hospitalId: sessionHospitalId,
   });
   const [doctors, setDoctors] = useState<DoctorRegistration[]>([]);
+  const [hospitals, setHospitals] = useState<HospitalRegistrationSummary[]>([]);
+  const [departmentOther, setDepartmentOther] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const departmentOptions = mergeDepartmentOptions(
+    CLINICAL_DEPARTMENTS,
+    hospitals.find((h) => String(h.id ?? h.hospitalId) === String(form.hospitalId))?.departments,
+  );
+  const departmentIsListed = departmentOptions.some(
+    (name) => name.toLowerCase() === form.department.trim().toLowerCase(),
+  );
+  const departmentSelectValue = departmentOther
+    ? "__other__"
+    : !form.department.trim()
+      ? ""
+      : departmentIsListed
+        ? departmentOptions.find((name) => name.toLowerCase() === form.department.trim().toLowerCase()) || form.department
+        : "__other__";
 
   async function load() {
     try {
@@ -126,7 +144,16 @@ export default function DoctorRegistrationPage() {
     } catch { /* ignore until service is up */ }
   }
 
-  useEffect(() => { load(); }, []);
+  async function loadHospitals() {
+    try {
+      const data = await api.hospitals();
+      setHospitals(data.hospitals ?? []);
+    } catch {
+      setHospitals([]);
+    }
+  }
+
+  useEffect(() => { load(); void loadHospitals(); }, []);
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -164,6 +191,9 @@ export default function DoctorRegistrationPage() {
       if (form.loginPassword !== form.confirmPassword) {
         throw new Error("Password and confirm password do not match");
       }
+      if (!form.department.trim()) {
+        throw new Error("Department is required");
+      }
       const body: DoctorRegistrationBody = {
         firstName: form.firstName.trim(),
         middleName: form.middleName.trim() || undefined,
@@ -190,7 +220,7 @@ export default function DoctorRegistrationPage() {
         registrationValidUntil: form.registrationValidUntil || undefined,
         yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : undefined,
         currentDesignation: form.currentDesignation.trim() || undefined,
-        department: form.department.trim() || undefined,
+        department: form.department.trim(),
         specialization: form.specialization.trim(),
         subSpecialization: form.subSpecialization.trim() || undefined,
         qualification: form.qualification.trim() || undefined,
@@ -243,6 +273,7 @@ export default function DoctorRegistrationPage() {
         `${res.message}. Sign in with User ID ${res.doctor?.doctorId ?? form.doctorUserId} and your password (Hospital ID ${form.hospitalId}).`,
       );
       setForm({ ...emptyForm, hospitalId: sessionHospitalId });
+      setDepartmentOther(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
@@ -358,7 +389,38 @@ export default function DoctorRegistrationPage() {
           <Field label="Registration Valid Until" optional><input type="date" value={form.registrationValidUntil} onChange={(e) => setField("registrationValidUntil", e.target.value)} /></Field>
           <Field label="Years of Experience" optional><input type="number" min={0} value={form.yearsOfExperience} onChange={(e) => setField("yearsOfExperience", e.target.value)} /></Field>
           <Field label="Current Designation" optional><input value={form.currentDesignation} onChange={(e) => setField("currentDesignation", e.target.value)} /></Field>
-          <Field label="Department" optional><input value={form.department} onChange={(e) => setField("department", e.target.value)} /></Field>
+          <Field label="Department" required>
+            <select
+              required
+              value={departmentSelectValue}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === "__other__") {
+                  setDepartmentOther(true);
+                  if (departmentIsListed) setField("department", "");
+                  return;
+                }
+                setDepartmentOther(false);
+                setField("department", value);
+              }}
+            >
+              <option value="">Select department</option>
+              {departmentOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+              <option value="__other__">Other</option>
+            </select>
+          </Field>
+          {departmentSelectValue === "__other__" && (
+            <Field label="Other department" required>
+              <input
+                required
+                value={form.department}
+                onChange={(e) => setField("department", e.target.value)}
+                placeholder="Enter department name"
+              />
+            </Field>
+          )}
           <Field label="Specialization" required><input required value={form.specialization} onChange={(e) => setField("specialization", e.target.value)} /></Field>
           <Field label="Sub-Specialization" optional><input value={form.subSpecialization} onChange={(e) => setField("subSpecialization", e.target.value)} /></Field>
           <Field label="Qualification" optional><input placeholder="MBBS, MD, MS, DM, MCh…" value={form.qualification} onChange={(e) => setField("qualification", e.target.value)} /></Field>
@@ -468,7 +530,10 @@ export default function DoctorRegistrationPage() {
             type="button"
             className="secondary"
             disabled={saving}
-            onClick={() => setForm({ ...emptyForm, hospitalId: sessionHospitalId })}
+            onClick={() => {
+              setForm({ ...emptyForm, hospitalId: sessionHospitalId });
+              setDepartmentOther(false);
+            }}
           >
             Reset form
           </button>
@@ -484,7 +549,7 @@ export default function DoctorRegistrationPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>User ID</th><th>Hospital</th><th>Name</th><th>Specialization</th><th>Email</th><th>Status</th>
+                  <th>User ID</th><th>Hospital</th><th>Name</th><th>Department</th><th>Specialization</th><th>Email</th><th>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -493,6 +558,7 @@ export default function DoctorRegistrationPage() {
                     <td>{d.doctorId}</td>
                     <td>{d.hospitalId ?? "—"}</td>
                     <td>{d.firstName} {d.lastName}</td>
+                    <td>{d.department || "—"}</td>
                     <td>{d.specialization}</td>
                     <td>{d.email}</td>
                     <td><span className={`badge ${d.status}`}>{d.status}</span></td>
