@@ -27,6 +27,11 @@ export const navGroups: NavGroup[] = [
   {
     title: "Clinic ops",
     items: [
+      {
+        to: "/emergency",
+        label: "Check Emergency Service",
+        hint: "Beds, doctors, book & pay",
+      },
       { to: "/bookings", label: "Bookings", hint: "Appointments" },
       { to: "/schedules", label: "Schedules", hint: "Working hours" },
       { to: "/availability", label: "Availability", hint: "Busy / blocked time" },
@@ -87,6 +92,7 @@ export const doctorNavGroups: NavGroup[] = [
     title: "Doctor portal",
     items: [
       { to: "/doctor-portal", label: "Dashboard", end: true, hint: "Open a section" },
+      { to: "/doctor-portal/emergency", label: "Check Emergency Service", hint: "Beds, doctors, book & pay" },
       { to: "/doctor-portal/queue", label: "Check Patient", end: true, hint: "Patient queue" },
       { to: "/doctor-portal/time-slots", label: "Time slots", hint: "Your weekly windows" },
       { to: "/doctor-portal/medicine-orders", label: "Medicine orders", hint: "Book RX for patients" },
@@ -170,8 +176,10 @@ export const pageTitles: Record<string, string> = {
   "/hrm/approver": "HRM · Approver",
   "/hrm/holidays": "HRM · Holiday",
   "/patient-list": "Patient list",
+  "/emergency": "Check Emergency Service",
   "/doctor-portal": "Doctor dashboard",
   "/doctor-portal/queue": "Check Patient",
+  "/doctor-portal/emergency": "Check Emergency Service",
   "/doctor-portal/time-slots": "Time slots",
   "/doctor-portal/medicine-orders": "Medicine orders",
   "/medicine-orders": "Medicine orders",

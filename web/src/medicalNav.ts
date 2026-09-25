@@ -3,6 +3,7 @@ export const medicalNavGroups = [
     title: "Medical store",
     items: [
       { to: "/medical", label: "Dashboard", hint: "Order counts", end: true },
+      { to: "/medical/emergency", label: "Check Emergency Service", hint: "Beds, doctors, book a bed" },
       { to: "/medical/orders/check", label: "Check order", hint: "Accept, pending, amount" },
       { to: "/medical/orders", label: "All orders", hint: "Search & track" },
       { to: "/medical/orders/new", label: "New orders", hint: "Accept or reject" },
@@ -22,6 +23,7 @@ export const medicalNavGroups = [
 
 export const medicalPageTitles: Record<string, string> = {
   "/medical": "Medical dashboard",
+  "/medical/emergency": "Check Emergency Service",
   "/medical/orders/check": "Check order",
   "/medical/orders": "Medicine orders",
   "/medical/orders/new": "New orders",
@@ -35,6 +37,7 @@ export const medicalPageTitles: Record<string, string> = {
 
 export const medicalKnownPaths = new Set([
   "/medical",
+  "/medical/emergency",
   "/medical/orders/check",
   "/medical/orders",
   "/medical/orders/new",

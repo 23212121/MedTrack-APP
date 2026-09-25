@@ -39,6 +39,11 @@ export default function MedicalDashboardPage() {
               <p>Open this queue</p>
             </Link>
           ))}
+          <Link to="/medical/emergency" className="home-card">
+            <span className="home-card-group">Emergency</span>
+            <h3>Check Emergency Service</h3>
+            <p>Search hospitals and book a bed</p>
+          </Link>
           <Link to="/medical/notifications" className="home-card">
             <span className="home-card-group">Alerts</span>
             <h3>Notifications ({counts?.unreadNotifications ?? "…"})</h3>

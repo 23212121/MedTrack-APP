@@ -2,6 +2,7 @@ package com.medtrack.booking.service;
 
 import com.medtrack.booking.domain.HospitalEntity;
 import com.medtrack.booking.domain.LoginEntity;
+import com.medtrack.booking.domain.LoginStatus;
 import com.medtrack.booking.domain.MedicalStoreEntity;
 import com.medtrack.booking.domain.PatientEntity;
 import com.medtrack.booking.domain.UserDetailsEntity;
@@ -98,20 +99,17 @@ public class AuthService {
   }
 
   private Map<String, Object> loginHospital(String id, String password) {
-    Optional<LoginEntity> login =
-        loginRepo.findByLoginTypeAndLoginIdIgnoreCaseAndStatus("HOSPITAL", id, "ACTIVE");
+    Optional<LoginEntity> login = loginRepo.findByLoginTypeAndLoginIdIgnoreCase("HOSPITAL", id);
     if (login.isEmpty()) {
       try {
-        login =
-            loginRepo
-                .findByLoginTypeAndHospitalId("HOSPITAL", Long.parseLong(id))
-                .filter(row -> "ACTIVE".equalsIgnoreCase(row.getStatus()));
+        login = loginRepo.findByLoginTypeAndHospitalId("HOSPITAL", Long.parseLong(id));
       } catch (NumberFormatException ignored) {
         // not a numeric hospital id
       }
     }
     HospitalEntity hospital = null;
     if (login.isPresent() && passwordEquals(login.get().getPassword(), password)) {
+      requireActive(login.get());
       if (login.get().getHospitalId() != null) {
         hospital = hospitalRepo.findById(login.get().getHospitalId()).orElse(null);
       }
@@ -139,18 +137,14 @@ public class AuthService {
   }
 
   private Map<String, Object> loginDoctor(String id, String password) {
-    Optional<LoginEntity> login =
-        loginRepo.findByLoginTypeAndLoginIdIgnoreCaseAndStatus("USER", id, "ACTIVE");
+    Optional<LoginEntity> login = loginRepo.findByLoginTypeAndLoginIdIgnoreCase("USER", id);
     if (login.isEmpty()) {
-      List<LoginEntity> byDoctor = loginRepo.findByLoginTypeAndDoctorIdAndStatus("USER", id, "ACTIVE");
+      List<LoginEntity> byDoctor = loginRepo.findByLoginTypeAndDoctorId("USER", id);
       if (!byDoctor.isEmpty()) {
         login = Optional.of(byDoctor.get(0));
       }
     }
-    if (login.isEmpty() || !passwordEquals(login.get().getPassword(), password)) {
-      throw badCredentials();
-    }
-    LoginEntity row = login.get();
+    LoginEntity row = authenticate(login, password);
     HospitalEntity hospital =
         row.getHospitalId() == null ? null : hospitalRepo.findById(row.getHospitalId()).orElse(null);
     String doctorId =
@@ -178,12 +172,8 @@ public class AuthService {
   }
 
   private Map<String, Object> loginMedical(String id, String password) {
-    Optional<LoginEntity> login =
-        loginRepo.findByLoginTypeAndLoginIdIgnoreCaseAndStatus("MEDICAL", id, "ACTIVE");
-    if (login.isEmpty() || !passwordEquals(login.get().getPassword(), password)) {
-      throw badCredentials();
-    }
-    LoginEntity row = login.get();
+    LoginEntity row =
+        authenticate(loginRepo.findByLoginTypeAndLoginIdIgnoreCase("MEDICAL", id), password);
     MedicalStoreEntity store =
         storeRepo
             .findByStoreCodeIgnoreCase(row.getLoginId())
@@ -278,6 +268,20 @@ public class AuthService {
       return hospitalRepo.findById(Long.parseLong(id));
     } catch (NumberFormatException ex) {
       return hospitalRepo.findByHospitalCode(id);
+    }
+  }
+
+  private LoginEntity authenticate(Optional<LoginEntity> login, String password) {
+    if (login.isEmpty() || !passwordEquals(login.get().getPassword(), password)) {
+      throw badCredentials();
+    }
+    requireActive(login.get());
+    return login.get();
+  }
+
+  private static void requireActive(LoginEntity row) {
+    if (!LoginStatus.isActive(row.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account is inactive");
     }
   }
 

@@ -51,7 +51,9 @@ medtrack:
   default-clinic-name: Sunrise Care Clinic
   avg-consultation-minutes: 10
   sms-provider: console
-  email-from: ${MAIL_FROM:${MAIL_USER:noreply@sunriseclinic.local}}
+  email-from: ${MAIL_FROM:${MAIL_USER:azherkhan061@gmail.com}}
+  # Inbox that receives Send-message form details (defaults to the app mailbox)
+  contact-to: ${MAIL_CONTACT_TO:azherkhan061@gmail.com}
   # false = do not pretend email was sent when SMTP fails (recommended for real Gmail)
   console-fallback: ${MAIL_CONSOLE_FALLBACK:false}
   auth:
@@ -72,6 +74,7 @@ medtrack:
   razorpay:
     key-id: ${RAZORPAY_KEY_ID:}
     key-secret: ${RAZORPAY_KEY_SECRET:}
+    webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
   payment:
     upi-id: ${MEDTRACK_UPI_ID:medtrackpharmacy@upi}
   # Actuator probes for optional standalone microservices

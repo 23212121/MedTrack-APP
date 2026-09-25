@@ -149,6 +149,36 @@ public class GatewayApplication {
     return proxy(bookingUrl, request, body);
   }
 
+  @RequestMapping("/api/payments/**")
+  public ResponseEntity<byte[]> payments(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
+  @RequestMapping(value = "/api/payments", method = {RequestMethod.GET, RequestMethod.POST})
+  public ResponseEntity<byte[]> paymentsRoot(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
+  @RequestMapping("/api/statuses/**")
+  public ResponseEntity<byte[]> statuses(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
+  @RequestMapping(value = "/api/statuses", method = {RequestMethod.GET})
+  public ResponseEntity<byte[]> statusesRoot(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
+  @RequestMapping("/api/emergency/**")
+  public ResponseEntity<byte[]> emergency(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
+  @RequestMapping(value = "/api/emergency", method = {RequestMethod.GET, RequestMethod.POST})
+  public ResponseEntity<byte[]> emergencyRoot(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
   @GetMapping("/api/health")
   public MapHealth health() {
     return new MapHealth("UP", "gateway");

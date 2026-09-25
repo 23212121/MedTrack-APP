@@ -82,6 +82,13 @@ CREATE TABLE IF NOT EXISTS svc.user_details (
     email character varying(150)
 );
 
+-- svc.status (0 = Inactive, 1 = Active) — lookup for svc.login.status
+CREATE TABLE IF NOT EXISTS svc.status (
+    status_id   smallint NOT NULL,
+    status_code character varying(20) NOT NULL,
+    status_name character varying(40) NOT NULL
+);
+
 -- svc.login
 CREATE TABLE IF NOT EXISTS svc.login (
     id character varying(64) NOT NULL,
@@ -91,12 +98,34 @@ CREATE TABLE IF NOT EXISTS svc.login (
     hospital_id bigint,
     doctor_id character varying(64),
     display_name character varying(255),
-    status character varying(20) DEFAULT 'ACTIVE'::character varying NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     creation_date timestamp with time zone DEFAULT now() NOT NULL,
     creation_user character varying(100),
     update_date timestamp with time zone,
     update_user character varying(100)
 );
+
+-- Migrate existing VARCHAR login.status (ACTIVE/INACTIVE) to SMALLINT 0/1
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'svc' AND table_name = 'login' AND column_name = 'status'
+      AND data_type IN ('character varying', 'character', 'text')
+  ) THEN
+    ALTER TABLE svc.login ALTER COLUMN status DROP DEFAULT;
+    ALTER TABLE svc.login
+      ALTER COLUMN status TYPE SMALLINT
+      USING CASE
+        WHEN UPPER(TRIM(status::text)) IN ('INACTIVE', '0', 'FALSE', 'F', 'NO') THEN 0
+        WHEN UPPER(TRIM(status::text)) IN ('ACTIVE', '1', 'TRUE', 'T', 'YES') THEN 1
+        WHEN TRIM(status::text) ~ '^[0-9]+$' THEN LEAST(1, GREATEST(0, TRIM(status::text)::SMALLINT))
+        ELSE 1
+      END;
+    ALTER TABLE svc.login ALTER COLUMN status SET DEFAULT 1;
+    ALTER TABLE svc.login ALTER COLUMN status SET NOT NULL;
+  END IF;
+END $$;
 
 -- svc.doctor_personal
 CREATE TABLE IF NOT EXISTS svc.doctor_personal (
@@ -309,7 +338,27 @@ CREATE TABLE IF NOT EXISTS svc.appointments (
     updated_by character varying(50),
     updated_date timestamp(6) with time zone,
     phone_number character varying(32),
-    department character varying(255)
+    department character varying(255),
+    payment_status character varying(30) DEFAULT 'UNPAID',
+    payment_id character varying(40)
+);
+
+-- svc.payments (appointment QR / UPI — completed only after gateway verify)
+CREATE TABLE IF NOT EXISTS svc.payments (
+    payment_id character varying(40) NOT NULL,
+    appointment_id character varying(36) NOT NULL,
+    patient_id character varying(64) NOT NULL,
+    amount double precision NOT NULL,
+    currency character varying(10) NOT NULL DEFAULT 'INR',
+    status character varying(30) NOT NULL,
+    gateway_transaction_id character varying(150),
+    gateway_name character varying(50),
+    gateway_order_id character varying(80),
+    gateway_qr_id character varying(80),
+    qr_image_url character varying(1000),
+    upi_uri character varying(500),
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone
 );
 
 -- svc.visits
@@ -869,6 +918,14 @@ END $$;
 
 DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_pkey') THEN
+    ALTER TABLE ONLY svc.payments
+    ADD CONSTRAINT payments_pkey PRIMARY KEY (payment_id);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'bookings_pkey') THEN
     ALTER TABLE ONLY svc.bookings
     ADD CONSTRAINT bookings_pkey PRIMARY KEY (id);
@@ -1162,6 +1219,23 @@ BEGIN
     ADD CONSTRAINT leave_applications_pkey PRIMARY KEY (id);
   END IF;
 END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'status_pkey') THEN
+    ALTER TABLE ONLY svc.status
+    ADD CONSTRAINT status_pkey PRIMARY KEY (status_id);
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_status_code ON svc.status (status_code);
+
+INSERT INTO svc.status (status_id, status_code, status_name) VALUES
+  (0, 'INACTIVE', 'Inactive'),
+  (1, 'ACTIVE', 'Active')
+ON CONFLICT (status_id) DO UPDATE SET
+  status_code = EXCLUDED.status_code,
+  status_name = EXCLUDED.status_name;
 
 DO $$
 BEGIN
@@ -1650,6 +1724,18 @@ BEGIN
   END IF;
 EXCEPTION WHEN others THEN
   RAISE NOTICE 'Skip FK fk_login_hospital : %', SQLERRM;
+END $$;
+
+DO $$
+BEGIN
+  IF to_regclass('svc.login') IS NULL OR to_regclass('svc.status') IS NULL THEN
+    RAISE NOTICE 'Skip FK fk_login_status — table svc.login or svc.status does not exist';
+  ELSIF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_login_status') THEN
+    ALTER TABLE svc.login ADD CONSTRAINT fk_login_status
+      FOREIGN KEY (status) REFERENCES svc.status(status_id);
+  END IF;
+EXCEPTION WHEN others THEN
+  RAISE NOTICE 'Skip FK fk_login_status : %', SQLERRM;
 END $$;
 
 DO $$

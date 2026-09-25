@@ -77,40 +77,59 @@ function resolveDoctorId(): string {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const hospitalId = session.getHospitalId();
+  const anonymousAuth = path.startsWith("/api/auth/");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init?.headers as Record<string, string> | undefined),
   };
-  if (hospitalId) {
-    headers["X-Hospital-Id"] = hospitalId;
+  if (!anonymousAuth) {
+    const hospitalId = session.getHospitalId();
+    if (hospitalId) {
+      headers["X-Hospital-Id"] = hospitalId;
+    }
+    const loginType = session.getLoginType();
+    if (loginType) headers["X-Login-Type"] = loginType;
+    const storeId = session.getMedicalStoreId();
+    if (storeId) headers["X-Medical-Store-Id"] = storeId;
+    const patientPhone = session.getPatientPhone();
+    if (patientPhone) headers["X-Patient-Phone"] = patientPhone;
+    const patientId = session.getPatientId();
+    if (patientId) headers["X-Patient-Id"] = patientId;
+    const patientName = session.getPatientName();
+    if (patientName) headers["X-Patient-Name"] = patientName;
+    const doctorId = resolveDoctorId();
+    if (doctorId) {
+      headers["X-Doctor-Id"] = doctorId;
+    }
+    const username = session.getUsername();
+    if (username) {
+      headers["X-User"] = username;
+    }
+    const token = session.getAccessToken();
+    if (token && token.includes(".")) {
+      headers.Authorization = `Bearer ${token}`;
+    }
   }
-  const loginType = session.getLoginType();
-  if (loginType) headers["X-Login-Type"] = loginType;
-  const storeId = session.getMedicalStoreId();
-  if (storeId) headers["X-Medical-Store-Id"] = storeId;
-  const patientPhone = session.getPatientPhone();
-  if (patientPhone) headers["X-Patient-Phone"] = patientPhone;
-  const patientId = session.getPatientId();
-  if (patientId) headers["X-Patient-Id"] = patientId;
-  const patientName = session.getPatientName();
-  if (patientName) headers["X-Patient-Name"] = patientName;
-  const doctorId = resolveDoctorId();
-  if (doctorId) {
-    headers["X-Doctor-Id"] = doctorId;
+  const timeoutMs = anonymousAuth ? 20000 : 0;
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : 0;
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...init,
+      headers,
+      signal: init?.signal ?? controller?.signal,
+    });
+  } catch (err) {
+    if (controller && err instanceof DOMException && err.name === "AbortError") {
+      throw new Error(
+        "Sign-in timed out. Check that the MedTrack API is running on :8090.",
+      );
+    }
+    throw err;
+  } finally {
+    if (timer) window.clearTimeout(timer);
   }
-  const username = session.getUsername();
-  if (username) {
-    headers["X-User"] = username;
-  }
-  const token = session.getAccessToken();
-  if (token && token.includes(".")) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  const res = await fetch(path, {
-    ...init,
-    headers,
-  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(friendlyHttpError(res.status, text));
@@ -355,6 +374,28 @@ export type CreateBookingBody = {
   createdBy?: string;
 };
 
+export type AppointmentPayment = {
+  paymentId: string;
+  appointmentId?: string;
+  referenceType?: string;
+  referenceId?: string;
+  patientId: string;
+  amount: number;
+  currency?: string;
+  status: string;
+  gatewayTransactionId?: string | null;
+  gatewayName?: string;
+  qrImageUrl?: string;
+  upiUri?: string;
+  upiId?: string;
+  razorpayEnabled?: boolean;
+  message?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  upiApps?: Array<{ id: string; name: string; uri: string }>;
+  booking?: EmergencyBedBooking;
+};
+
 /** Primary appointment store — only doctorId stored; display fields enriched at read time. */
 export type Appointment = {
   id: string;
@@ -383,6 +424,8 @@ export type Appointment = {
   createdDate: string;
   updatedBy?: string;
   updatedDate?: string;
+  paymentStatus?: string;
+  paymentId?: string;
   chatCount?: number;
   unreadCount?: number;
   otherMessageAts?: string[];
@@ -713,6 +756,27 @@ export const api = {
         body: JSON.stringify(body),
       }
     ),
+  createPayment: (body: {
+    appointmentId: string;
+    patientId?: string;
+    amount?: number;
+  }) =>
+    request<AppointmentPayment>("/api/payments/create", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  getPayment: (paymentId: string) =>
+    request<AppointmentPayment>(`/api/payments/${encodeURIComponent(paymentId)}`),
+  verifyPaymentWithGateway: (paymentId: string) =>
+    request<AppointmentPayment>(
+      `/api/payments/${encodeURIComponent(paymentId)}/verify-with-gateway`,
+      { method: "POST" }
+    ),
+  cancelPayment: (paymentId: string) =>
+    request<AppointmentPayment>(
+      `/api/payments/${encodeURIComponent(paymentId)}/cancel`,
+      { method: "POST" }
+    ),
   appointments: (opts?: {
     doctorId?: string;
     patientId?: string;
@@ -825,6 +889,10 @@ export const api = {
 
   hospitals: () =>
     request<{ count: number; hospitals: HospitalRegistrationSummary[] }>("/api/hospitals"),
+  statuses: () =>
+    request<{ count: number; statuses: LoginStatusLookup[] }>("/api/statuses"),
+  status: (statusId: number) =>
+    request<{ status: LoginStatusLookup }>(`/api/statuses/${statusId}`),
   hospital: (id: string | number) =>
     request<{ hospital: HospitalRegistrationSummary }>(`/api/hospitals/${id}`),
   nextHospitalId: () =>
@@ -832,7 +900,44 @@ export const api = {
   registerHospital: (body: Record<string, unknown>) =>
     request<{ message: string; hospital: HospitalRegistrationSummary }>(
       "/api/hospitals/register",
-      { method: "POST", body: JSON.stringify(body) }
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  emergencyContext: () =>
+    request<EmergencyContext>("/api/emergency/context"),
+  emergencyHospitals: (opts?: { state?: string; city?: string; q?: string }) => {
+    const qs = new URLSearchParams();
+    if (opts?.state) qs.set("state", opts.state);
+    if (opts?.city) qs.set("city", opts.city);
+    if (opts?.q) qs.set("q", opts.q);
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<{ count: number; state?: string; city?: string; hospitals: EmergencyHospital[] }>(
+      `/api/emergency/hospitals${suffix}`,
+    );
+  },
+  emergencyHospital: (hospitalId: string | number) =>
+    request<EmergencyHospitalDetail>(`/api/emergency/hospitals/${encodeURIComponent(String(hospitalId))}`),
+  bookEmergencyBed: (
+    bedId: string,
+    body: { patientName: string; patientPhone?: string; patientId?: string; notes?: string },
+  ) =>
+    request<{ message: string; booking: EmergencyBedBooking; bed: EmergencyBed }>(
+      `/api/emergency/beds/${encodeURIComponent(bedId)}/book`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  emergencyBooking: (bookingId: string) =>
+    request<{ booking: EmergencyBedBooking }>(
+      `/api/emergency/bookings/${encodeURIComponent(bookingId)}`,
+    ),
+  payEmergencyBooking: (bookingId: string) =>
+    request<AppointmentPayment>(
+      `/api/emergency/bookings/${encodeURIComponent(bookingId)}/pay`,
+      { method: "POST" },
+    ),
+  attachEmergencySlip: (bookingId: string, form: FormData) =>
+    requestForm<{ message: string; booking: EmergencyBedBooking }>(
+      `/api/emergency/bookings/${encodeURIComponent(bookingId)}/slip`,
+      form,
     ),
 
   login: (body: { loginType: "HOSPITAL" | "USER" | "PATIENT" | "MEDICAL"; id: string; password: string }) =>
@@ -1700,6 +1805,12 @@ export type PatientQueueStatusResponse = QueueStatus & {
   queueSummary?: QueueSummary;
 };
 
+export type LoginStatusLookup = {
+  statusId: number;
+  statusCode: string;
+  statusName: string;
+};
+
 export type HospitalRegistrationSummary = {
   id: number;
   hospitalId?: number;
@@ -1716,6 +1827,76 @@ export type HospitalRegistrationSummary = {
   status?: string;
   createdAt?: string;
   departments?: string[];
+};
+
+export type EmergencyContext = {
+  state?: string;
+  city?: string;
+  patientName?: string;
+  patientPhone?: string;
+  loginType?: string;
+};
+
+export type EmergencyHospital = {
+  id?: number;
+  hospitalId: number;
+  hospitalName: string;
+  hospitalType?: string;
+  city?: string;
+  state?: string;
+  primaryContact?: string;
+  status?: string;
+  totalBeds: number;
+  bookedBeds: number;
+  availableBeds: number;
+  emergencyDoctorsAvailable?: number;
+};
+
+export type EmergencyDoctor = {
+  doctorId: string;
+  doctorName: string;
+  department?: string;
+  specialization?: string;
+  mobileNumber?: string;
+  availableDays?: string;
+  availableTimeSlots?: string;
+  availableNow?: boolean;
+  emergencyDoctor?: boolean;
+};
+
+export type EmergencyBedBooking = {
+  id: string;
+  hospitalId: number;
+  bedId: string;
+  bedNumber: string;
+  patientName: string;
+  patientPhone?: string;
+  status: string;
+  fees?: number;
+  paymentId?: string;
+  paymentStatus?: string;
+  hasPaymentSlip?: boolean;
+  paymentSlipName?: string;
+  notes?: string;
+  createdAt?: string;
+};
+
+export type EmergencyBed = {
+  id: string;
+  hospitalId: number;
+  bedNumber: string;
+  ward?: string;
+  fees: number;
+  status: string;
+  notes?: string;
+  booking?: EmergencyBedBooking | null;
+};
+
+export type EmergencyHospitalDetail = EmergencyHospital & {
+  beds: EmergencyBed[];
+  doctors: EmergencyDoctor[];
+  email?: string;
+  country?: string;
 };
 
 export type LeaveBalanceRow = {
@@ -2073,7 +2254,7 @@ export function submitContactInquiry(body: {
   subject: string;
   message: string;
 }) {
-  return request<{ ok: boolean; inquiryId: string; message: string }>("/api/contact", {
+  return request<{ ok: boolean; inquiryId: string; emailed?: boolean; message: string }>("/api/contact", {
     method: "POST",
     body: JSON.stringify(body),
   });

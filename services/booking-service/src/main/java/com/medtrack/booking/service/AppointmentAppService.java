@@ -67,6 +67,7 @@ public class AppointmentAppService {
       row.setAppointmentTime(booking.getAppointmentTime());
       row.setTokenNumber(booking.getTokenNumber());
       row.setStatus(booking.getStatus());
+      row.setPaymentStatus("UNPAID");
       row.setBookedBy(ctx.bookedBy());
       row.setBookingRefId(booking.getId());
       row.setCreatedBy(ctx.createdBy());
@@ -119,6 +120,26 @@ public class AppointmentAppService {
 
   public Optional<AppointmentEntity> findByBookingRef(String bookingRefId) {
     return appointmentRepo.findByBookingRefId(bookingRefId);
+  }
+
+  /** Payment and appointment workflow stay separate. Queue status remains BOOKED. */
+  @Transactional
+  public void markPaid(String appointmentId, String paymentId) {
+    if (appointmentId == null || appointmentId.isBlank()) return;
+    appointmentRepo
+        .findById(appointmentId)
+        .ifPresent(
+            appt -> {
+              if ("PAID".equalsIgnoreCase(appt.getPaymentStatus())) {
+                return;
+              }
+              appt.setPaymentStatus("PAID");
+              if (paymentId != null && !paymentId.isBlank()) {
+                appt.setPaymentId(paymentId);
+              }
+              appt.setUpdatedBy("PAYMENT");
+              appointmentRepo.save(appt);
+            });
   }
 
   public List<AppointmentEntity> findAll() {

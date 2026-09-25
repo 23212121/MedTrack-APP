@@ -36,6 +36,7 @@ export const hi: Record<string, string> = {
   Overview: "अवलोकन",
   HRM: "एचआरएम",
   "Clinic ops": "क्लिनिक कार्य",
+  Emergency: "आपातकाल",
   Insights: "जानकारी",
   People: "लोग",
   "Doctor portal": "डॉक्टर पोर्टल",
@@ -46,6 +47,12 @@ export const hi: Record<string, string> = {
   "Actuator · services UP/DOWN": "सेवाएँ चालू/बंद",
   "Home, attendance, leave": "होम, उपस्थिति, छुट्टी",
   Bookings: "बुकिंग",
+  "Check Emergency Service": "आपातकालीन सेवा जाँचें",
+  "Beds, doctors, book & pay": "बिस्तर, डॉक्टर, बुक और भुगतान",
+  "Beds, doctors, book a bed": "बिस्तर, डॉक्टर, बिस्तर बुक करें",
+  "Search hospitals, beds, and book an emergency bed":
+    "अस्पताल खोजें, बिस्तर देखें और आपातकालीन बिस्तर बुक करें",
+  "Search hospitals and book a bed": "अस्पताल खोजें और बिस्तर बुक करें",
   Appointments: "अपॉइंटमेंट",
   Schedules: "समय-सारणी",
   "Working hours": "कार्य समय",
@@ -278,8 +285,9 @@ export const hi: Record<string, string> = {
   "Consultation fee (from doctor profile): INR {fee}": "परामर्श शुल्क (डॉक्टर प्रोफ़ाइल से): ₹ {fee}",
 
   // Voice prompts
+  "Please say the patient name.": "कृपया मरीज़ का नाम बोलें।",
   "Please say the patient name, for example: Book appointment.":
-    "कृपया मरीज़ का नाम बोलें, जैसे: अपॉइंटमेंट बुक करो।",
+    "कृपया मरीज़ का नाम बोलें।",
   "Phone number is missing. Please speak the phone number.":
     "फ़ोन नंबर नहीं है। कृपया फ़ोन नंबर बोलें।",
   "Please provide age.": "कृपया उम्र बताएँ।",
@@ -731,6 +739,8 @@ export const hi: Record<string, string> = {
   "Message sent": "संदेश भेजा गया",
   "Thank you. We received your message and will get back to you.":
     "धन्यवाद। आपका संदेश मिल गया है, हम जल्द उत्तर देंगे।",
+  "Could not send the message. Please try again.":
+    "संदेश नहीं भेजा जा सका। कृपया फिर कोशिश करें।",
   "Send another message": "एक और संदेश भेजें",
   "Opening your email app so you can send the message.":
     "ईमेल ऐप खुल रहा है ताकि आप संदेश भेज सकें।",

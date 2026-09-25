@@ -7,6 +7,7 @@ import {
   type MedicalStore,
 } from "../../api";
 import NativeFileInput from "../../components/NativeFileInput";
+import { IndiaStateCityFields } from "../../components/IndiaStateCityFields";
 import { session } from "../../dl/MedTrackSession";
 import { toast } from "../../toast";
 
@@ -287,23 +288,6 @@ export default function MedicineOrdersPage({
     [quoteItems],
   );
 
-  const storeStates = useMemo(() => {
-    const names = new Set<string>();
-    stores.forEach((s) => {
-      if (s.state?.trim()) names.add(s.state.trim());
-    });
-    return [...names].sort((a, b) => a.localeCompare(b));
-  }, [stores]);
-
-  const storeCities = useMemo(() => {
-    const names = new Set<string>();
-    stores.forEach((s) => {
-      if (filterState && locKey(s.state) !== locKey(filterState)) return;
-      if (s.city?.trim()) names.add(s.city.trim());
-    });
-    return [...names].sort((a, b) => a.localeCompare(b));
-  }, [stores, filterState]);
-
   const filteredStores = useMemo(() => {
     return stores.filter((s) => {
       if (filterState && locKey(s.state) !== locKey(filterState)) return false;
@@ -311,12 +295,6 @@ export default function MedicineOrdersPage({
       return true;
     });
   }, [stores, filterState, filterCity]);
-
-  useEffect(() => {
-    if (filterCity && !storeCities.some((c) => locKey(c) === locKey(filterCity))) {
-      setFilterCity("");
-    }
-  }, [filterCity, storeCities]);
 
   useEffect(() => {
     if (storeId && !filteredStores.some((s) => s.id === storeId)) {
@@ -660,39 +638,13 @@ export default function MedicineOrdersPage({
           </div>
           {isPatient ? (
             <>
-              <div className="row">
-                <label>
-                  State
-                  <select
-                    value={filterState}
-                    onChange={(e) => {
-                      setFilterState(e.target.value);
-                      setFilterCity("");
-                    }}
-                  >
-                    <option value="">All states</option>
-                    {storeStates.map((st) => (
-                      <option key={st} value={st}>
-                        {st}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  City
-                  <select
-                    value={filterCity}
-                    onChange={(e) => setFilterCity(e.target.value)}
-                  >
-                    <option value="">All cities</option>
-                    {storeCities.map((ct) => (
-                      <option key={ct} value={ct}>
-                        {ct}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              <IndiaStateCityFields
+                allowAll
+                state={filterState}
+                city={filterCity}
+                onStateChange={setFilterState}
+                onCityChange={setFilterCity}
+              />
               <label>
                 Medical store
                 <select

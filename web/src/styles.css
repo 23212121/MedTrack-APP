@@ -510,7 +510,7 @@ main.content.content--dashboard,
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: 1rem 1.2rem 1.2rem;
+  padding: 0;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -528,11 +528,14 @@ main.content.content--dashboard,
   flex-direction: column;
   min-height: 0;
   width: 100%;
+  max-width: none;
+  margin: 0;
 }
 
 .dashboard-fill {
   width: 100%;
   max-width: none;
+  margin: 0;
   box-sizing: border-box;
   flex: 1;
   display: flex;
@@ -541,8 +544,8 @@ main.content.content--dashboard,
   align-self: stretch;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: var(--shadow);
+  border-radius: 0;
+  box-shadow: none;
   padding: 1.1rem 1.2rem 1.2rem;
   overflow: visible;
 }
@@ -591,6 +594,54 @@ h1, h2 {
 }
 
 .row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: end; }
+
+.india-combo {
+  position: relative;
+  width: 100%;
+}
+.india-combo input {
+  width: 100%;
+}
+.india-combo.is-disabled input {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.india-combo-menu {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+}
+.india-combo-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.45rem 0.75rem;
+  font: inherit;
+  cursor: pointer;
+  color: var(--ink);
+}
+.india-combo-menu button:hover,
+.india-combo-menu button.is-active {
+  background: #e8f1f2;
+}
+.india-combo-empty {
+  padding: 0.55rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
 .stack { display: flex; flex-direction: column; gap: 0.55rem; }
 
 label,
@@ -914,12 +965,12 @@ code {
 
   main.content.content--dashboard,
   .content--workspace.content--dashboard {
-    padding: 0.75rem 0.85rem 1.25rem;
+    padding: 0;
   }
 
   .dashboard-fill {
     padding: 0.9rem;
-    border-radius: 14px;
+    border-radius: 0;
   }
 
   .home-cards {
@@ -1533,38 +1584,87 @@ button.chip:hover {
 .app-shell--login {
   position: relative;
   isolation: isolate;
+  overflow: hidden;
   align-items: stretch;
   min-height: 100vh;
   min-height: 100dvh;
-  background-color: #9ec8d4;
-  background-image:
-    linear-gradient(180deg, rgba(6, 32, 40, 0.18) 0%, rgba(6, 32, 40, 0.06) 42%, rgba(6, 32, 40, 0.22) 100%),
-    url("/login-bg.png");
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-attachment: scroll;
+  background-color: #7eb8c4;
+}
+.app-shell--login::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: url("/homepage.jpeg") center top / cover no-repeat;
+  filter: brightness(1.16) contrast(1.06) saturate(1.12);
+  pointer-events: none;
+}
+.app-shell--login::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    108deg,
+    transparent 32%,
+    rgba(255, 255, 255, 0.08) 44%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0.08) 56%,
+    transparent 68%
+  );
+  background-size: 240% 100%;
+  animation: login-image-shine 5s ease-in-out infinite;
+}
+@keyframes login-image-shine {
+  0% {
+    background-position: 140% 0;
+    opacity: 0.2;
+  }
+  18% {
+    opacity: 1;
+  }
+  52% {
+    background-position: -50% 0;
+    opacity: 1;
+  }
+  68%,
+  100% {
+    background-position: -50% 0;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell--login::after {
+    animation: none;
+    background-position: 40% 0;
+    opacity: 0.35;
+  }
 }
 .app-shell--login > .app-header {
   align-self: stretch;
   width: 100%;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-bottom-color: rgba(255, 255, 255, 0.22);
-  box-shadow: none;
+  position: relative;
+  z-index: 2;
+  background: rgba(226, 242, 244, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(14, 124, 134, 0.18);
+  box-shadow: 0 4px 18px rgba(11, 61, 74, 0.06);
 }
 .app-shell--login > .content,
 .app-shell--login > .content--auth,
 .app-shell--login > .content--login {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: none;
-  margin: 0 auto;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  padding: 1.5rem 1rem 2.5rem;
+  padding: 1.5rem 4vw 2.5rem 1rem;
 }
 
 .login-popup,
@@ -1572,13 +1672,13 @@ button.chip:hover {
   width: min(460px, 100%);
   max-width: 460px;
   margin-left: auto;
-  margin-right: auto;
-  align-self: center;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  box-shadow: 0 20px 55px rgba(6, 32, 40, 0.16);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  margin-right: 0;
+  align-self: flex-end;
+  background: rgba(226, 242, 244, 0.42);
+  border: 1px solid rgba(14, 124, 134, 0.28);
+  box-shadow: 0 20px 55px rgba(10, 92, 99, 0.18);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 .login-popup .panel,
 .login-popup .login-demo-creds {
@@ -1612,11 +1712,11 @@ button.chip:hover {
 }
 .app-shell--login .modal.panel.login-popup,
 .app-shell--login .modal.login-popup {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 20px 55px rgba(6, 32, 40, 0.16);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(226, 242, 244, 0.42);
+  border: 1px solid rgba(14, 124, 134, 0.28);
+  box-shadow: 0 20px 55px rgba(10, 92, 99, 0.18);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .login-mode {
@@ -3599,18 +3699,26 @@ main.content.content--hrm,
 }
 .content--patient {
   box-sizing: border-box;
-  padding-bottom: 2rem;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
 .patient-portal-stack {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   width: 100%;
+  max-width: none;
+  margin: 0;
+  flex: 1;
+  min-height: 0;
 }
 .patient-portal-stack .dashboard,
 .patient-portal-stack .dashboard-fill {
   width: 100%;
   max-width: none;
+  margin: 0;
 }
 .patient-dash-grid {
   display: grid;
@@ -3863,6 +3971,39 @@ main.content.content--hrm,
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+.appointment-pay-modal {
+  width: min(100%, 420px);
+  text-align: center;
+}
+.appointment-pay-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+}
+.appointment-pay-qr {
+  display: block;
+  margin: 0 auto 0.75rem;
+  width: 240px;
+  height: 240px;
+  background: #fff;
+  border-radius: 12px;
+}
+.appointment-pay-id {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+}
+.appointment-pay-hint {
+  font-size: 0.85rem;
+  margin: 0 0 0.75rem;
+}
+.appointment-pay-apps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
 }
 .btn-secondary {
   background: #e2e8f0;
@@ -5555,4 +5696,182 @@ button.native-file-icon,
 .badge.AMOUNT_ACCEPTED { background: #d1fae5; color: #047857; }
 .badge.MEDICINE_READY { background: #cffafe; color: #0e7490; }
 .badge.CANCELED { background: #fee2e2; color: #b91c1c; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.emergency-page {
+  display: grid;
+  gap: 1rem;
+}
+.emergency-page-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.emergency-page-head h1 {
+  margin: 0.15rem 0 0.4rem;
+}
+.voice-emergency {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 220px;
+}
+.voice-emergency-prompt {
+  max-width: 280px;
+}
+.emergency-search {
+  display: grid;
+  gap: 0.75rem;
+}
+.emergency-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.emergency-hospital-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+.emergency-hospital-card {
+  text-align: left;
+  background: linear-gradient(165deg, #f8fcfd 0%, #eef6f8 100%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.9rem;
+  cursor: pointer;
+}
+.emergency-hospital-card h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+.emergency-hospital-card p {
+  margin: 0.15rem 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.emergency-detail-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.emergency-doctor-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.emergency-doctor-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7fbfc;
+}
+.emergency-doctor-list span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.emergency-beds {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+.emergency-bed-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+.emergency-bed-card.is-booked {
+  opacity: 0.88;
+}
+.emergency-bed-visual {
+  position: relative;
+  background: linear-gradient(180deg, #e7f5f7, #f8fcfd);
+  padding: 0.7rem 0.7rem 1.6rem;
+  display: grid;
+  place-items: center;
+}
+.emergency-bed-art {
+  width: 132px;
+  height: 90px;
+}
+.emergency-more-link {
+  position: absolute;
+  right: 0.55rem;
+  bottom: 0.4rem;
+  background: transparent;
+  border: 0;
+  color: var(--brand);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: underline;
+  padding: 0;
+  cursor: pointer;
+}
+.emergency-bed-meta {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.7rem 0.8rem 0.85rem;
+}
+.emergency-bed-meta strong {
+  font-size: 1.05rem;
+}
+.emergency-pill {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  background: #d1fae5;
+  color: #047857;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.emergency-pill.is-booked {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.emergency-modal-dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+  margin: 0 0 1rem;
+}
+.emergency-modal-dl dt {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.emergency-modal-dl dd {
+  margin: 0.1rem 0 0;
+  font-weight: 650;
+}
+.emergency-slip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+@media (max-width: 700px) {
+  .emergency-modal-dl {
+    grid-template-columns: 1fr;
+  }
+}
 

@@ -55,6 +55,7 @@ import MedicalDashboardPage from "./pages/medicine/MedicalDashboardPage";
 import MedicalCheckOrderPage from "./pages/medicine/MedicalCheckOrderPage";
 import MedicalStoresPage from "./pages/medicine/MedicalStoresPage";
 import MedicalNotificationsPage from "./pages/medicine/MedicalNotificationsPage";
+import EmergencyServicePage from "./pages/emergency/EmergencyServicePage";
 
 export default function App() {
   const t = useT();
@@ -220,9 +221,14 @@ export default function App() {
         </aside>
 
         <div className="workspace">
-          <main className="content content--workspace content--patient">
+          <main
+            className={`content content--workspace content--patient${
+              location.pathname === "/patient" ? " content--dashboard" : ""
+            }`}
+          >
             <Routes>
               <Route path="/patient" element={<PatientDashboardPage />} />
+              <Route path="/patient/emergency" element={<EmergencyServicePage />} />
               <Route path="/patient/booking" element={<PatientBookingPortalPage />} />
               <Route path="/patient/status" element={<PatientStatusPage />} />
               <Route path="/patient/chat" element={<PatientChatPage />} />
@@ -318,9 +324,14 @@ export default function App() {
           </div>
         </aside>
         <div className="workspace">
-          <main className="content content--workspace">
+          <main
+            className={`content content--workspace${
+              location.pathname === "/medical" ? " content--dashboard" : ""
+            }`}
+          >
             <Routes>
               <Route path="/medical" element={<MedicalDashboardPage />} />
+              <Route path="/medical/emergency" element={<EmergencyServicePage />} />
               <Route path="/medical/orders/check" element={<MedicalCheckOrderPage />} />
               <Route path="/medical/orders" element={<MedicineOrdersPage title="All orders" />} />
               <Route
@@ -457,6 +468,7 @@ export default function App() {
             <Route path="/system-status" element={<SystemStatusPage />} />
             <Route path="/doctor-register" element={<DoctorRegistrationPage />} />
             <Route path="/bookings" element={<BookingsPage />} />
+            <Route path="/emergency" element={<EmergencyServicePage />} />
             <Route path="/schedules" element={<SchedulesPage />} />
             <Route path="/availability" element={<AvailabilityPage />} />
             <Route path="/check-in" element={<CheckInPage />} />
@@ -468,6 +480,7 @@ export default function App() {
             <Route path="/check-document" element={<CheckDocumentsPage />} />
             <Route path="/patient-list" element={<HospitalPatientListPage />} />
             <Route path="/doctor-portal" element={<DoctorPortalPage />} />
+            <Route path="/doctor-portal/emergency" element={<EmergencyServicePage />} />
             <Route path="/doctor-portal/queue" element={<DoctorPatientQueuePage />} />
             <Route path="/doctor-portal/time-slots" element={<DoctorTimeSlotsPage />} />
             <Route

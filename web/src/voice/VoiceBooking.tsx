@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../api";
 import { useI18n } from "../i18n";
 import {
   applyParsedCommand,
   nextMissingField,
-  patientToPatch,
-  pickPatientMatch,
   promptFor,
   matchDoctor,
   type ConversationField,
@@ -80,7 +77,6 @@ export default function VoiceBooking({
   const activeRef = useRef(false);
   const processingRef = useRef(false);
   const expectingRef = useRef<ConversationField>("patientName");
-  const searchedNameRef = useRef("");
   const draftRef = useRef(draft);
   const doctorsRef = useRef(doctors);
   const publicModeRef = useRef(publicMode);
@@ -312,6 +308,11 @@ export default function VoiceBooking({
       }
 
       if (parsed.intent === "SHOW_BOOKINGS") {
+        if (!onShowBookings) {
+          onNeedBookForm?.();
+          await askAndListen(nextMissingField(draftRef.current, publicModeRef.current));
+          return;
+        }
         await handleShowBookings(parsed);
         return;
       }
@@ -342,6 +343,11 @@ export default function VoiceBooking({
           parsed.reason,
       );
       if (!hasContent) {
+        if (parsed.intent === "BOOK_APPOINTMENT") {
+          onNeedBookForm?.();
+          await askAndListen(nextMissingField(draftRef.current, publicModeRef.current));
+          return;
+        }
         if (deskModeRef.current && expectingRef.current === "idle") {
           await say(
             "Say show booking to hear the patient list, or book appointment for a patient.",
@@ -384,36 +390,7 @@ export default function VoiceBooking({
         return;
       }
 
-      const merged: VoiceDraft = { ...draftRef.current, ...applied.patch };
-      draftRef.current = merged;
-
-      const name = merged.patientName.trim();
-      if (
-        name.length >= 2 &&
-        searchedNameRef.current.toLowerCase() !== name.toLowerCase()
-      ) {
-        searchedNameRef.current = name;
-        try {
-          const res = await api.searchPatients(name);
-          const hit = pickPatientMatch(name, res.patients || []);
-          if (hit) {
-            const fromPatient = patientToPatch(hit, merged);
-            if (Object.keys(fromPatient).length) onPatch(fromPatient);
-            draftRef.current = { ...merged, ...fromPatient };
-            const foundLine = t("{name} was found in patient records.", {
-              name: hit.name || name,
-            });
-            setAssistant(foundLine);
-            await speak(foundLine, speechLocale);
-          } else {
-            const newLine = t("{name} is not in the system yet.", { name });
-            setAssistant(newLine);
-            await speak(newLine, speechLocale);
-          }
-        } catch {
-          /* search is optional — continue collecting fields */
-        }
-      }
+      draftRef.current = { ...draftRef.current, ...applied.patch };
 
       const next = nextMissingField(draftRef.current, publicModeRef.current);
       await askAndListen(next);
@@ -425,7 +402,6 @@ export default function VoiceBooking({
   async function startSession() {
     if (!supported) return;
     stopSpeaking();
-    searchedNameRef.current = "";
     showDoctorIdRef.current = "";
     showDoctorNameRef.current = "";
     showFromRef.current = "";

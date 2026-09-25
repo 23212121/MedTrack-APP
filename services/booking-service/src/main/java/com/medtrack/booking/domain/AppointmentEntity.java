@@ -67,6 +67,13 @@ public class AppointmentEntity {
   @Column(nullable = false, length = 32)
   private String status = "BOOKED";
 
+  /** Separate from appointment workflow status: UNPAID | PAYMENT_PENDING | PAID */
+  @Column(name = "payment_status", length = 30)
+  private String paymentStatus = "UNPAID";
+
+  @Column(name = "payment_id", length = 40)
+  private String paymentId;
+
   /** Snapshot of doctor clinical department at booking time. */
   @Column(name = "department", length = 255)
   private String department;
@@ -126,6 +133,10 @@ public class AppointmentEntity {
   public void setTokenNumber(Integer tokenNumber) { this.tokenNumber = tokenNumber; }
   public String getStatus() { return status; }
   public void setStatus(String status) { this.status = status; }
+  public String getPaymentStatus() { return paymentStatus; }
+  public void setPaymentStatus(String paymentStatus) { this.paymentStatus = paymentStatus; }
+  public String getPaymentId() { return paymentId; }
+  public void setPaymentId(String paymentId) { this.paymentId = paymentId; }
   public String getBookedBy() { return bookedBy; }
   public void setBookedBy(String bookedBy) { this.bookedBy = bookedBy; }
   public String getBookingRefId() { return bookingRefId; }

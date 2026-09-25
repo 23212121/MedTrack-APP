@@ -2,6 +2,7 @@ package com.medtrack.booking.service;
 
 import com.medtrack.booking.domain.HospitalEntity;
 import com.medtrack.booking.domain.LoginEntity;
+import com.medtrack.booking.domain.LoginStatus;
 import com.medtrack.booking.domain.MedicalStoreEntity;
 import com.medtrack.booking.repo.HospitalRepository;
 import com.medtrack.booking.repo.LoginRepository;
@@ -105,7 +106,7 @@ public class MedicalStoreAppService {
     login.setPassword(password);
     login.setHospitalId(hospitalId);
     login.setDisplayName(name.trim());
-    login.setStatus("ACTIVE");
+    login.setStatus(LoginStatus.ACTIVE);
     login.setCreationDate(Instant.now());
     login.setCreationUser(blank(actor));
     loginRepo.save(login);
@@ -134,7 +135,7 @@ public class MedicalStoreAppService {
         .findByLoginTypeAndLoginIdIgnoreCase("MEDICAL", store.getStoreCode())
         .ifPresent(
             login -> {
-              login.setStatus(next);
+              login.setStatus(LoginStatus.parse(next));
               login.setUpdateDate(Instant.now());
               login.setUpdateUser(blank(actor));
               loginRepo.save(login);

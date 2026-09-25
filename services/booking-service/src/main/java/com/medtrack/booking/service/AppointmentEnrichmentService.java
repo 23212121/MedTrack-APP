@@ -169,6 +169,8 @@ public class AppointmentEnrichmentService {
               m.put("createdByName", createdByName);
               m.put("bookedByLabel", bookedByLabel(appt, booking.getHospitalId()));
               m.put("bookedAt", appt.getCreatedDate().toString());
+              m.put("paymentStatus", appt.getPaymentStatus());
+              m.put("paymentId", appt.getPaymentId());
               if (appt.getPatientName() != null && !appt.getPatientName().isBlank()) {
                 m.put("patientName", appt.getPatientName());
               }

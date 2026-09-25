@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, type MedicalStore } from "../../api";
+import { IndiaStateCityFields } from "../../components/IndiaStateCityFields";
 import { session } from "../../dl/MedTrackSession";
 import { toast } from "../../toast";
 
@@ -75,16 +76,12 @@ export default function MedicalStoresPage() {
           Address
           <input value={address} onChange={(e) => setAddress(e.target.value)} />
         </label>
-        <div className="row">
-          <label>
-            State
-            <input value={state} onChange={(e) => setState(e.target.value)} placeholder="Optional" />
-          </label>
-          <label>
-            City
-            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Optional" />
-          </label>
-        </div>
+        <IndiaStateCityFields
+          state={state}
+          city={city}
+          onStateChange={setState}
+          onCityChange={setCity}
+        />
         <label>
           Login password
           <input value={password} onChange={(e) => setPassword(e.target.value)} required />

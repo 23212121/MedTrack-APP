@@ -2,6 +2,12 @@ import { Link } from "react-router-dom";
 
 const PORTAL_TILES = [
   {
+    to: "/patient/emergency",
+    group: "Emergency",
+    title: "Check Emergency Service",
+    text: "Search hospitals, beds, and book an emergency bed",
+  },
+  {
     to: "/patient/booking",
     group: "Appointments",
     title: "Booking",

@@ -34,9 +34,9 @@ public class LoginEntity {
   @Column(name = "display_name", length = 255)
   private String displayName;
 
-  /** ACTIVE | INACTIVE */
-  @Column(nullable = false, length = 20)
-  private String status = "ACTIVE";
+  /** 0 = Inactive, 1 = Active — FK to svc.status.status_id */
+  @Column(nullable = false)
+  private Integer status = LoginStatus.ACTIVE;
 
   @Column(name = "creation_date", nullable = false)
   private Instant creationDate = Instant.now();
@@ -106,11 +106,11 @@ public class LoginEntity {
     this.displayName = displayName;
   }
 
-  public String getStatus() {
+  public Integer getStatus() {
     return status;
   }
 
-  public void setStatus(String status) {
+  public void setStatus(Integer status) {
     this.status = status;
   }
 

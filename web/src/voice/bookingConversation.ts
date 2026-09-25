@@ -52,7 +52,7 @@ export function nextMissingField(
 export function promptFor(field: ConversationField): string {
   switch (field) {
     case "patientName":
-      return "Please say the patient name, for example: Book appointment.";
+      return "Please say the patient name.";
     case "phone":
       return "Phone number is missing. Please speak the phone number.";
     case "age":

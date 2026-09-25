@@ -142,6 +142,7 @@ public class NotificationAppService {
   private String subjectFor(NotifyRequest req) {
     return switch (req.eventCode()) {
       case "BOOKING_CONFIRMED" -> "Your appointment has been booked — " + nullTo(req.clinicName(), "MedTrack Clinic");
+      case "PAYMENT_COMPLETED" -> "Payment successful — " + nullTo(req.clinicName(), "MedTrack Clinic");
       case "CHECKED_IN" -> "Checked in — token " + req.token();
       case "CHECKUP_STARTED" -> "Your checkup has started";
       case "DOCTOR_DELAYED" -> "Update — doctor running late";
@@ -194,6 +195,45 @@ public class NotificationAppService {
               + clinic;
         }
         yield base;
+      }
+      case "PAYMENT_COMPLETED" -> {
+        String txn =
+            req.extra() != null && req.extra().get("transactionId") != null
+                ? req.extra().get("transactionId")
+                : "—";
+        String apptId =
+            req.extra() != null && req.extra().get("appointmentId") != null
+                ? req.extra().get("appointmentId")
+                : req.visitId();
+        String paid =
+            req.totalFee() == null
+                ? ""
+                : (req.feeCurrency() == null ? "INR" : req.feeCurrency()) + " " + req.totalFee();
+        if ("EMAIL".equals(channel)) {
+          yield "Dear "
+              + patient
+              + ",\n\nPayment successful!\n\n"
+              + "Appointment: "
+              + apptId
+              + "\nDoctor: "
+              + doctor
+              + "\nAmount Paid: "
+              + paid
+              + "\nTransaction ID: "
+              + txn
+              + "\n\nRegards,\n"
+              + clinic;
+        }
+        yield clinic
+            + ": Payment successful! Appointment "
+            + apptId
+            + " with "
+            + doctor
+            + ". Amount paid "
+            + paid
+            + ". Txn "
+            + txn
+            + ".";
       }
       case "CHECKED_IN" -> clinic + ": " + patient + " checked in. Token " + req.token()
           + " for " + doctor + ".";

@@ -288,11 +288,24 @@ function dayOnlyDate(text: string): string | undefined {
   return toYmd(d);
 }
 
-export function isShowBookingIntent(text: string): boolean {
+export function isBookAppointmentIntent(text: string): boolean {
   const s = text.toLowerCase();
-  if (/\b(book(?: the)? appointment|confirm booking)\b/.test(s) && !/\bshow\b/.test(s)) {
+  if (/\b(show|list|display|see|view)\s+(my\s+)?(bookings?|appointments?)\b/.test(s)) {
     return false;
   }
+  if (/\b(show|list)\s+booking\b/.test(s)) return false;
+  return (
+    /\b(book(?:ing)?(?:\s+an?)?(?:\s+the)?\s+appointments?)\b/.test(s) ||
+    /\b(new|create|make)\s+(a\s+)?(booking|appointment)\b/.test(s) ||
+    /\bbook\s+(?:an?\s+)?(?:appointment\s+)?for\b/.test(s) ||
+    /अपॉइंटमेंट\s*बुक/.test(text) ||
+    /बुक\s*(करो|करें|करना)/.test(text)
+  );
+}
+
+export function isShowBookingIntent(text: string): boolean {
+  const s = text.toLowerCase();
+  if (isBookAppointmentIntent(text)) return false;
   return (
     /\b(show|list|display|open|see|view)\s+(my\s+)?(bookings?|appointments?|patients?|patient\s+list)\b/.test(
       s,
@@ -332,13 +345,15 @@ function clipName(value: string) {
 
 function extractName(text: string): string | undefined {
   const bookFor = text.match(
-    /(?:book(?:\s+an?)?\s+appointment|appointment)\s+for\s+(.+)$/i,
+    /(?:book(?:ing)?(?:\s+an?)?(?:\s+the)?\s+appointment|appointment)\s+(?:for\s+)?(.+)$/i,
   );
-  if (bookFor) return tidyName(clipName(bookFor[1]));
+  if (bookFor) return tidyName(clipName(bookFor[1])) || undefined;
+  const bookBare = text.match(/\bbook\s+for\s+(.+)$/i);
+  if (bookBare) return tidyName(clipName(bookBare[1])) || undefined;
   const nameIs = text.match(
     /(?:patient(?:\s+name)?|name)\s+(?:is\s+|for\s+)?(.+)$/i,
   );
-  if (nameIs) return tidyName(clipName(nameIs[1]));
+  if (nameIs) return tidyName(clipName(nameIs[1])) || undefined;
   return undefined;
 }
 
@@ -409,7 +424,8 @@ export function parseVoiceCommand(
 
   const showExpecting =
     expecting === "showDoctor" || expecting === "showDate" || expecting === "showDateTo";
-  if (isShowBookingIntent(text) || showExpecting) {
+  const bookIntent = isBookAppointmentIntent(text);
+  if (!bookIntent && (isShowBookingIntent(text) || showExpecting)) {
     parsed.intent = "SHOW_BOOKINGS";
     if (expecting === "showDateTo") {
       const range = extractDateRange(text);
@@ -426,6 +442,7 @@ export function parseVoiceCommand(
     }
     return parsed;
   }
+  if (bookIntent) parsed.intent = "BOOK_APPOINTMENT";
 
   const confirm =
     /^(book appointment|confirm(?: booking)?|yes book(?: it)?|submit|save booking)\.?$/.test(

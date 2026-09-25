@@ -123,11 +123,6 @@ export default function LoginPage() {
       <section className="panel login-popup">
         <h1 style={{ color: "var(--brand-dark)" }}>{t("MedTrack Clinic")}</h1>
         <p className="lead" style={{ marginBottom: "0.45rem" }}>
-          <Link to="/about" style={{ textDecoration: "underline" }}>
-            {t("About MedTrack — modules, journey, and contact")}
-          </Link>
-        </p>
-        <p className="lead" style={{ marginBottom: "0.45rem" }}>
           <Link to="/book" style={{ textDecoration: "underline" }}>
             {t("Book an appointment without login")}
           </Link>

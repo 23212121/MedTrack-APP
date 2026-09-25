@@ -3,6 +3,8 @@ package com.medtrack.booking.service;
 import com.medtrack.booking.domain.BookingEntity;
 import com.medtrack.booking.domain.PatientEntity;
 import com.medtrack.booking.domain.UserDetailsEntity;
+import com.medtrack.booking.event.PaymentCompletedEvent;
+import com.medtrack.booking.repo.AppointmentRepository;
 import com.medtrack.booking.repo.PatientRepository;
 import com.medtrack.booking.repo.UserDetailsRepository;
 import com.medtrack.common.dto.NotifyRequest;
@@ -28,16 +30,19 @@ public class BookingNotificationService {
   private final AppointmentEnrichmentService enrichment;
   private final PatientRepository patientRepo;
   private final UserDetailsRepository userDetailsRepo;
+  private final AppointmentRepository appointmentRepo;
 
   public BookingNotificationService(
       NotificationAppService notificationAppService,
       AppointmentEnrichmentService enrichment,
       PatientRepository patientRepo,
-      UserDetailsRepository userDetailsRepo) {
+      UserDetailsRepository userDetailsRepo,
+      AppointmentRepository appointmentRepo) {
     this.notificationAppService = notificationAppService;
     this.enrichment = enrichment;
     this.patientRepo = patientRepo;
     this.userDetailsRepo = userDetailsRepo;
+    this.appointmentRepo = appointmentRepo;
   }
 
   public void notifyAppointmentBooked(BookingEntity booking, String patientEmailFromRequest) {
@@ -94,6 +99,60 @@ public class BookingNotificationService {
     } catch (Exception ex) {
       log.warn(
           "[booking-notify] failed for booking {}: {}", booking.getId(), ex.getMessage());
+    }
+  }
+
+  public void notifyPaymentCompleted(PaymentCompletedEvent event) {
+    if (event == null || event.appointmentId() == null) return;
+    try {
+      var appt = appointmentRepo.findById(event.appointmentId()).orElse(null);
+      if (appt == null) return;
+      String phone = normalizePhone(appt.getPhoneNumber());
+      String email = emailFromPatientRecord(phone);
+      if (email == null) email = emailFromUserDetails(phone);
+      String doctor = enrichment.doctorName(appt.getDoctorId());
+      String clinic = enrichment.hospitalName(appt.getHospitalId());
+      if (clinic == null || clinic.isBlank()) clinic = "MedTrack Clinic";
+      String token = appt.getTokenNumber() == null ? "—" : String.valueOf(appt.getTokenNumber());
+      Map<String, String> extra = new HashMap<>();
+      extra.put("paymentId", event.paymentId());
+      extra.put("transactionId", event.transactionId());
+      extra.put("amount", String.valueOf(event.amount()));
+      extra.put("appointmentId", event.appointmentId());
+
+      NotifyRequest req =
+          new NotifyRequest(
+              String.valueOf(appt.getHospitalId()),
+              event.appointmentId(),
+              phone,
+              "PAYMENT_COMPLETED",
+              appt.getPatientName(),
+              phone.isBlank() ? null : phone,
+              email,
+              phone != null && !phone.isBlank(),
+              email != null && !email.isBlank(),
+              doctor,
+              clinic,
+              null,
+              token,
+              null,
+              "PAID",
+              null,
+              event.amount(),
+              event.currency() == null ? "INR" : event.currency(),
+              extra);
+
+      Map<String, Object> result = notificationAppService.send(req);
+      log.info(
+          "[booking-notify] PAYMENT_COMPLETED appointment={} txn={} result={}",
+          event.appointmentId(),
+          event.transactionId(),
+          result.get("eventCode"));
+    } catch (Exception ex) {
+      log.warn(
+          "[booking-notify] payment notify failed for {}: {}",
+          event.appointmentId(),
+          ex.getMessage());
     }
   }
 

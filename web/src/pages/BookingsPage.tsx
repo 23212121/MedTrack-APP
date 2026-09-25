@@ -9,19 +9,12 @@ import {
   themeQuartz,
 } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
-import {
-  api,
-  Appointment,
-  Booking,
-  CreateBookingBody,
-  DoctorAvailableDay,
-  HospitalDoctor,
-  HospitalRegistrationSummary,
-} from "../api";
+import { api, Appointment, AppointmentPayment, Booking, CreateBookingBody, DoctorAvailableDay, HospitalDoctor, HospitalRegistrationSummary } from "../api";
 import { session } from "../dl/MedTrackSession";
 import { useT } from "../i18n";
 import { toast } from "../toast";
 import VoiceBooking from "../voice/VoiceBooking";
+import AppointmentPaymentModal from "../components/AppointmentPaymentModal";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -197,6 +190,7 @@ export default function BookingsPage({
   const [formOpen, setFormOpen] = useState(false);
   const [voiceList, setVoiceList] = useState<Booking[] | null>(null);
   const [voiceListNote, setVoiceListNote] = useState("");
+  const [payModal, setPayModal] = useState<AppointmentPayment | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   const hospitalDoctors = useMemo(() => {
@@ -767,6 +761,35 @@ export default function BookingsPage({
     return { ok: true };
   }
 
+  async function finishAfterBook() {
+    onBooked?.();
+    if (publicMode && session.isPatient() && !onBooked) {
+      navigate("/patient/status");
+      return;
+    }
+    if (publicMode) {
+      setForm(blankPublicForm);
+      if (!hospitalIdFilter) setSelectedHospitalId("");
+      setSelectedDepartment("");
+      setAvailDays([]);
+      setAvailNote("");
+      setDateWarning("");
+    } else {
+      setForm({
+        ...emptyForm,
+        appointmentDate: form.appointmentDate,
+        appointmentTime: form.appointmentTime,
+        doctorId: form.doctorId,
+        doctorName: form.doctorName,
+        hospitalName: form.hospitalName,
+        hospitalId: form.hospitalId,
+        consultationFee: form.consultationFee,
+      });
+      setFormOpen(false);
+    }
+    await load();
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!form.doctorId) {
@@ -818,32 +841,28 @@ export default function BookingsPage({
             : ""
         }.`,
       );
-      onBooked?.();
-      if (publicMode && session.isPatient() && !onBooked) {
-        navigate("/patient/status");
-        return;
+      const appointmentId = res.appointment?.id;
+      const fee = Number(form.consultationFee);
+      if (appointmentId && Number.isFinite(fee) && fee >= 1) {
+        try {
+          const payment = await api.createPayment({
+            appointmentId,
+            patientId: res.appointment?.patientId || loggedInPatientId || undefined,
+            amount: fee,
+          });
+          if (payment.status !== "COMPLETED") {
+            setFormOpen(false);
+            setPayModal(payment);
+            return;
+          }
+          toast.success(
+            `Payment confirmed. Transaction ${payment.gatewayTransactionId || payment.paymentId}.`,
+          );
+        } catch {
+          toast.success("Appointment saved. You can pay the consultation fee from your booking.");
+        }
       }
-      if (publicMode) {
-        setForm(blankPublicForm);
-        if (!hospitalIdFilter) setSelectedHospitalId("");
-        setSelectedDepartment("");
-        setAvailDays([]);
-        setAvailNote("");
-        setDateWarning("");
-      } else {
-        setForm({
-          ...emptyForm,
-          appointmentDate: form.appointmentDate,
-          appointmentTime: form.appointmentTime,
-          doctorId: form.doctorId,
-          doctorName: form.doctorName,
-          hospitalName: form.hospitalName,
-          hospitalId: form.hospitalId,
-          consultationFee: form.consultationFee,
-        });
-        setFormOpen(false);
-      }
-      await load();
+      finishAfterBook();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -861,7 +880,7 @@ export default function BookingsPage({
           draft={form}
           doctors={hospitalDoctors}
           publicMode={publicMode}
-          deskMode={!publicMode}
+          deskMode={false}
           loggedInDoctorId={loggedInDoctorId}
           loggedInDoctorName={loggedInDoctorName}
           onPatch={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
@@ -872,9 +891,6 @@ export default function BookingsPage({
           }}
           onSelectDate={(date) => onAppointmentDateChange(date)}
           onConfirmBook={() => formRef.current?.requestSubmit()}
-          onNeedBookForm={publicMode ? undefined : () => setFormOpen(true)}
-          onShowBookings={publicMode ? undefined : handleShowBookings}
-          onAfterShowBookings={publicMode ? undefined : () => setFormOpen(false)}
         />
 
         <div className="booking-hospital-doctor-row">
@@ -1239,7 +1255,11 @@ export default function BookingsPage({
                     setFormOpen(true);
                     window.setTimeout(() => formRef.current?.requestSubmit(), 50);
                   }}
-                  onNeedBookForm={() => setFormOpen(true)}
+                  onNeedBookForm={() => {
+                    setVoiceList(null);
+                    setVoiceListNote("");
+                    setFormOpen(true);
+                  }}
                   onShowBookings={handleShowBookings}
                   onAfterShowBookings={() => setFormOpen(false)}
                 />
@@ -1306,6 +1326,23 @@ export default function BookingsPage({
             )}
         </>
       )}
+      {payModal ? (
+        <AppointmentPaymentModal
+          payment={payModal}
+          doctorName={form.doctorName}
+          onPaid={(paid) => {
+            setPayModal(null);
+            toast.success(
+              `Payment successful. Transaction ${paid.gatewayTransactionId || paid.paymentId}.`,
+            );
+            void finishAfterBook();
+          }}
+          onClose={() => {
+            setPayModal(null);
+            void finishAfterBook();
+          }}
+        />
+      ) : null}
     </section>
   );
 }

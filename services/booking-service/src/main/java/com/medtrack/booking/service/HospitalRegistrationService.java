@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medtrack.booking.domain.HospitalEntity;
 import com.medtrack.booking.domain.LoginEntity;
+import com.medtrack.booking.domain.LoginStatus;
 import com.medtrack.booking.repo.HospitalRepository;
 import com.medtrack.booking.repo.LoginRepository;
 import java.time.Instant;
@@ -23,12 +24,17 @@ public class HospitalRegistrationService {
   private final HospitalRepository hospitalRepo;
   private final LoginRepository loginRepo;
   private final ObjectMapper mapper;
+  private final EmergencyAppService emergency;
 
   public HospitalRegistrationService(
-      HospitalRepository hospitalRepo, LoginRepository loginRepo, ObjectMapper mapper) {
+      HospitalRepository hospitalRepo,
+      LoginRepository loginRepo,
+      ObjectMapper mapper,
+      EmergencyAppService emergency) {
     this.hospitalRepo = hospitalRepo;
     this.loginRepo = loginRepo;
     this.mapper = mapper;
+    this.emergency = emergency;
   }
 
   public List<Map<String, Object>> list() {
@@ -101,6 +107,7 @@ public class HospitalRegistrationService {
     }
 
     HospitalEntity saved = hospitalRepo.save(e);
+    emergency.ensureBeds(saved);
 
     LoginEntity login = new LoginEntity();
     login.setId("login-hosp-" + saved.getId());
@@ -110,7 +117,7 @@ public class HospitalRegistrationService {
     login.setHospitalId(saved.getId());
     login.setDisplayName(
         adminEmail != null && !adminEmail.isBlank() ? adminEmail : saved.getHospitalName());
-    login.setStatus("ACTIVE");
+    login.setStatus(LoginStatus.ACTIVE);
     login.setCreationDate(Instant.now());
     login.setCreationUser("hospital-register");
     loginRepo.save(login);

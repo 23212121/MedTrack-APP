@@ -102,6 +102,21 @@ CREATE TABLE IF NOT EXISTS svc.user_details (
     CONSTRAINT uk_user_details_phone UNIQUE (phone)
 );
 
+CREATE TABLE IF NOT EXISTS svc.status (
+    status_id          smallint NOT NULL,
+    status_code        character varying(20) NOT NULL,
+    status_name        character varying(40) NOT NULL,
+    CONSTRAINT status_pkey PRIMARY KEY (status_id),
+    CONSTRAINT uk_status_code UNIQUE (status_code)
+);
+
+INSERT INTO svc.status (status_id, status_code, status_name) VALUES
+  (0, 'INACTIVE', 'Inactive'),
+  (1, 'ACTIVE', 'Active')
+ON CONFLICT (status_id) DO UPDATE SET
+  status_code = EXCLUDED.status_code,
+  status_name = EXCLUDED.status_name;
+
 CREATE TABLE IF NOT EXISTS svc.login (
     id                 character varying(64) NOT NULL,
     login_type         character varying(20) NOT NULL,
@@ -110,7 +125,7 @@ CREATE TABLE IF NOT EXISTS svc.login (
     hospital_id        bigint,
     doctor_id          character varying(64),
     display_name       character varying(255),
-    status             character varying(20) DEFAULT 'ACTIVE' NOT NULL,
+    status             smallint DEFAULT 1 NOT NULL,
     creation_date      timestamp with time zone DEFAULT now() NOT NULL,
     creation_user      character varying(100),
     update_date        timestamp with time zone,

@@ -1,11 +1,13 @@
 package com.medtrack.booking.config;
 
 import jakarta.annotation.PostConstruct;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /** Medicine order tables + demo medical store login under hospital 10001. */
 @Component
+@DependsOn("loginSchemaInitializer")
 public class MedicineOrderSchemaInitializer {
   private final JdbcTemplate jdbc;
 
@@ -251,13 +253,13 @@ public class MedicineOrderSchemaInitializer {
           status, creation_date, creation_user
         ) VALUES (
           'login-med-10001-1', 'MEDICAL', 'MED-10001-1', '123456', 10001,
-          'Test Hospital Pharmacy', 'ACTIVE', now(), 'seed'
+          'Test Hospital Pharmacy', 1, now(), 'seed'
         )
         ON CONFLICT (id) DO UPDATE SET
           password = EXCLUDED.password,
           hospital_id = EXCLUDED.hospital_id,
           display_name = EXCLUDED.display_name,
-          status = 'ACTIVE'
+          status = 1
         """);
     jdbc.update(
         """

@@ -2,6 +2,8 @@
 import { Link } from "react-router-dom";
 import { api, DoctorRegistration, DoctorRegistrationBody, HospitalRegistrationSummary } from "../api";
 import { CLINICAL_DEPARTMENTS, mergeDepartmentOptions } from "../clinicalDepartments";
+import { SearchableSelect } from "../components/IndiaStateCityFields";
+import { citiesForState, INDIA_STATES } from "../data/indiaLocations";
 import { session } from "../dl/MedTrackSession";
 import { toast } from "../toast";
 
@@ -376,8 +378,28 @@ export default function DoctorRegistrationPage() {
           <Field label="Email Address" required><input type="email" required value={form.email} onChange={(e) => setField("email", e.target.value)} /></Field>
           <Field label="Emergency Contact Number" optional><input value={form.emergencyContactNumber} onChange={(e) => setField("emergencyContactNumber", e.target.value)} /></Field>
           <Field label="Residential Address" required><textarea required rows={2} value={form.residentialAddress} onChange={(e) => setField("residentialAddress", e.target.value)} /></Field>
-          <Field label="City" required><input required value={form.city} onChange={(e) => setField("city", e.target.value)} /></Field>
-          <Field label="State" required><input required value={form.state} onChange={(e) => setField("state", e.target.value)} /></Field>
+          <Field label="State" required>
+            <SearchableSelect
+              value={form.state}
+              options={INDIA_STATES}
+              onChange={(next) => {
+                setField("state", next);
+                setField("city", "");
+              }}
+              placeholder="Type to search state"
+              required
+            />
+          </Field>
+          <Field label="City" required>
+            <SearchableSelect
+              value={form.city}
+              options={citiesForState(form.state)}
+              onChange={(next) => setField("city", next)}
+              placeholder={form.state ? "Type to search city" : "Select a state first"}
+              required
+              disabled={!form.state}
+            />
+          </Field>
           <Field label="Country" required><input required value={form.country} onChange={(e) => setField("country", e.target.value)} /></Field>
           <Field label="Postal Code" required><input required value={form.postalCode} onChange={(e) => setField("postalCode", e.target.value)} /></Field>
         </FormBlock>

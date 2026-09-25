@@ -2,6 +2,7 @@ package com.medtrack.booking.service;
 
 import com.medtrack.booking.domain.DoctorClinicEntity;
 import com.medtrack.booking.domain.LoginEntity;
+import com.medtrack.booking.domain.LoginStatus;
 import com.medtrack.booking.repo.DoctorClinicRepository;
 import com.medtrack.booking.repo.DoctorPersonalRepository;
 import com.medtrack.booking.repo.LoginRepository;
@@ -75,10 +76,10 @@ public class DoctorPortalIdentityService {
     String doctorId = doctorIdRaw.trim();
 
     Optional<LoginEntity> login =
-        loginRepo.findByLoginTypeAndLoginIdIgnoreCaseAndStatus("USER", doctorId, "ACTIVE");
+        loginRepo.findByLoginTypeAndLoginIdIgnoreCaseAndStatus("USER", doctorId, LoginStatus.ACTIVE);
     if (login.isEmpty()) {
       List<LoginEntity> byDoctor =
-          loginRepo.findByLoginTypeAndDoctorIdAndStatus("USER", doctorId, "ACTIVE");
+          loginRepo.findByLoginTypeAndDoctorIdAndStatus("USER", doctorId, LoginStatus.ACTIVE);
       if (!byDoctor.isEmpty()) {
         login = Optional.of(byDoctor.get(0));
       }

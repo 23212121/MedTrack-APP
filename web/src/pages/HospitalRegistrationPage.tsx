@@ -2,6 +2,8 @@ import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from 
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { CLINICAL_DEPARTMENTS } from "../clinicalDepartments";
+import { SearchableSelect } from "../components/IndiaStateCityFields";
+import { citiesForState, INDIA_STATES } from "../data/indiaLocations";
 import { toast } from "../toast";
 
 type HospitalForm = {
@@ -763,16 +765,24 @@ export default function HospitalRegistrationPage() {
                       onChange={(e) => setField("addressLine2", e.target.value)}
                     />
                   </Field>
-                  <Field label="City">
-                    <input
-                      value={form.city}
-                      onChange={(e) => setField("city", e.target.value)}
+                  <Field label="State">
+                    <SearchableSelect
+                      value={form.state}
+                      options={INDIA_STATES}
+                      onChange={(next) => {
+                        setField("state", next);
+                        setField("city", "");
+                      }}
+                      placeholder="Type to search state"
                     />
                   </Field>
-                  <Field label="State">
-                    <input
-                      value={form.state}
-                      onChange={(e) => setField("state", e.target.value)}
+                  <Field label="City">
+                    <SearchableSelect
+                      value={form.city}
+                      options={citiesForState(form.state)}
+                      onChange={(next) => setField("city", next)}
+                      placeholder={form.state ? "Type to search city" : "Select a state first"}
+                      disabled={!form.state}
                     />
                   </Field>
                   <Field label="Country">

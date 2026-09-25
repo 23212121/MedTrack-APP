@@ -66,9 +66,7 @@ public class DoctorSectionService {
     if (doctorId == null) {
       doctorId = "DOC-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     } else if (personalRepo.existsById(doctorId)
-        || loginRepo
-            .findByLoginTypeAndLoginIdIgnoreCaseAndStatus("USER", doctorId, "ACTIVE")
-            .isPresent()) {
+        || loginRepo.findByLoginTypeAndLoginIdIgnoreCase("USER", doctorId).isPresent()) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "Doctor user ID already exists: " + doctorId);
     }
@@ -196,7 +194,7 @@ public class DoctorSectionService {
       String doctorId, Long hospitalId, String password, String firstName, String lastName) {
     LoginEntity login =
         loginRepo
-            .findByLoginTypeAndLoginIdIgnoreCaseAndStatus("USER", doctorId, "ACTIVE")
+            .findByLoginTypeAndLoginIdIgnoreCase("USER", doctorId)
             .orElseGet(LoginEntity::new);
     if (login.getId() == null) {
       login.setId("login-user-" + doctorId);
@@ -217,7 +215,7 @@ public class DoctorSectionService {
                 + (lastName == null ? "" : lastName.trim()))
             .trim();
     login.setDisplayName(display.isBlank() ? doctorId : display);
-    login.setStatus("ACTIVE");
+    login.setStatus(LoginStatus.ACTIVE);
     loginRepo.save(login);
   }
 

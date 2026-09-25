@@ -203,13 +203,12 @@ export default function AboutPage() {
       setOrganization("");
       setSubject("");
       setMessage("");
-    } catch {
-      const mailto = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject.trim())}&body=${encodeURIComponent(
-        `${name.trim()}\n${email.trim()}\n${phone.trim()}\n${organization.trim()}\n\n${message.trim()}`,
-      )}`;
-      window.location.href = mailto;
-      setSent(true);
-      toast.success(t("Opening your email app so you can send the message."));
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("Could not send the message. Please try again."),
+      );
     } finally {
       setSaving(false);
     }
