@@ -2,6 +2,7 @@ package com.medtrack.booking.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.medtrack.booking.domain.*;
 import com.medtrack.booking.repo.*;
 import java.time.Instant;
@@ -31,8 +32,10 @@ public class DoctorSectionService {
   private final DoctorDocumentsRepository documentsRepo;
   private final HospitalRepository hospitalRepo;
   private final LoginRepository loginRepo;
+  private final ObjectMapper mapper =  new ObjectMapper().registerModule(new JavaTimeModule());
+/**
   private final ObjectMapper mapper = new ObjectMapper();
-
+*/
   public DoctorSectionService(
       DoctorPersonalRepository personalRepo,
       DoctorContactRepository contactRepo,
