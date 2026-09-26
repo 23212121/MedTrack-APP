@@ -8,6 +8,7 @@ public class FeeRuleEntity {
   @Id
   private String id;
   private String clinicId;
+  private Long hospitalId;
   private String doctorId;
   private double baseConsultFee = 500;
   private int fixedConsultMinutes = 15;
@@ -19,6 +20,10 @@ public class FeeRuleEntity {
   public void setId(String id) { this.id = id; }
   public String getClinicId() { return clinicId; }
   public void setClinicId(String clinicId) { this.clinicId = clinicId; }
+  public Long getHospitalId() { return hospitalId; }
+
+  public void setHospitalId(Long hospitalId) { this.hospitalId = hospitalId; }
+
   public String getDoctorId() { return doctorId; }
   public void setDoctorId(String doctorId) { this.doctorId = doctorId; }
   public double getBaseConsultFee() { return baseConsultFee; }

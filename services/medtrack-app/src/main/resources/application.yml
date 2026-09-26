@@ -40,6 +40,7 @@ spring:
 
 medtrack:
   clinic-id: seed-clinic-1
+  hospital-id: 10001
   clinic-name: Sunrise Care Clinic
   doctor-id: seed-doctor-1
   doctor-name: Dr. Mehta
