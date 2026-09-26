@@ -41,7 +41,13 @@ export default function MedicalNotificationsPage() {
                   <td>
                     {n.orderId ? (
                       <Link
-                        to={medical ? "/medical/orders" : "/medicine-orders"}
+                        to={
+                          medical
+                            ? "/medical/orders"
+                            : session.isPatient()
+                              ? "/patient/medicine-orders"
+                              : "/medicine-orders"
+                        }
                         onClick={() => void api.markMedicineNotificationRead(n.id)}
                       >
                         {n.title}

@@ -23,6 +23,13 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const OPEN = new Set(["ORDERED", "PENDING"]);
+const MEDICAL_QUOTE_STATUSES = new Set([
+  "ORDERED",
+  "PENDING",
+  "IN_PROCESS",
+  "WAITING_FOR_PATIENT_APPROVAL",
+  "AMOUNT_ACCEPTED",
+]);
 
 function locKey(v?: string) {
   return (v || "").trim().toLowerCase();
@@ -618,7 +625,7 @@ export default function MedicineOrdersPage({
       <h1>{pageTitle}</h1>
       <p className="lead">
         {isMedical
-          ? "Accept new prescriptions, send a quote, and complete pickup or delivery."
+          ? "Fill the amount for new prescriptions, send it to the patient, then complete pickup or delivery."
           : "Upload a doctor prescription and track the medical store quote."}
       </p>
       {error && <div className="msg error">{error}</div>}
@@ -791,7 +798,11 @@ export default function MedicineOrdersPage({
                   <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : "—"}</td>
                   <td>{o.assignedStoreName || "—"}</td>
                   <td>
-                    {isPatient && patientCanEditOrder(o.status, o.amountStatus, o.paymentStatus) ? (
+                    {isMedical && OPEN.has(o.status) ? (
+                      <button type="button" className="link-button" onClick={() => void openAmount(o)}>
+                        {o.amount != null ? money(o.amount) : "Fill amount"}
+                      </button>
+                    ) : isPatient && patientCanEditOrder(o.status, o.amountStatus, o.paymentStatus) ? (
                       <button
                         type="button"
                         className="link-button medicine-approve-link"
@@ -827,27 +838,25 @@ export default function MedicineOrdersPage({
                     </td>
                   )}
                   <td className="medicine-actions">
-                    {isMedical && OPEN.has(o.status) && !o.assignedStoreId && (
-                      <>
-                        <button type="button" onClick={() => void run(() => api.acceptMedicineOrder(o.id), "Order accepted")}>
-                          Accept
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => {
-                            const reason = window.prompt("Reject reason", "Medicine not available") || "";
-                            if (reason) void run(() => api.rejectMedicineOrder(o.id, reason), "Rejected for this store");
-                          }}
-                        >
-                          Reject
-                        </button>
-                      </>
-                    )}
-                    {isMedical && o.status === "IN_PROCESS" && (
+                    {isMedical && (OPEN.has(o.status) || o.status === "IN_PROCESS") && (
                       <button type="button" onClick={() => void openAmount(o)}>
-                        Quote
+                        New
                       </button>
+                    )}
+                    {isMedical && OPEN.has(o.status) && !o.assignedStoreId && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          const reason = window.prompt("Reject reason", "Medicine not available") || "";
+                          if (reason) void run(() => api.rejectMedicineOrder(o.id, reason), "Rejected for this store");
+                        }}
+                      >
+                        Reject
+                      </button>
+                    )}
+                    {isMedical && o.status === "WAITING_FOR_PATIENT_APPROVAL" && (
+                      <span className="badge WAITING_FOR_PATIENT_APPROVAL">Approval pending from patient</span>
                     )}
                     {isMedical && o.status === "AMOUNT_ACCEPTED" && (
                       <button type="button" onClick={() => void run(() => api.markMedicineReady(o.id), "Marked ready")}>
@@ -906,7 +915,7 @@ export default function MedicineOrdersPage({
               {detail.assignedStoreName || "Store not assigned"} · {detail.patientName}
             </p>
 
-            {!patientReview && isMedical && (detail.status === "IN_PROCESS" || detail.status === "AMOUNT_ACCEPTED" || detail.status === "WAITING_FOR_PATIENT_APPROVAL") ? (
+            {!patientReview && isMedical && MEDICAL_QUOTE_STATUSES.has(detail.status) ? (
               <div className="stack">
                 <div className="medicine-quote-row medicine-quote-head">
                   <span>Prescribed</span>
@@ -1045,7 +1054,7 @@ export default function MedicineOrdersPage({
                   </label>
                 )}
                 <div className="modal-actions">
-                  {detail.status === "IN_PROCESS" && (
+                  {OPEN.has(detail.status) || detail.status === "IN_PROCESS" ? (
                     <button
                       type="button"
                       className="secondary"
@@ -1058,7 +1067,7 @@ export default function MedicineOrdersPage({
                     >
                       Save draft
                     </button>
-                  )}
+                  ) : null}
                   <button
                     type="button"
                     onClick={() =>
@@ -1087,16 +1096,18 @@ export default function MedicineOrdersPage({
                       Prescription unclear
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="danger"
-                    onClick={() => {
-                      const reason = window.prompt("Release reason", "Stock issue") || "";
-                      if (reason) void run(() => api.releaseMedicineOrder(detail.id, reason), "Order released");
-                    }}
-                  >
-                    Release order
-                  </button>
+                  {detail.assignedStoreId ? (
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => {
+                        const reason = window.prompt("Release reason", "Stock issue") || "";
+                        if (reason) void run(() => api.releaseMedicineOrder(detail.id, reason), "Order released");
+                      }}
+                    >
+                      Release order
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : (

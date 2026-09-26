@@ -135,8 +135,8 @@ export default function MedicalCheckOrderPage() {
     <section className="stack check-order-page">
       <h1>Check order</h1>
       <p className="lead">
-        Each order opens as a card. Accept to start processing, fill amount, or mark pending with a
-        reason.
+        Each order opens as a card. Click Amount or New to add medicines and send the total to the
+        patient for approval.
       </p>
       {error && <div className="msg error">{error}</div>}
       {loading ? (
@@ -177,13 +177,9 @@ export default function MedicalCheckOrderPage() {
                   <div>
                     <dt>Amount</dt>
                     <dd>
-                      {working ? (
-                        <button type="button" className="link-button" onClick={() => void openAmount(order)}>
-                          {order.amount != null ? money(order.amount) : "Fill amount"}
-                        </button>
-                      ) : (
-                        money(order.amount)
-                      )}
+                      <button type="button" className="link-button" onClick={() => void openAmount(order)}>
+                        {order.amount != null ? money(order.amount) : "Fill amount"}
+                      </button>
                     </dd>
                   </div>
                 </dl>
@@ -192,11 +188,8 @@ export default function MedicalCheckOrderPage() {
                 )}
                 {open && (
                   <div className="check-order-actions">
-                    <button
-                      type="button"
-                      onClick={() => void run(() => api.acceptMedicineOrder(order.id), "Order is in process")}
-                    >
-                      Accept
+                    <button type="button" onClick={() => void openAmount(order)}>
+                      New
                     </button>
                     <button
                       type="button"
@@ -210,19 +203,20 @@ export default function MedicalCheckOrderPage() {
                     </button>
                   </div>
                 )}
-                {working && (
+                {order.status === "WAITING_FOR_PATIENT_APPROVAL" && (
+                  <p className="muted">Approval pending from patient.</p>
+                )}
+                {working && order.status !== "WAITING_FOR_PATIENT_APPROVAL" && (
                   <div className="check-order-pending">
-                    {order.status === "WAITING_FOR_PATIENT_APPROVAL" ? (
-                      <p className="muted">Amount sent. Patient sees this as Total.</p>
-                    ) : order.status === "PENDING" ? (
-                      <button
-                        type="button"
-                        onClick={() => void run(() => api.acceptMedicineOrder(order.id), "Order is in process")}
-                      >
-                        Accept / resume
+                    {order.status === "PENDING" && order.assignedStoreId ? (
+                      <button type="button" onClick={() => void openAmount(order)}>
+                        New
                       </button>
-                    ) : (
+                    ) : order.status === "IN_PROCESS" ? (
                       <>
+                        <button type="button" onClick={() => void openAmount(order)}>
+                          New
+                        </button>
                         <label>
                           Pending reason
                           <input
@@ -249,7 +243,7 @@ export default function MedicalCheckOrderPage() {
                           Pending
                         </button>
                       </>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </article>
@@ -340,7 +334,7 @@ export default function MedicalCheckOrderPage() {
               </p>
               <div className="modal-actions">
                 <button type="submit" disabled={savingAmount}>
-                  {savingAmount ? "Saving…" : "Save"}
+                  {savingAmount ? "Sending…" : "Send amount to patient"}
                 </button>
                 <button type="button" className="secondary" onClick={() => setAmountOrder(null)}>
                   Cancel

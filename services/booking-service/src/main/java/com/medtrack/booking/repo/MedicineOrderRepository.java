@@ -22,6 +22,8 @@ public interface MedicineOrderRepository extends JpaRepository<MedicineOrderEnti
   List<MedicineOrderEntity> findByHospitalIdIsNullAndAssignedStoreIdIsNullAndStatusInOrderByCreatedAtDesc(
       List<String> statuses);
 
+  List<MedicineOrderEntity> findByAssignedStoreIdIsNullAndStatusInOrderByCreatedAtDesc(List<String> statuses);
+
   long countByHospitalIdAndStatus(Long hospitalId, String status);
 
   long countByAssignedStoreIdAndStatus(String assignedStoreId, String status);

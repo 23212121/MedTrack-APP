@@ -37,6 +37,12 @@ const PORTAL_TILES = [
     title: "Medicine orders",
     text: "Upload a prescription and track the pharmacy quote",
   },
+  {
+    to: "/patient/notifications",
+    group: "Pharmacy",
+    title: "Notifications",
+    text: "Quote ready and order updates from the medical store",
+  },
 ] as const;
 
 export default function PatientDashboardPage() {

@@ -234,6 +234,7 @@ export default function App() {
               <Route path="/patient/chat" element={<PatientChatPage />} />
               <Route path="/patient/reports" element={<PatientReportsPage />} />
               <Route path="/patient/medicine-orders" element={<MedicineOrdersPage title="Medicine orders" />} />
+              <Route path="/patient/notifications" element={<MedicalNotificationsPage />} />
               <Route path="/patient/profile" element={<PatientProfilePage />} />
               <Route path="/patient/logout" element={<LogoutPage />} />
               <Route path="*" element={<NotFoundPage />} />

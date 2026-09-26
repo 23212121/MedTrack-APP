@@ -218,12 +218,6 @@ public class MedicineOrderAppService {
           order,
           "New medicine order",
           "A new medicine order " + order.getOrderNumber() + " was sent to your store. Please review the prescription.");
-    } else if (hospitalId != null) {
-      notifyHospitalStores(
-          hospitalId,
-          order.getId(),
-          "New medicine order",
-          "A new medicine order " + order.getOrderNumber() + " has been received. Please review the prescription.");
     } else {
       notifyOpenPoolStores(
           order,
@@ -423,10 +417,11 @@ public class MedicineOrderAppService {
   @Transactional
   public Map<String, Object> saveQuote(Actor actor, String id, Map<String, Object> body, boolean send) {
     requireMedical(actor);
-    MedicineOrderEntity order = requireAssigned(actor, id);
+    MedicineOrderEntity order = claimIfUnassigned(actor, id);
     String status = order.getStatus();
     boolean revisingApproved = "AMOUNT_ACCEPTED".equals(status) && send;
-    if (!Set.of("IN_PROCESS", "PENDING", "WAITING_FOR_PATIENT_APPROVAL", "AMOUNT_ACCEPTED").contains(status)) {
+    if (!Set.of("ORDERED", "IN_PROCESS", "PENDING", "WAITING_FOR_PATIENT_APPROVAL", "AMOUNT_ACCEPTED")
+        .contains(status)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot edit quote in status " + status);
     }
     if ("AMOUNT_ACCEPTED".equals(status) && !send) {
@@ -935,14 +930,14 @@ public class MedicineOrderAppService {
     }
     if (actor.isMedical()) {
       LinkedHashMap<String, MedicineOrderEntity> unique = new LinkedHashMap<>();
-      if (actor.hospitalId() != null) {
-        for (MedicineOrderEntity o : orderRepo.findByHospitalIdOrderByCreatedAtDesc(actor.hospitalId())) {
+      String sid = canonicalStoreId(actor);
+      if (sid != null) {
+        for (MedicineOrderEntity o : orderRepo.findByAssignedStoreIdOrderByCreatedAtDesc(sid)) {
           unique.put(o.getId(), o);
         }
       }
       for (MedicineOrderEntity o :
-          orderRepo.findByHospitalIdIsNullAndAssignedStoreIdIsNullAndStatusInOrderByCreatedAtDesc(
-              List.copyOf(OPEN_STATUSES))) {
+          orderRepo.findByAssignedStoreIdIsNullAndStatusInOrderByCreatedAtDesc(List.copyOf(OPEN_STATUSES))) {
         unique.putIfAbsent(o.getId(), o);
       }
       return new ArrayList<>(unique.values());
@@ -963,19 +958,9 @@ public class MedicineOrderAppService {
     if (actor.isMedical()) {
       boolean openPool = o.getAssignedStoreId() == null && OPEN_STATUSES.contains(o.getStatus());
       if (openPool) {
-        if (o.getHospitalId() != null
-            && actor.hospitalId() != null
-            && !actor.hospitalId().equals(o.getHospitalId())) {
-          return false;
-        }
         return actor.storeId() == null
             || !responseRepo.existsByOrderIdAndStoreIdAndAction(
                 o.getId(), canonicalStoreId(actor), "REJECT");
-      }
-      if (actor.hospitalId() != null
-          && o.getHospitalId() != null
-          && !actor.hospitalId().equals(o.getHospitalId())) {
-        return false;
       }
       return sameStore(actor, o.getAssignedStoreId());
     }
@@ -1017,9 +1002,48 @@ public class MedicineOrderAppService {
 
   private void assertSameHospital(Actor actor, MedicineOrderEntity o) {
     if (o.getHospitalId() == null) return;
+    if (o.getAssignedStoreId() == null && OPEN_STATUSES.contains(o.getStatus())) return;
     if (actor.hospitalId() != null && !actor.hospitalId().equals(o.getHospitalId())) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Order belongs to another hospital");
     }
+  }
+
+  /** Assign this store to an open-pool order, or return it if already assigned here. */
+  private MedicineOrderEntity claimIfUnassigned(Actor actor, String id) {
+    requireMedical(actor);
+    MedicalStoreEntity store = requireActiveStore(actor);
+    MedicineOrderEntity current = require(id);
+    assertCanView(actor, current);
+    if (sameStore(actor, current.getAssignedStoreId())) {
+      return current;
+    }
+    if (current.getAssignedStoreId() != null) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Order is not assigned to this store");
+    }
+    if (!OPEN_STATUSES.contains(current.getStatus())) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "This order has already been accepted by another medical store.");
+    }
+    int locked = orderRepo.lockAccept(id, store.getId(), store.getStoreName(), actor.label());
+    if (locked == 0) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "This order has already been accepted by another medical store.");
+    }
+    MedicineOrderEntity order = require(id);
+    order.setAssignedStoreId(store.getId());
+    order.setAssignedStoreName(store.getStoreName());
+    if (order.getHospitalId() == null) {
+      order.setHospitalId(store.getHospitalId());
+    }
+    order.setStatus("IN_PROCESS");
+    order.setStatusCode(1);
+    order.setPendingReason(null);
+    order.setUpdatedAt(Instant.now());
+    order.setUpdatedBy(actor.label());
+    orderRepo.save(order);
+    addStatus(id, current.getStatus(), "IN_PROCESS", actor.label(), "Accepted by " + store.getStoreName());
+    saveResponse(id, store.getId(), "ACCEPT", null);
+    return order;
   }
 
   private MedicineOrderEntity requireAssigned(Actor actor, String id) {
