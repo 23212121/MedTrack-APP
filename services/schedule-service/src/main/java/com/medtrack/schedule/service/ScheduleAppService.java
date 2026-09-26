@@ -13,8 +13,6 @@ import com.medtrack.schedule.web.ScheduleController.*;
 import java.time.*;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -22,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
-public class ScheduleAppService implements ApplicationRunner, DoctorBusyPort {
+public class ScheduleAppService implements DoctorBusyPort {
   private final DoctorScheduleRepository scheduleRepo;
   private final DoctorAvailabilityRepository availabilityRepo;
   private final FeeRuleRepository feeRepo;
@@ -30,12 +28,8 @@ public class ScheduleAppService implements ApplicationRunner, DoctorBusyPort {
 
   @Value("${medtrack.clinic-id}")
   private String clinicId;
-  @Value("${medtrack.doctor-id}")
-  private String seedDoctorId;
   @Value("${medtrack.doctor-name}")
   private String seedDoctorName;
-  @Value("${medtrack.seed-hospital-id:10001}")
-  private Long seedHospitalId;
 
   public ScheduleAppService(
       DoctorScheduleRepository scheduleRepo,
@@ -46,47 +40,6 @@ public class ScheduleAppService implements ApplicationRunner, DoctorBusyPort {
     this.availabilityRepo = availabilityRepo;
     this.feeRepo = feeRepo;
     this.visitChartPort = visitChartPort;
-  }
-
-  @Override
-  public void run(ApplicationArguments args) {
-    try {
-      if (scheduleRepo.findByDoctorIdOrderByDayOfWeekAscStartTimeAsc(seedDoctorId).isEmpty()) {
-        for (int day = 1; day <= 5; day++) {
-          DoctorScheduleEntity s = new DoctorScheduleEntity();
-          s.setDoctorId(seedDoctorId);
-          s.setHospitalId(seedHospitalId);
-          s.setDayOfWeek(day);
-          s.setStartTime("09:00");
-          s.setEndTime("13:00");
-          s.setSlotMinutes(15);
-          scheduleRepo.save(s);
-          DoctorScheduleEntity afternoon = new DoctorScheduleEntity();
-          afternoon.setDoctorId(seedDoctorId);
-          afternoon.setHospitalId(seedHospitalId);
-          afternoon.setDayOfWeek(day);
-          afternoon.setStartTime("14:00");
-          afternoon.setEndTime("18:00");
-          afternoon.setSlotMinutes(15);
-          scheduleRepo.save(afternoon);
-        }
-      }
-      if (feeRepo.findByDoctorId(seedDoctorId).isEmpty()) {
-        FeeRuleEntity fee = new FeeRuleEntity();
-        fee.setId("fee-" + seedDoctorId);
-        fee.setClinicId(clinicId);
-        fee.setDoctorId(seedDoctorId);
-        fee.setBaseConsultFee(500);
-        fee.setFixedConsultMinutes(15);
-        fee.setOvertimeFeeAmount(200);
-        fee.setOvertimeFeePerBlockMinutes(15);
-        fee.setCurrency("INR");
-        feeRepo.save(fee);
-      }
-    } catch (Exception ex) {
-      // Seed is best-effort — do not block app startup (e.g. leave APIs).
-      System.err.println("Schedule seed skipped: " + ex.getMessage());
-    }
   }
 
   public List<DoctorScheduleEntity> weekly(String doctorId) {

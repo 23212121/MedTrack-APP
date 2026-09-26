@@ -54,12 +54,6 @@ public class DoctorHospitalIdSchemaInitializer {
       if (!tableExists(table)) continue;
       jdbc.execute(
           "ALTER TABLE svc." + table + " ADD COLUMN IF NOT EXISTS hospital_id BIGINT");
-      jdbc.update(
-          "UPDATE svc."
-              + table
-              + " t SET hospital_id = COALESCE("
-              + "(SELECT p.hospital_id FROM svc.doctor_personal p WHERE p.doctor_id = t.doctor_id),"
-              + " 10001) WHERE t.hospital_id IS NULL");
       jdbc.execute("ALTER TABLE svc." + table + " ALTER COLUMN hospital_id DROP DEFAULT");
       String trigger = "trg_" + table + "_hospital_id";
       jdbc.execute("DROP TRIGGER IF EXISTS " + trigger + " ON svc." + table);

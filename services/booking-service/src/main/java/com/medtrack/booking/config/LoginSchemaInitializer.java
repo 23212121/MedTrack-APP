@@ -6,7 +6,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-/** Ensures svc.status lookup + svc.login exist, migrates login.status to 0/1, and seeds test logins. */
+/** Ensures svc.status lookup and svc.login exist, and migrates login.status to 0/1. */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class LoginSchemaInitializer {
@@ -48,9 +48,6 @@ public class LoginSchemaInitializer {
           ADD CONSTRAINT fk_login_status
           FOREIGN KEY (status) REFERENCES svc.status(status_id)
         """);
-
-    seedHospitalLogins();
-    syncHospitalAdminPasswords();
   }
 
   private void ensureStatusLookup() {
@@ -63,15 +60,6 @@ public class LoginSchemaInitializer {
         )
         """);
     jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_status_code ON svc.status (status_code)");
-    jdbc.update(
-        """
-        INSERT INTO svc.status (status_id, status_code, status_name) VALUES
-          (0, 'INACTIVE', 'Inactive'),
-          (1, 'ACTIVE', 'Active')
-        ON CONFLICT (status_id) DO UPDATE SET
-          status_code = EXCLUDED.status_code,
-          status_name = EXCLUDED.status_name
-        """);
   }
 
   /** Convert existing VARCHAR ACTIVE/INACTIVE values to SMALLINT 0/1. */
@@ -101,92 +89,5 @@ public class LoginSchemaInitializer {
         """);
     jdbc.execute("ALTER TABLE svc.login ALTER COLUMN status SET DEFAULT 1");
     jdbc.execute("ALTER TABLE svc.login ALTER COLUMN status SET NOT NULL");
-  }
-
-  private void seedHospitalLogins() {
-    // Demo password for all seeded hospital + doctor accounts
-    final String demoPassword = "123456";
-    Object[][] hospitals = {
-      {"login-hosp-10001", "10001", 10001L, "Test Hospital"},
-      {"login-hosp-10002", "10002", 10002L, "Sunrise Care Hospital"},
-      {"login-hosp-10003", "10003", 10003L, "City Heart Institute"},
-      {"login-hosp-10005", "10005", 10005L, "Apollo Metro Hospital"},
-      {"login-hosp-10009", "10009", 10009L, "Ocean View Medical"},
-    };
-    for (Object[] r : hospitals) {
-      jdbc.update(
-          """
-          INSERT INTO svc.login (
-            id, login_type, login_id, password, hospital_id, display_name,
-            status, creation_date, creation_user
-          ) VALUES (?, 'HOSPITAL', ?, ?, ?, ?, 1, now(), 'seed')
-          ON CONFLICT (id) DO UPDATE SET
-            password = EXCLUDED.password,
-            display_name = EXCLUDED.display_name,
-            status = 1,
-            update_date = now(),
-            update_user = 'seed'
-          """,
-          r[0],
-          r[1],
-          demoPassword,
-          r[2],
-          r[3]);
-    }
-
-    // Seed doctor USER logins from doctor_personal + doctor_clinic
-    jdbc.update(
-        """
-        INSERT INTO svc.login (
-          id, login_type, login_id, password, hospital_id, doctor_id, display_name,
-          status, creation_date, creation_user
-        )
-        SELECT
-          'login-user-' || dp.doctor_id,
-          'USER',
-          dp.doctor_id,
-          ?,
-          dc.hospital_id,
-          dp.doctor_id,
-          trim(both ' ' from coalesce(dp.first_name, '') || ' ' || coalesce(dp.last_name, '')),
-          1,
-          now(),
-          'seed'
-        FROM svc.doctor_personal dp
-        LEFT JOIN svc.doctor_clinic dc ON dc.doctor_id = dp.doctor_id
-        WHERE dp.doctor_id LIKE 'DOC-SEED-%'
-        ON CONFLICT (id) DO UPDATE SET
-          password = EXCLUDED.password,
-          hospital_id = EXCLUDED.hospital_id,
-          doctor_id = EXCLUDED.doctor_id,
-          display_name = EXCLUDED.display_name,
-          status = 1,
-          update_date = now(),
-          update_user = 'seed'
-        """,
-        demoPassword);
-
-    jdbc.update(
-        """
-        UPDATE svc.doctor_personal
-        SET login_password = ?, updated_date = now()
-        WHERE doctor_id LIKE 'DOC-SEED-%'
-        """,
-        demoPassword);
-  }
-
-  /** Keep hospitals.admin_password in sync for legacy AuthService fallback. */
-  private void syncHospitalAdminPasswords() {
-    jdbc.update(
-        """
-        UPDATE svc.hospitals h
-        SET admin_password = l.password,
-            admin_email = COALESCE(NULLIF(h.admin_email, ''), 'admin@hospital-' || h.id || '.local'),
-            updated_at = now()
-        FROM svc.login l
-        WHERE l.login_type = 'HOSPITAL'
-          AND l.hospital_id = h.id
-          AND l.status = 1
-        """);
   }
 }

@@ -71,52 +71,11 @@ public class AppointmentSchemaInitializer {
   private void ensureDepartmentColumn() {
     jdbc.execute(
         "ALTER TABLE svc.appointments ADD COLUMN IF NOT EXISTS department VARCHAR(255)");
-    try {
-      jdbc.execute(
-          """
-          UPDATE svc.appointments a
-          SET department = p.department
-          FROM svc.doctor_professional p
-          WHERE a.doctor_id = p.doctor_id
-            AND (a.department IS NULL OR a.department = '')
-            AND p.department IS NOT NULL
-            AND btrim(p.department) <> ''
-          """);
-    } catch (Exception ignored) {
-      // doctor_professional may not exist yet on a fresh DB
-    }
   }
 
   private void ensurePhoneNumberColumn() {
     jdbc.execute(
         "ALTER TABLE svc.appointments ADD COLUMN IF NOT EXISTS phone_number VARCHAR(32)");
-    // Backfill from linked bookings.patient_phone when appointment phone is empty
-    try {
-      jdbc.execute(
-          """
-          UPDATE svc.appointments a
-          SET phone_number = regexp_replace(b.patient_phone, '\\D', '', 'g')
-          FROM svc.bookings b
-          WHERE a.booking_ref_id = b.id
-            AND (a.phone_number IS NULL OR a.phone_number = '')
-            AND b.patient_phone IS NOT NULL
-            AND b.patient_phone <> ''
-          """);
-    } catch (Exception ignored) {
-      // bookings table / column may differ in some envs
-    }
-    // If patient_id itself is a phone number, copy it
-    try {
-      jdbc.execute(
-          """
-          UPDATE svc.appointments
-          SET phone_number = patient_id
-          WHERE (phone_number IS NULL OR phone_number = '')
-            AND patient_id ~ '^[0-9]{8,}$'
-          """);
-    } catch (Exception ignored) {
-      // ignore
-    }
   }
 
   private void dropLegacyAppointmentColumns() {

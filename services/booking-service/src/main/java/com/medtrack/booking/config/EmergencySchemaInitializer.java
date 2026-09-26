@@ -67,10 +67,6 @@ public class EmergencySchemaInitializer {
         "ALTER TABLE svc.payments ADD COLUMN IF NOT EXISTS reference_type VARCHAR(30) DEFAULT 'APPOINTMENT'");
     jdbc.execute("ALTER TABLE svc.payments ADD COLUMN IF NOT EXISTS reference_id VARCHAR(64)");
     jdbc.execute(
-        "UPDATE svc.payments SET reference_type = 'APPOINTMENT' WHERE reference_type IS NULL OR btrim(reference_type) = ''");
-    jdbc.execute(
-        "UPDATE svc.payments SET reference_id = appointment_id WHERE (reference_id IS NULL OR btrim(reference_id) = '') AND appointment_id IS NOT NULL");
-    jdbc.execute(
         "CREATE INDEX IF NOT EXISTS idx_payments_reference ON svc.payments (reference_type, reference_id)");
   }
 }

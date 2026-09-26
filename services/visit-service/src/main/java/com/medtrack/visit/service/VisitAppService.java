@@ -11,8 +11,6 @@ import com.medtrack.visit.repo.VisitRepository;
 import java.time.*;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -20,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
-public class VisitAppService implements ApplicationRunner, VisitChartPort {
+public class VisitAppService implements VisitChartPort {
   private final VisitRepository visitRepo;
   private final VisitEventRepository eventRepo;
   private final ScheduleAppService scheduleAppService;
@@ -31,10 +29,7 @@ public class VisitAppService implements ApplicationRunner, VisitChartPort {
   @Value("${medtrack.clinic-name}") private String clinicName;
   @Value("${medtrack.doctor-id}") private String seedDoctorId;
   @Value("${medtrack.doctor-name}") private String seedDoctorName;
-  @Value("${medtrack.patient-id}") private String seedPatientId;
   @Value("${medtrack.patient-name}") private String seedPatientName;
-  @Value("${medtrack.patient-phone}") private String seedPatientPhone;
-  @Value("${medtrack.patient-email}") private String seedPatientEmail;
 
   public VisitAppService(
       VisitRepository visitRepo,
@@ -47,30 +42,6 @@ public class VisitAppService implements ApplicationRunner, VisitChartPort {
     this.scheduleAppService = scheduleAppService;
     this.notificationAppService = notificationAppService;
     this.doctorQueueService = doctorQueueService;
-  }
-
-  @Override
-  public void run(ApplicationArguments args) {
-    if (visitRepo.count() == 0) {
-      ZoneId zone = ZoneId.of("Asia/Kolkata");
-      LocalDate today = LocalDate.now(zone);
-      Instant start = today.atTime(14, 30).atZone(zone).toInstant();
-      VisitEntity v = new VisitEntity();
-      v.setClinicId(clinicId);
-      v.setPatientId(seedPatientId);
-      v.setPatientName(seedPatientName);
-      v.setPatientPhone(seedPatientPhone);
-      v.setPatientEmail(seedPatientEmail);
-      v.setDoctorId(seedDoctorId);
-      v.setDoctorName(seedDoctorName);
-      v.setStatus("BOOKED");
-      v.setReason("Fever, 2 days");
-      v.setScheduledStart(start);
-      v.setScheduledEnd(start.plus(Duration.ofMinutes(15)));
-      visitRepo.save(v);
-      addEvent(v.getId(), "STATUS_CHANGE", null, "BOOKED", "Seed visit created");
-      notify(v, "BOOKING_CONFIRMED");
-    }
   }
 
   @Override

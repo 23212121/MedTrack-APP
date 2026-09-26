@@ -96,15 +96,6 @@ public class MedicineOrderSchemaInitializer {
     jdbc.execute(
         "ALTER TABLE svc.medical_stores ADD COLUMN IF NOT EXISTS state VARCHAR(120)");
     jdbc.execute(
-        """
-        UPDATE svc.medical_stores s
-           SET city = h.city,
-               state = h.state
-          FROM svc.hospitals h
-         WHERE s.hospital_id = h.id
-           AND (s.city IS NULL OR btrim(s.city) = '')
-        """);
-    jdbc.execute(
         "ALTER TABLE svc.medicine_orders ALTER COLUMN hospital_id DROP NOT NULL");
     jdbc.execute(
         "ALTER TABLE svc.medicine_order_notifications ALTER COLUMN hospital_id DROP NOT NULL");
@@ -228,58 +219,5 @@ public class MedicineOrderSchemaInitializer {
         """);
     jdbc.execute(
         "CREATE INDEX IF NOT EXISTS idx_med_order_notif_store ON svc.medicine_order_notifications (store_id, read_flag)");
-
-    seedDemoStore();
-  }
-
-  private void seedDemoStore() {
-    jdbc.update(
-        """
-        INSERT INTO svc.medical_stores (
-          id, hospital_id, store_code, store_name, phone, address, status, created_at, created_by
-        ) VALUES (
-          'store-10001-1', 10001, 'MED-10001-1', 'Test Hospital Pharmacy',
-          '9876500001', 'Ground floor, Test Hospital', 'ACTIVE', now(), 'seed'
-        )
-        ON CONFLICT (id) DO UPDATE SET
-          store_name = EXCLUDED.store_name,
-          status = 'ACTIVE'
-        """);
-    jdbc.update(
-        """
-        UPDATE svc.medical_stores SET upi_id = 'medtrackpharmacy@upi'
-        WHERE id = 'store-10001-1' AND (upi_id IS NULL OR upi_id = '')
-        """);
-    jdbc.update(
-        """
-        INSERT INTO svc.login (
-          id, login_type, login_id, password, hospital_id, display_name,
-          status, creation_date, creation_user
-        ) VALUES (
-          'login-med-10001-1', 'MEDICAL', 'MED-10001-1', '123456', 10001,
-          'Test Hospital Pharmacy', 1, now(), 'seed'
-        )
-        ON CONFLICT (id) DO UPDATE SET
-          password = EXCLUDED.password,
-          hospital_id = EXCLUDED.hospital_id,
-          display_name = EXCLUDED.display_name,
-          status = 1
-        """);
-    jdbc.update(
-        """
-        UPDATE svc.medical_stores s
-           SET city = h.city,
-               state = h.state
-          FROM svc.hospitals h
-         WHERE s.hospital_id = h.id
-           AND (s.city IS NULL OR btrim(s.city) = '')
-        """);
-    jdbc.update(
-        """
-        UPDATE svc.medical_stores
-           SET city = COALESCE(NULLIF(btrim(city), ''), 'Hyderabad'),
-               state = COALESCE(NULLIF(btrim(state), ''), 'Telangana')
-         WHERE id = 'store-10001-1'
-        """);
   }
 }
