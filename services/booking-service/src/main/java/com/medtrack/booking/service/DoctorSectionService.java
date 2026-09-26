@@ -2,6 +2,7 @@ package com.medtrack.booking.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.medtrack.booking.domain.*;
 import com.medtrack.booking.repo.*;
@@ -32,10 +33,8 @@ public class DoctorSectionService {
   private final DoctorDocumentsRepository documentsRepo;
   private final HospitalRepository hospitalRepo;
   private final LoginRepository loginRepo;
-  private final ObjectMapper mapper =  new ObjectMapper().registerModule(new JavaTimeModule());
-/**
-  private final ObjectMapper mapper = new ObjectMapper();
-*/
+  private final ObjectMapper mapper;
+
   public DoctorSectionService(
       DoctorPersonalRepository personalRepo,
       DoctorContactRepository contactRepo,
@@ -45,7 +44,8 @@ public class DoctorSectionService {
       DoctorBankRepository bankRepo,
       DoctorDocumentsRepository documentsRepo,
       HospitalRepository hospitalRepo,
-      LoginRepository loginRepo) {
+      LoginRepository loginRepo,
+      ObjectMapper mapper) {
     this.personalRepo = personalRepo;
     this.contactRepo = contactRepo;
     this.professionalRepo = professionalRepo;
@@ -55,6 +55,11 @@ public class DoctorSectionService {
     this.documentsRepo = documentsRepo;
     this.hospitalRepo = hospitalRepo;
     this.loginRepo = loginRepo;
+    this.mapper =
+        mapper
+            .copy()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
   }
 
   /** Create empty personal master row and return doctorId (hidden from UI). */
@@ -296,12 +301,7 @@ public class DoctorSectionService {
     DoctorPersonalEntity e =
         personalRepo.findById(doctorId).orElseGet(DoctorPersonalEntity::new);
     e.setDoctorId(doctorId);
-    Long hid = longVal(body, "hospitalId");
-    if (hid == null) {
-      DoctorClinicEntity clinic = clinicRepo.findById(doctorId).orElse(null);
-      if (clinic != null) hid = clinic.getHospitalId();
-    }
-    e.setHospitalId(hid != null ? hid : 10001L);
+    e.setHospitalId(resolveHospitalId(doctorId, body));
     e.setFirstName(text(body, "firstName"));
     e.setMiddleName(text(body, "middleName"));
     e.setLastName(text(body, "lastName"));
@@ -321,6 +321,7 @@ public class DoctorSectionService {
   private Map<String, Object> saveContact(String doctorId, JsonNode body) {
     DoctorContactEntity e = contactRepo.findById(doctorId).orElseGet(DoctorContactEntity::new);
     e.setDoctorId(doctorId);
+    e.setHospitalId(resolveHospitalId(doctorId, body));
     e.setMobileNumber(text(body, "mobileNumber"));
     e.setAlternateMobileNumber(text(body, "alternateMobileNumber"));
     e.setEmail(text(body, "email"));
@@ -337,6 +338,7 @@ public class DoctorSectionService {
     DoctorProfessionalEntity e =
         professionalRepo.findById(doctorId).orElseGet(DoctorProfessionalEntity::new);
     e.setDoctorId(doctorId);
+    e.setHospitalId(resolveHospitalId(doctorId, body));
     e.setMedicalRegistrationNumber(text(body, "medicalRegistrationNumber"));
     e.setMedicalCouncilName(text(body, "medicalCouncilName"));
     e.setRegistrationDate(date(body, "registrationDate"));
@@ -356,9 +358,9 @@ public class DoctorSectionService {
   private Map<String, Object> saveClinic(String doctorId, JsonNode body) {
     DoctorClinicEntity e = clinicRepo.findById(doctorId).orElseGet(DoctorClinicEntity::new);
     e.setDoctorId(doctorId);
+    e.setHospitalId(resolveHospitalId(doctorId, body));
     e.setHospitalName(text(body, "hospitalName"));
     e.setClinicName(text(body, "clinicName"));
-    e.setHospitalId(longVal(body, "hospitalId"));
     e.setBranch(text(body, "branch"));
     e.setConsultationType(text(body, "consultationType"));
     e.setConsultationFee(dbl(body, "consultationFee"));
@@ -371,6 +373,7 @@ public class DoctorSectionService {
   private Map<String, Object> saveIdentity(String doctorId, JsonNode body) {
     DoctorIdentityEntity e = identityRepo.findById(doctorId).orElseGet(DoctorIdentityEntity::new);
     e.setDoctorId(doctorId);
+    e.setHospitalId(resolveHospitalId(doctorId, body));
     e.setAadhaarNumber(text(body, "aadhaarNumber"));
     e.setPanNumber(text(body, "panNumber"));
     e.setPassportNumber(text(body, "passportNumber"));
@@ -381,6 +384,7 @@ public class DoctorSectionService {
   private Map<String, Object> saveBank(String doctorId, JsonNode body) {
     DoctorBankEntity e = bankRepo.findById(doctorId).orElseGet(DoctorBankEntity::new);
     e.setDoctorId(doctorId);
+    e.setHospitalId(resolveHospitalId(doctorId, body));
     e.setAccountHolderName(text(body, "accountHolderName"));
     e.setBankName(text(body, "bankName"));
     e.setAccountNumber(text(body, "accountNumber"));
@@ -393,6 +397,7 @@ public class DoctorSectionService {
     DoctorDocumentsEntity e =
         documentsRepo.findById(doctorId).orElseGet(DoctorDocumentsEntity::new);
     e.setDoctorId(doctorId);
+    e.setHospitalId(resolveHospitalId(doctorId, body));
     e.setMedicalRegistrationCertificate(text(body, "medicalRegistrationCertificate"));
     e.setDegreeCertificate(text(body, "degreeCertificate"));
     e.setExperienceCertificate(text(body, "experienceCertificate"));
@@ -414,6 +419,19 @@ public class DoctorSectionService {
     @SuppressWarnings("unchecked")
     Map<String, Object> map = mapper.convertValue(entity, Map.class);
     return map == null ? Map.of() : new HashMap<>(map);
+  }
+
+  private Long resolveHospitalId(String doctorId, JsonNode body) {
+    Long hid = longVal(body, "hospitalId");
+    if (hid == null) {
+      DoctorClinicEntity clinic = clinicRepo.findById(doctorId).orElse(null);
+      if (clinic != null) hid = clinic.getHospitalId();
+    }
+    if (hid == null) {
+      DoctorPersonalEntity personal = personalRepo.findById(doctorId).orElse(null);
+      if (personal != null) hid = personal.getHospitalId();
+    }
+    return hid != null ? hid : 10001L;
   }
 
   private static String text(JsonNode body, String field) {

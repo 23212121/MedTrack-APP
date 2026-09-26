@@ -9,6 +9,9 @@ public class DoctorDocumentsEntity {
   @Column(name = "doctor_id", length = 40)
   private String doctorId;
 
+  @Column(name = "hospital_id", nullable = false)
+  private Long hospitalId = 10001L;
+
   @Column(columnDefinition = "TEXT")
   private String medicalRegistrationCertificate;
 
@@ -32,6 +35,8 @@ public class DoctorDocumentsEntity {
 
   public String getDoctorId() { return doctorId; }
   public void setDoctorId(String doctorId) { this.doctorId = doctorId; }
+  public Long getHospitalId() { return hospitalId; }
+  public void setHospitalId(Long hospitalId) { this.hospitalId = hospitalId; }
   public String getMedicalRegistrationCertificate() { return medicalRegistrationCertificate; }
   public void setMedicalRegistrationCertificate(String medicalRegistrationCertificate) {
     this.medicalRegistrationCertificate = medicalRegistrationCertificate;
