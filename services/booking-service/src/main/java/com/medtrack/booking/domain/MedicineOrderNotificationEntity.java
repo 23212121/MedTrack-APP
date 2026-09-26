@@ -10,7 +10,7 @@ public class MedicineOrderNotificationEntity {
   @Column(length = 64)
   private String id;
 
-  @Column(name = "hospital_id", nullable = false)
+  @Column(name = "hospital_id")
   private Long hospitalId;
 
   @Column(name = "store_id")

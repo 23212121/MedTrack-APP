@@ -105,6 +105,10 @@ public class MedicineOrderSchemaInitializer {
            AND (s.city IS NULL OR btrim(s.city) = '')
         """);
     jdbc.execute(
+        "ALTER TABLE svc.medicine_orders ALTER COLUMN hospital_id DROP NOT NULL");
+    jdbc.execute(
+        "ALTER TABLE svc.medicine_order_notifications ALTER COLUMN hospital_id DROP NOT NULL");
+    jdbc.execute(
         "ALTER TABLE svc.medicine_order_documents ADD COLUMN IF NOT EXISTS kind VARCHAR(32) NOT NULL DEFAULT 'PRESCRIPTION'");
 
     jdbc.execute(

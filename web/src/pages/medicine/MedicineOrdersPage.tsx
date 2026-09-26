@@ -52,7 +52,6 @@ function FilePicker({
     <NativeFileInput
       label="Choose file"
       multiple
-      accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
       chosen={files.length > 0 ? files.map((f) => f.name).join(", ") : undefined}
       onPick={(picked) => {
         if (picked.length === 0) return;
@@ -484,12 +483,7 @@ export default function MedicineOrdersPage({
       return;
     }
     const resolvedHospitalId = hospitalId || session.getHospitalId();
-    if (isPatient) {
-      if (!storeId) {
-        setError("Select a medical store");
-        return;
-      }
-    } else if (!resolvedHospitalId) {
+    if (!isPatient && !resolvedHospitalId) {
       setError("Hospital is not set for this session");
       return;
     }
@@ -500,8 +494,14 @@ export default function MedicineOrdersPage({
     setSaving(true);
     try {
       const form = new FormData();
-      if (isPatient && storeId) form.set("storeId", storeId);
-      if (resolvedHospitalId) form.set("hospitalId", resolvedHospitalId);
+      if (isPatient) {
+        if (storeId) {
+          form.set("storeId", storeId);
+          if (resolvedHospitalId) form.set("hospitalId", resolvedHospitalId);
+        }
+      } else if (resolvedHospitalId) {
+        form.set("hospitalId", resolvedHospitalId);
+      }
       form.set("patientName", patientName.trim());
       form.set("patientPhone", patientPhone.trim());
       form.set("fulfillment", fulfillment);
@@ -638,6 +638,10 @@ export default function MedicineOrdersPage({
           </div>
           {isPatient ? (
             <>
+              <p className="muted">
+                State, city, and medical store are optional. Leave them empty to send the prescription
+                to all medical stores.
+              </p>
               <IndiaStateCityFields
                 allowAll
                 state={filterState}
@@ -655,9 +659,8 @@ export default function MedicineOrdersPage({
                     const picked = stores.find((s) => s.id === next);
                     setHospitalId(picked ? String(picked.hospitalId) : "");
                   }}
-                  required
                 >
-                  <option value="">Select medical store</option>
+                  <option value="">Any medical store</option>
                   {filteredStores.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.storeName}
@@ -667,7 +670,9 @@ export default function MedicineOrdersPage({
                 </select>
               </label>
               {storesLoaded && filteredStores.length === 0 ? (
-                <p className="muted">No medical stores in this state/city. Clear the filters to see all.</p>
+                <p className="muted">
+                  No medical stores in this state/city. Clear the filters to see all, or leave the store empty.
+                </p>
               ) : null}
             </>
           ) : null}

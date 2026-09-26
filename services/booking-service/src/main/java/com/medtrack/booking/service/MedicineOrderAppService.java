@@ -151,7 +151,7 @@ public class MedicineOrderAppService {
       hospitalId = requestedStore.getHospitalId();
     }
     if (hospitalId == null) hospitalId = actor.hospitalId();
-    if (hospitalId == null) {
+    if (hospitalId == null && requestedStore == null && !actor.isPatient()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "hospitalId is required");
     }
     if (actor.hospitalId() != null && !actor.hospitalId().equals(hospitalId) && !actor.isPatient()) {
@@ -218,12 +218,17 @@ public class MedicineOrderAppService {
           order,
           "New medicine order",
           "A new medicine order " + order.getOrderNumber() + " was sent to your store. Please review the prescription.");
-    } else {
+    } else if (hospitalId != null) {
       notifyHospitalStores(
           hospitalId,
           order.getId(),
           "New medicine order",
           "A new medicine order " + order.getOrderNumber() + " has been received. Please review the prescription.");
+    } else {
+      notifyOpenPoolStores(
+          order,
+          "New medicine order",
+          "A new medicine order " + order.getOrderNumber() + " is open for any store. Please review the prescription.");
     }
 
     return detail(order, actor, false);
@@ -352,6 +357,9 @@ public class MedicineOrderAppService {
     MedicineOrderEntity order = require(id);
     order.setAssignedStoreId(store.getId());
     order.setAssignedStoreName(store.getStoreName());
+    if (order.getHospitalId() == null) {
+      order.setHospitalId(store.getHospitalId());
+    }
     order.setStatus("IN_PROCESS");
     order.setStatusCode(1);
     order.setPendingReason(null);
@@ -926,8 +934,18 @@ public class MedicineOrderAppService {
       return orderRepo.findByPatientPhoneOrderByCreatedAtDesc(digits(actor.patientPhone()));
     }
     if (actor.isMedical()) {
-      if (actor.hospitalId() == null) return List.of();
-      return orderRepo.findByHospitalIdOrderByCreatedAtDesc(actor.hospitalId());
+      LinkedHashMap<String, MedicineOrderEntity> unique = new LinkedHashMap<>();
+      if (actor.hospitalId() != null) {
+        for (MedicineOrderEntity o : orderRepo.findByHospitalIdOrderByCreatedAtDesc(actor.hospitalId())) {
+          unique.put(o.getId(), o);
+        }
+      }
+      for (MedicineOrderEntity o :
+          orderRepo.findByHospitalIdIsNullAndAssignedStoreIdIsNullAndStatusInOrderByCreatedAtDesc(
+              List.copyOf(OPEN_STATUSES))) {
+        unique.putIfAbsent(o.getId(), o);
+      }
+      return new ArrayList<>(unique.values());
     }
     if (actor.hospitalId() != null) {
       return orderRepo.findByHospitalIdOrderByCreatedAtDesc(actor.hospitalId());
@@ -943,10 +961,21 @@ public class MedicineOrderAppService {
       return digits(actor.patientPhone()).equals(digits(o.getPatientPhone()));
     }
     if (actor.isMedical()) {
-      if (actor.hospitalId() != null && !actor.hospitalId().equals(o.getHospitalId())) return false;
-      if (o.getAssignedStoreId() == null && OPEN_STATUSES.contains(o.getStatus())) {
+      boolean openPool = o.getAssignedStoreId() == null && OPEN_STATUSES.contains(o.getStatus());
+      if (openPool) {
+        if (o.getHospitalId() != null
+            && actor.hospitalId() != null
+            && !actor.hospitalId().equals(o.getHospitalId())) {
+          return false;
+        }
         return actor.storeId() == null
-            || !responseRepo.existsByOrderIdAndStoreIdAndAction(o.getId(), canonicalStoreId(actor), "REJECT");
+            || !responseRepo.existsByOrderIdAndStoreIdAndAction(
+                o.getId(), canonicalStoreId(actor), "REJECT");
+      }
+      if (actor.hospitalId() != null
+          && o.getHospitalId() != null
+          && !actor.hospitalId().equals(o.getHospitalId())) {
+        return false;
       }
       return sameStore(actor, o.getAssignedStoreId());
     }
@@ -987,6 +1016,7 @@ public class MedicineOrderAppService {
   }
 
   private void assertSameHospital(Actor actor, MedicineOrderEntity o) {
+    if (o.getHospitalId() == null) return;
     if (actor.hospitalId() != null && !actor.hospitalId().equals(o.getHospitalId())) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Order belongs to another hospital");
     }
@@ -1437,6 +1467,13 @@ public class MedicineOrderAppService {
       saveNotif(hospitalId, store.getId(), null, "STORE", orderId, title, message);
     }
     saveNotif(hospitalId, null, null, "HOSPITAL", orderId, title, message);
+  }
+
+  private void notifyOpenPoolStores(MedicineOrderEntity order, String title, String message) {
+    List<MedicalStoreEntity> stores = storeRepo.findByStatusOrderByStoreNameAsc("ACTIVE");
+    for (MedicalStoreEntity store : stores) {
+      saveNotif(store.getHospitalId(), store.getId(), null, "STORE", order.getId(), title, message);
+    }
   }
 
   private void notifyPatient(MedicineOrderEntity order, String title, String message) {

@@ -13,7 +13,7 @@ public class MedicineOrderEntity {
   @Column(name = "order_number", nullable = false, length = 40)
   private String orderNumber;
 
-  @Column(name = "hospital_id", nullable = false)
+  @Column(name = "hospital_id")
   private Long hospitalId;
 
   @Column(name = "patient_id")
