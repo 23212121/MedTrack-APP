@@ -1,5 +1,6 @@
 package com.medtrack.hrm.web;
 
+import com.medtrack.hrm.domain.AttendanceEntity;
 import com.medtrack.hrm.domain.LeaveApplicationEntity;
 import com.medtrack.hrm.domain.WfhRequestEntity;
 import com.medtrack.hrm.service.HrmApproverService;
@@ -25,6 +26,16 @@ public class HrmApproverController {
     return approver.pending();
   }
 
+  @GetMapping("/employees")
+  public Map<String, Object> employees() {
+    return approver.employees();
+  }
+
+  @GetMapping("/employees/{employeeId}")
+  public Map<String, Object> employeeFile(@PathVariable String employeeId) {
+    return approver.employeeFile(employeeId);
+  }
+
   @PostMapping("/leave/{id}/decide")
   public LeaveApplicationEntity decideLeave(
       @PathVariable String id, @RequestBody Map<String, Object> body) {
@@ -38,5 +49,12 @@ public class HrmApproverController {
       @PathVariable String id, @RequestBody Map<String, Object> body) {
     String status = body == null || body.get("status") == null ? "" : String.valueOf(body.get("status"));
     return approver.decideWfh(id, status);
+  }
+
+  @PostMapping("/attendance/{id}/decide")
+  public AttendanceEntity decideAttendance(
+      @PathVariable String id, @RequestBody Map<String, Object> body) {
+    String status = body == null || body.get("status") == null ? "" : String.valueOf(body.get("status"));
+    return approver.decideAttendance(id, status);
   }
 }

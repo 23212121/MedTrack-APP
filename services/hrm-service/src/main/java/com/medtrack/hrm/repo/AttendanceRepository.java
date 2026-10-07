@@ -10,5 +10,7 @@ public interface AttendanceRepository extends JpaRepository<AttendanceEntity, St
 
   List<AttendanceEntity> findByDoctorIdAndAttendanceDate(String doctorId, LocalDate date);
 
+  List<AttendanceEntity> findByEmployeeIdOrderByAttendanceDateDesc(String employeeId);
+
   long countByDoctorIdAndAttendanceDateAndStatus(String doctorId, LocalDate date, String status);
 }

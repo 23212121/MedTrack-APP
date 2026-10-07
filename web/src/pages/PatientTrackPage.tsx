@@ -13,14 +13,43 @@ export default function PatientTrackPage() {
   const [params, setParams] = useSearchParams();
   const initialPhone = params.get("phone") || "";
   const [phoneInput, setPhoneInput] = useState(initialPhone);
-  const [trackedPhone, setTrackedPhone] = useState(
-    initialPhone.trim() ? normalizePhone(initialPhone) : "",
-  );
+  const [trackedPhone, setTrackedPhone] = useState("");
+  const [otpRequired, setOtpRequired] = useState(true);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpInput, setOtpInput] = useState("");
+  const [debugOtp, setDebugOtp] = useState("");
   const [status, setStatus] = useState<PatientQueueStatusResponse | null>(null);
   const [bookings, setBookings] = useState<BookingSummary[]>([]);
   const [patientId, setPatientId] = useState("");
   const [error, setError] = useState("");
+  const [hint, setHint] = useState("");
   const [loading, setLoading] = useState(false);
+  const [flagLoaded, setFlagLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .trackOtpFlag()
+      .then((res) => {
+        if (cancelled) return;
+        const required = !!res.otpRequired;
+        setOtpRequired(required);
+        setFlagLoaded(true);
+        const seed = normalizePhone(initialPhone);
+        if (!required && seed.length >= 8) {
+          setTrackedPhone(seed);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setOtpRequired(true);
+        setFlagLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = useCallback(async () => {
     if (!trackedPhone) {
@@ -70,18 +99,59 @@ export default function PatientTrackPage() {
     return () => window.clearInterval(id);
   }, [load, trackedPhone]);
 
-  function onSubmit(e: FormEvent) {
+  function resetDetails() {
+    setTrackedPhone("");
+    setStatus(null);
+    setBookings([]);
+    setPatientId("");
+  }
+
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
     const normalized = normalizePhone(phoneInput);
     if (normalized.length < 8) {
       setError("Enter a valid mobile number (at least 8 digits)");
-      setStatus(null);
-      setBookings([]);
+      resetDetails();
       return;
     }
     setError("");
-    setTrackedPhone(normalized);
-    setParams(normalized ? { phone: normalized } : {});
+    setHint("");
+    if (!otpRequired) {
+      setTrackedPhone(normalized);
+      setParams(normalized ? { phone: normalized } : {});
+      return;
+    }
+    setLoading(true);
+    try {
+      if (!otpSent) {
+        const sent = await api.sendTrackOtp(normalized);
+        if (!sent.otpRequired) {
+          setOtpRequired(false);
+          setTrackedPhone(normalized);
+          setParams({ phone: normalized });
+          return;
+        }
+        setOtpSent(true);
+        setOtpInput("");
+        setDebugOtp(sent.debugOtp || "");
+        setHint(sent.message || "OTP sent to this mobile number.");
+        setParams({ phone: normalized });
+        return;
+      }
+      const verified = await api.verifyTrackOtp(normalized, otpInput);
+      if (!verified.verified) {
+        setError("OTP was not confirmed");
+        return;
+      }
+      setHint("Mobile confirmed. Showing appointments for this number.");
+      setTrackedPhone(normalized);
+      setParams({ phone: normalized });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not confirm this mobile number");
+      resetDetails();
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -93,8 +163,8 @@ export default function PatientTrackPage() {
             <h1>Track your appointment</h1>
             <p className="lead patient-booking-lead">
               Enter the mobile number used when the hospital booked your visit
-              (or when you self-booked). Example:{" "}
-              <code>/track?phone=982972723</code>
+              (or when you self-booked). If OTP is on, we send a code to that
+              number first, then show the matching appointments.
             </p>
           </div>
           <Link to={popupClosePath()} className="patient-booking-signin" aria-label="Close">
@@ -111,25 +181,92 @@ export default function PatientTrackPage() {
               autoComplete="tel"
               placeholder="e.g. 982972723"
               value={phoneInput}
-              onChange={(e) => setPhoneInput(e.target.value)}
+              onChange={(e) => {
+                setPhoneInput(e.target.value);
+                setOtpSent(false);
+                setOtpInput("");
+                setDebugOtp("");
+                setHint("");
+                resetDetails();
+              }}
               required
             />
           </label>
+          {otpRequired && otpSent && !trackedPhone ? (
+            <label>
+              OTP
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="6-digit code"
+                maxLength={6}
+                value={otpInput}
+                onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                required
+              />
+            </label>
+          ) : null}
+          {debugOtp && otpSent && !trackedPhone ? (
+            <p className="patient-note">Dev SMS (console): {debugOtp}</p>
+          ) : null}
+          {hint && !error ? <p className="patient-note">{hint}</p> : null}
           <div className="row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>
-            <button type="submit" disabled={loading}>
-              {loading && trackedPhone ? "Updating…" : "Track appointment"}
+            <button type="submit" disabled={loading || !flagLoaded}>
+              {loading
+                ? otpRequired && !trackedPhone
+                  ? otpSent
+                    ? "Confirming…"
+                    : "Sending OTP…"
+                  : "Updating…"
+                : otpRequired && !trackedPhone
+                  ? otpSent
+                    ? "Confirm OTP"
+                    : "Send OTP"
+                  : "Track appointment"}
             </button>
-            {trackedPhone && (
+            {otpRequired && otpSent && !trackedPhone ? (
+              <button
+                type="button"
+                className="secondary"
+                disabled={loading}
+                onClick={() => {
+                  setOtpSent(false);
+                  setOtpInput("");
+                  setDebugOtp("");
+                  setHint("");
+                  setError("");
+                  const normalized = normalizePhone(phoneInput);
+                  if (normalized.length < 8) return;
+                  setLoading(true);
+                  api
+                    .sendTrackOtp(normalized)
+                    .then((sent) => {
+                      setOtpSent(true);
+                      setDebugOtp(sent.debugOtp || "");
+                      setHint(sent.message || "OTP sent to this mobile number.");
+                    })
+                    .catch((err) => {
+                      setError(err instanceof Error ? err.message : "Could not resend OTP");
+                    })
+                    .finally(() => setLoading(false));
+                }}
+              >
+                Resend OTP
+              </button>
+            ) : null}
+            {(trackedPhone || otpSent) && (
               <button
                 type="button"
                 className="secondary"
                 onClick={() => {
                   setPhoneInput("");
-                  setTrackedPhone("");
-                  setStatus(null);
-                  setBookings([]);
-                  setPatientId("");
+                  setOtpSent(false);
+                  setOtpInput("");
+                  setDebugOtp("");
+                  setHint("");
                   setError("");
+                  resetDetails();
                   setParams({});
                 }}
               >

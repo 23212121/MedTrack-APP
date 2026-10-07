@@ -522,11 +522,21 @@ public class PatientPortalService {
 
     List<PatientReportEntity> rows;
     if (nameFilter != null && from == null && to == null) {
-      // Strict WHERE phone + patient_name
       rows = reportRepo.findByPhoneAndPatientName(normalized, nameFilter);
     } else {
       rows = reportRepo.search(normalized, nameFilter, from, to);
     }
+    List<PatientReportEntity> labRows =
+        reportRepo.findByPatientPhoneAndReportTypeIgnoreCaseOrderByReportDateDescCreatedAtDesc(
+            normalized, "LAB");
+    Map<String, PatientReportEntity> merged = new LinkedHashMap<>();
+    for (PatientReportEntity r : rows) {
+      merged.put(r.getId(), r);
+    }
+    for (PatientReportEntity r : labRows) {
+      merged.putIfAbsent(r.getId(), r);
+    }
+    rows = new ArrayList<>(merged.values());
 
     Map<String, Object> out = new HashMap<>();
     out.put("count", rows.size());
@@ -555,6 +565,40 @@ public class PatientPortalService {
       row.put("patientName", name);
       row.put("age", a.getPatientAge() != null ? a.getPatientAge() : "");
       row.put("gender", nullTo(a.getGender(), ""));
+      row.put("phone", normalizedPhone);
+      byName.put(key, row);
+    }
+    patientRepo
+        .findByPhone(normalizedPhone)
+        .ifPresent(
+            p -> {
+              String name = p.getName() == null ? "" : p.getName().trim();
+              if (name.isBlank()) {
+                return;
+              }
+              String key = name.toLowerCase(Locale.ROOT);
+              if (byName.containsKey(key)) {
+                return;
+              }
+              Map<String, Object> row = new HashMap<>();
+              row.put("patientId", p.getId() == null ? "" : p.getId());
+              row.put("patientName", name);
+              row.put("age", p.getAge() != null ? p.getAge() : "");
+              row.put("gender", nullTo(p.getGender(), ""));
+              row.put("phone", normalizedPhone);
+              byName.put(key, row);
+            });
+    for (PatientReportEntity r :
+        reportRepo.findByPatientPhoneOrderByReportDateDescCreatedAtDesc(normalizedPhone)) {
+      String name = r.getPatientName() == null ? "" : r.getPatientName().trim();
+      if (name.isBlank()) continue;
+      String key = name.toLowerCase(Locale.ROOT);
+      if (byName.containsKey(key)) continue;
+      Map<String, Object> row = new HashMap<>();
+      row.put("patientId", "");
+      row.put("patientName", name);
+      row.put("age", "");
+      row.put("gender", "");
       row.put("phone", normalizedPhone);
       byName.put(key, row);
     }

@@ -24,8 +24,21 @@ public class NotificationController {
     return Map.of("notifications", service.recent());
   }
 
+  @GetMapping("/mine")
+  public Map<String, Object> mine(
+      @RequestHeader(value = "X-Patient-Phone", required = false) String phoneHeader,
+      @RequestParam(value = "phone", required = false) String phoneQuery) {
+    String phone = digits(phoneHeader);
+    if (phone.isBlank()) phone = digits(phoneQuery);
+    return Map.of("notifications", service.byRecipient(phone));
+  }
+
   @GetMapping("/visit/{visitId}")
   public Map<String, Object> byVisit(@PathVariable String visitId) {
     return Map.of("notifications", service.byVisit(visitId));
+  }
+
+  private static String digits(String raw) {
+    return raw == null ? "" : raw.replaceAll("\\D", "");
   }
 }

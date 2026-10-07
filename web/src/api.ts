@@ -67,7 +67,7 @@ function friendlyHttpError(status: number, text: string): string {
 }
 
 function resolveDoctorId(): string {
-  if (session.isMedical() || session.isPatient() || session.getLoginType() === "HOSPITAL") {
+  if (session.isMedical() || session.isPatient() || session.isLab() || session.getLoginType() === "HOSPITAL") {
     return "";
   }
   const userId = session.getUserId();
@@ -91,6 +91,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (loginType) headers["X-Login-Type"] = loginType;
     const storeId = session.getMedicalStoreId();
     if (storeId) headers["X-Medical-Store-Id"] = storeId;
+    const labId = session.getLabTechnicianId();
+    if (labId) headers["X-Lab-Id"] = labId;
     const patientPhone = session.getPatientPhone();
     if (patientPhone) headers["X-Patient-Phone"] = patientPhone;
     const patientId = session.getPatientId();
@@ -147,6 +149,8 @@ async function requestForm<T>(path: string, form: FormData): Promise<T> {
   if (loginType) headers["X-Login-Type"] = loginType;
   const storeId = session.getMedicalStoreId();
   if (storeId) headers["X-Medical-Store-Id"] = storeId;
+  const labId = session.getLabTechnicianId();
+  if (labId) headers["X-Lab-Id"] = labId;
   const patientPhone = session.getPatientPhone();
   if (patientPhone) headers["X-Patient-Phone"] = patientPhone;
   const patientId = session.getPatientId();
@@ -176,6 +180,8 @@ export type PatientDocument = {
   aadhaarNumber?: string;
   hospitalId: number;
   phoneNumber: string;
+  documentType?: string;
+  labId?: string;
   filePath?: string;
   destinationPath?: string;
   sourcePath?: string;
@@ -295,6 +301,8 @@ export type DoctorAvailableDays = {
 export type FeeRule = {
   id: string;
   doctorId: string;
+  clinicId?: string;
+  hospitalId?: number;
   baseConsultFee: number;
   fixedConsultMinutes: number;
   overtimeFeeAmount: number;
@@ -389,6 +397,11 @@ export type AppointmentPayment = {
   upiUri?: string;
   upiId?: string;
   razorpayEnabled?: boolean;
+  keyId?: string;
+  gatewayOrderId?: string;
+  gatewayQrId?: string;
+  bankVerified?: boolean;
+  bankStatus?: string;
   message?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -675,6 +688,9 @@ export const api = {
   notifications: () =>
     request<{ notifications: NotificationRow[] }>("/api/notifications"),
 
+  myNotifications: () =>
+    request<{ notifications: NotificationRow[] }>("/api/notifications/mine"),
+
   listPatientDocuments: () =>
     request<{ count: number; documents: PatientDocument[] }>("/api/documents"),
 
@@ -683,14 +699,18 @@ export const api = {
 
   uploadPatientDocuments: (body: {
     patientName: string;
-    aadhaarNumber: string;
+    aadhaarNumber?: string;
     phoneNumber: string;
+    documentType?: string;
+    hospitalId?: number | string;
     files: File[];
   }) => {
     const form = new FormData();
     form.append("patientName", body.patientName);
-    form.append("aadhaarNumber", body.aadhaarNumber);
+    if (body.aadhaarNumber) form.append("aadhaarNumber", body.aadhaarNumber);
     form.append("phoneNumber", body.phoneNumber);
+    if (body.documentType) form.append("documentType", body.documentType);
+    if (body.hospitalId) form.append("hospitalId", String(body.hospitalId));
     for (const file of body.files) {
       form.append("files", file);
     }
@@ -770,6 +790,19 @@ export const api = {
   verifyPaymentWithGateway: (paymentId: string) =>
     request<AppointmentPayment>(
       `/api/payments/${encodeURIComponent(paymentId)}/verify-with-gateway`,
+      { method: "POST" }
+    ),
+  verifyAppointmentRazorpay: (
+    paymentId: string,
+    body: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string },
+  ) =>
+    request<AppointmentPayment>(
+      `/api/payments/${encodeURIComponent(paymentId)}/razorpay/verify`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  confirmLocalUpiPayment: (paymentId: string) =>
+    request<AppointmentPayment>(
+      `/api/payments/${encodeURIComponent(paymentId)}/confirm-local-upi`,
       { method: "POST" }
     ),
   cancelPayment: (paymentId: string) =>
@@ -881,6 +914,10 @@ export const api = {
     request<{ count: number; hospitalId: number; doctors: HospitalDoctor[] }>(
       `/api/doctors?hospitalId=${encodeURIComponent(String(hospitalId))}`
     ),
+  departmentsByHospital: (hospitalId: string | number) =>
+    request<{ count: number; departments: { id?: string; name?: string; value?: string }[] }>(
+      `/api/departments?hospitalId=${encodeURIComponent(String(hospitalId))}`,
+    ),
   registerDoctor: (body: DoctorRegistrationBody) =>
     request<{ message: string; doctor: DoctorRegistration }>("/api/doctors/register", {
       method: "POST",
@@ -940,10 +977,10 @@ export const api = {
       form,
     ),
 
-  login: (body: { loginType: "HOSPITAL" | "USER" | "PATIENT" | "MEDICAL"; id: string; password: string }) =>
+  login: (body: { loginType: "HOSPITAL" | "USER" | "PATIENT" | "MEDICAL" | "LAB"; id: string; password: string }) =>
     request<{
       message: string;
-      loginType: "HOSPITAL" | "USER" | "PATIENT" | "MEDICAL";
+      loginType: "HOSPITAL" | "USER" | "PATIENT" | "MEDICAL" | "LAB";
       username: string;
       userId?: string;
       doctorId?: string;
@@ -959,6 +996,9 @@ export const api = {
       medicalStoreId?: string;
       storeCode?: string;
       storeName?: string;
+      labTechnicianId?: string;
+      labCode?: string;
+      labName?: string;
     }>("/api/auth/login", { method: "POST", body: JSON.stringify(body) }),
 
   registerPatient: (body: {
@@ -995,6 +1035,32 @@ export const api = {
     }>("/api/auth/register-user", {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+
+  trackOtpFlag: () =>
+    request<{ flag: string; otpRequired: boolean }>("/api/track/otp-flag"),
+
+  sendTrackOtp: (phone: string) =>
+    request<{
+      phone: string;
+      otpRequired: boolean;
+      message?: string;
+      expiresInSeconds?: number;
+      debugOtp?: string;
+    }>("/api/track/otp/send", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+    }),
+
+  verifyTrackOtp: (phone: string, otp: string) =>
+    request<{
+      verified: boolean;
+      otpRequired: boolean;
+      phone: string;
+      message?: string;
+    }>("/api/track/otp/verify", {
+      method: "POST",
+      body: JSON.stringify({ phone, otp }),
     }),
 
   patientDashboard: (phone: string) =>
@@ -1056,12 +1122,12 @@ export const api = {
     }>(`/api/patient/reports?${q}`);
   },
 
-  /** Hospital-uploaded documents for selected patient (phone + patientName filter). */
-  patientDocuments: (phone: string, patientName: string) => {
+  /** Hospital-uploaded documents for selected patient (phone + optional patientName filter). */
+  patientDocuments: (phone: string, patientName?: string) => {
     const q = new URLSearchParams({
       phone: phone.replace(/\D/g, ""),
-      patientName,
     });
+    if (patientName) q.set("patientName", patientName);
     return request<{ count: number; documents: PatientPortalDocument[] }>(
       `/api/patient/documents?${q}`,
     );
@@ -1286,6 +1352,8 @@ export const api = {
       currency: string;
       keyId?: string;
       razorpayEnabled?: boolean;
+      qrId?: string;
+      qrImageUrl?: string;
       upiId?: string;
       upiUri?: string;
       upiApps?: { id: string; name: string; uri: string }[];
@@ -1314,6 +1382,37 @@ export const api = {
     requestForm<MedicineOrder>(
       `/api/medicine-orders/${encodeURIComponent(id)}/payment/screenshot`,
       form,
+    ),
+
+  verifyMedicineBankPayment: (
+    id: string,
+    body?: {
+      requestedDays?: number;
+      items?: { id?: string; quantity: number; requestedDays?: number }[];
+    },
+  ) =>
+    request<{
+      bankVerified?: boolean;
+      bankStatus?: string;
+      message?: string;
+      razorpayEnabled?: boolean;
+      qrImageUrl?: string;
+      order: MedicineOrder;
+    }>(`/api/medicine-orders/${encodeURIComponent(id)}/payment/verify-with-gateway`, {
+      method: "POST",
+      body: JSON.stringify(body || {}),
+    }),
+
+  confirmMedicineLocalUpi: (
+    id: string,
+    body?: {
+      requestedDays?: number;
+      items?: { id?: string; quantity: number; requestedDays?: number }[];
+    },
+  ) =>
+    request<MedicineOrder>(
+      `/api/medicine-orders/${encodeURIComponent(id)}/payment/confirm-local-upi`,
+      { method: "POST", body: JSON.stringify(body || {}) },
     ),
 
   rejectMedicineAmount: (id: string, reason: string, comments?: string) =>
@@ -1382,6 +1481,108 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ status }),
     }),
+
+  labs: (hospitalId?: string | number, activeOnly = false) => {
+    const qs = new URLSearchParams();
+    if (hospitalId != null && String(hospitalId)) qs.set("hospitalId", String(hospitalId));
+    if (activeOnly) qs.set("activeOnly", "true");
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<{ count: number; labs: LabTechnician[] }>(`/api/labs${suffix}`);
+  },
+
+  registerLab: (body: {
+    labName: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    password?: string;
+    hospitalId?: number | string;
+  }) =>
+    request<LabTechnician & { loginId?: string; message?: string }>("/api/labs", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  selfRegisterLab: (body: {
+    labName: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    password?: string;
+  }) =>
+    request<LabTechnician & { loginId?: string; message?: string }>("/api/labs/register", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  setLabStatus: (id: string, status: "ACTIVE" | "INACTIVE") =>
+    request<LabTechnician>(`/api/labs/${encodeURIComponent(id)}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status }),
+    }),
+
+  labMe: () =>
+    request<{ lab: LabTechnician }>("/api/lab/me"),
+
+  labPatientDetails: (opts: { phone?: string; aadhaar?: string }) => {
+    const qs = new URLSearchParams();
+    if (opts.phone) qs.set("phone", opts.phone);
+    if (opts.aadhaar) qs.set("aadhaar", opts.aadhaar);
+    return request<{
+      found: boolean;
+      count: number;
+      patient?: LabPatientRow;
+      patients: LabPatientRow[];
+    }>(`/api/lab/patient-details?${qs}`);
+  },
+
+  labPatients: (opts?: { phone?: string; aadhaar?: string; name?: string }) => {
+    const qs = new URLSearchParams();
+    if (opts?.phone) qs.set("phone", opts.phone);
+    if (opts?.aadhaar) qs.set("aadhaar", opts.aadhaar);
+    if (opts?.name) qs.set("name", opts.name);
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<{ count: number; patients: LabPatientRow[] }>(`/api/lab/patients${suffix}`);
+  },
+
+  labReports: () =>
+    request<{ count: number; documents: PatientDocument[]; labName?: string }>("/api/lab/reports"),
+
+  uploadLabReports: (body: {
+    patientName?: string;
+    phone?: string;
+    aadhaar?: string;
+    title?: string;
+    notes?: string;
+    age?: number | string;
+    gender?: string;
+    files: File[];
+  }) => {
+    const form = new FormData();
+    if (body.patientName) form.append("patientName", body.patientName);
+    if (body.phone) form.append("phone", body.phone);
+    if (body.aadhaar) form.append("aadhaar", body.aadhaar);
+    if (body.title) form.append("title", body.title);
+    if (body.notes) form.append("notes", body.notes);
+    if (body.age != null && String(body.age) !== "") form.append("age", String(body.age));
+    if (body.gender) form.append("gender", body.gender);
+    for (const file of body.files) {
+      form.append("files", file);
+    }
+    return requestForm<{
+      message: string;
+      document: PatientDocument;
+      s3Path?: string;
+      s3Uploaded?: boolean;
+      storageKey?: string;
+      phone?: string;
+      aadhaarNumber?: string;
+      patientName?: string;
+      files?: { slot: number; fileName: string; downloadUrl: string }[];
+    }>("/api/lab/reports", form);
+  },
 };
 
 export type MedicineOrderDocument = {
@@ -1467,6 +1668,8 @@ export type MedicineOrder = {
   paymentStatus?: string;
   paymentMethod?: string;
   razorpayEnabled?: boolean;
+  qrImageUrl?: string;
+  razorpayQrId?: string;
   upiId?: string;
   upiUri?: string;
   upiQrUrl?: string;
@@ -1516,6 +1719,37 @@ export type MedicineOrderNotification = {
   message: string;
   read: boolean;
   createdAt?: string;
+};
+
+export type LabTechnician = {
+  id: string;
+  hospitalId?: number | null;
+  hospitalName?: string;
+  labCode: string;
+  labId?: string;
+  labName: string;
+  assistantName?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  status: string;
+  createdAt?: string;
+  loginId?: string;
+  message?: string;
+};
+
+export type LabPatientRow = {
+  patientId?: string;
+  patientName?: string;
+  userName?: string;
+  phone?: string;
+  aadhaarNumber?: string;
+  age?: number | string;
+  gender?: string;
+  source?: string;
+  documentCount?: number;
+  reportCount?: number;
 };
 
 export type MedicalStore = {
@@ -2228,8 +2462,41 @@ export type ApproverPending = {
   wfh: WfhRequest[];
 };
 
+export type ApproverEmployee = {
+  employeeId: string;
+  name?: string;
+  department?: string;
+  designation?: string;
+  employeeType?: string;
+};
+
+export type ApproverLeaveBalance = {
+  leaveType?: string;
+  total?: number;
+  used?: number;
+  available?: number;
+};
+
+export type ApproverEmployeeFile = {
+  employee: ApproverEmployee;
+  attendance: AttendanceLog[];
+  leave: LeaveRequestRow[];
+  wfh: WfhRequest[];
+  balances: ApproverLeaveBalance[];
+};
+
 export function getApproverPending() {
   return request<ApproverPending>("/api/hrm/approver/pending");
+}
+
+export function getApproverEmployees() {
+  return request<{ count: number; employees: ApproverEmployee[] }>("/api/hrm/approver/employees");
+}
+
+export function getApproverEmployeeFile(employeeId: string) {
+  return request<ApproverEmployeeFile>(
+    `/api/hrm/approver/employees/${encodeURIComponent(employeeId)}`,
+  );
 }
 
 export function decideApproverLeave(id: string, status: string, remarks?: string) {
@@ -2241,6 +2508,13 @@ export function decideApproverLeave(id: string, status: string, remarks?: string
 
 export function decideApproverWfh(id: string, status: string) {
   return request<WfhRequest>(`/api/hrm/approver/wfh/${id}/decide`, {
+    method: "POST",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function decideApproverAttendance(id: string, status: string) {
+  return request<AttendanceLog>(`/api/hrm/approver/attendance/${id}/decide`, {
     method: "POST",
     body: JSON.stringify({ status }),
   });

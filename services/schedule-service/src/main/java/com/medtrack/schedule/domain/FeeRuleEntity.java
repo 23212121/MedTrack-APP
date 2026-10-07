@@ -9,6 +9,8 @@ public class FeeRuleEntity {
   private String id;
   private String clinicId;
   private String doctorId;
+  @Column(name = "hospital_id", nullable = false)
+  private Long hospitalId = 10001L;
   private double baseConsultFee = 500;
   private int fixedConsultMinutes = 15;
   private double overtimeFeeAmount = 200;
@@ -21,6 +23,8 @@ public class FeeRuleEntity {
   public void setClinicId(String clinicId) { this.clinicId = clinicId; }
   public String getDoctorId() { return doctorId; }
   public void setDoctorId(String doctorId) { this.doctorId = doctorId; }
+  public Long getHospitalId() { return hospitalId; }
+  public void setHospitalId(Long hospitalId) { this.hospitalId = hospitalId; }
   public double getBaseConsultFee() { return baseConsultFee; }
   public void setBaseConsultFee(double baseConsultFee) { this.baseConsultFee = baseConsultFee; }
   public int getFixedConsultMinutes() { return fixedConsultMinutes; }

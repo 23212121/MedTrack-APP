@@ -66,6 +66,12 @@ public class MedicineOrderEntity {
   @Column(name = "razorpay_payment_id")
   private String razorpayPaymentId;
 
+  @Column(name = "razorpay_qr_id")
+  private String razorpayQrId;
+
+  @Column(name = "razorpay_qr_image_url")
+  private String razorpayQrImageUrl;
+
   @Column(name = "booked_by", nullable = false)
   private String bookedBy;
 
@@ -141,6 +147,10 @@ public class MedicineOrderEntity {
   public void setRazorpayOrderId(String razorpayOrderId) { this.razorpayOrderId = razorpayOrderId; }
   public String getRazorpayPaymentId() { return razorpayPaymentId; }
   public void setRazorpayPaymentId(String razorpayPaymentId) { this.razorpayPaymentId = razorpayPaymentId; }
+  public String getRazorpayQrId() { return razorpayQrId; }
+  public void setRazorpayQrId(String razorpayQrId) { this.razorpayQrId = razorpayQrId; }
+  public String getRazorpayQrImageUrl() { return razorpayQrImageUrl; }
+  public void setRazorpayQrImageUrl(String razorpayQrImageUrl) { this.razorpayQrImageUrl = razorpayQrImageUrl; }
   public String getBookedBy() { return bookedBy; }
   public void setBookedBy(String bookedBy) { this.bookedBy = bookedBy; }
   public String getPendingReason() { return pendingReason; }

@@ -159,6 +159,16 @@ public class GatewayApplication {
     return proxy(bookingUrl, request, body);
   }
 
+  @RequestMapping("/api/track/**")
+  public ResponseEntity<byte[]> track(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
+  @RequestMapping(value = "/api/track", method = {RequestMethod.GET, RequestMethod.POST})
+  public ResponseEntity<byte[]> trackRoot(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    return proxy(bookingUrl, request, body);
+  }
+
   @RequestMapping("/api/statuses/**")
   public ResponseEntity<byte[]> statuses(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
     return proxy(bookingUrl, request, body);

@@ -21,6 +21,11 @@ public class PaymentController {
     this.service = service;
   }
 
+  @GetMapping("/gateway")
+  public Map<String, Object> gateway() {
+    return service.gatewayStatus();
+  }
+
   @PostMapping("/create")
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> create(@RequestBody(required = false) Map<String, Object> body) {
@@ -47,6 +52,17 @@ public class PaymentController {
   @PostMapping("/{paymentId}/verify-with-gateway")
   public Map<String, Object> verify(@PathVariable String paymentId) {
     return service.verifyWithGateway(paymentId);
+  }
+
+  @PostMapping("/{paymentId}/razorpay/verify")
+  public Map<String, Object> razorpayVerify(
+      @PathVariable String paymentId, @RequestBody(required = false) Map<String, Object> body) {
+    return service.verifyRazorpayCheckout(paymentId, body == null ? Map.of() : body);
+  }
+
+  @PostMapping("/{paymentId}/confirm-local-upi")
+  public Map<String, Object> confirmLocalUpi(@PathVariable String paymentId) {
+    return service.confirmLocalUpi(paymentId);
   }
 
   @PostMapping("/{paymentId}/cancel")

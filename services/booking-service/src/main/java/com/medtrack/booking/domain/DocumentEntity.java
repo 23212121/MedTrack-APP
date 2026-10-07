@@ -22,6 +22,10 @@ public class DocumentEntity {
   @Column(name = "hospital_id", nullable = false)
   private Long hospitalId;
 
+  /** Set when a diagnostic lab uploads the report. */
+  @Column(name = "lab_id", length = 64)
+  private String labId;
+
   @Column(name = "phone_number", nullable = false, length = 32)
   private String phoneNumber;
 
@@ -95,6 +99,14 @@ public class DocumentEntity {
 
   public void setHospitalId(Long hospitalId) {
     this.hospitalId = hospitalId;
+  }
+
+  public String getLabId() {
+    return labId;
+  }
+
+  public void setLabId(String labId) {
+    this.labId = labId;
   }
 
   public String getPhoneNumber() {

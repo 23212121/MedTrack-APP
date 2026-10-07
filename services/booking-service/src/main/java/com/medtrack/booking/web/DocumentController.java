@@ -26,15 +26,27 @@ public class DocumentController {
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> upload(
       @RequestParam("patientName") String patientName,
-      @RequestParam("aadhaarNumber") String aadhaarNumber,
+      @RequestParam(value = "aadhaarNumber", required = false) String aadhaarNumber,
       @RequestParam("phoneNumber") String phoneNumber,
+      @RequestParam(value = "documentType", required = false) String documentType,
+      @RequestParam(value = "hospitalId", required = false) Long hospitalIdParam,
       @RequestParam(value = "files", required = false) MultipartFile[] files,
       @RequestHeader(value = "X-Hospital-Id", required = false) String hospitalHeader,
       @RequestHeader(value = "X-User", required = false) String userHeader) {
-    // Always bind upload to logged-in hospital session (ignore client hospitalId overrides)
-    Long hospitalId = requireHospitalId(hospitalHeader);
+    Long hospitalId = parseHospitalId(hospitalHeader);
+    if (hospitalId == null) hospitalId = hospitalIdParam;
+    if (hospitalId == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Hospital id is required");
+    }
     DocumentEntity saved =
-        service.upload(hospitalId, patientName, aadhaarNumber, phoneNumber, files, userHeader);
+        service.upload(
+            hospitalId,
+            patientName,
+            aadhaarNumber,
+            phoneNumber,
+            files,
+            userHeader,
+            documentType);
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("message", "Documents saved");
     out.put("document", service.toMap(saved));
@@ -75,13 +87,19 @@ public class DocumentController {
   }
 
   private static Long requireHospitalId(String header) {
-    if (header == null || header.isBlank()) {
+    Long id = parseHospitalId(header);
+    if (id == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Hospital id is required");
     }
+    return id;
+  }
+
+  private static Long parseHospitalId(String header) {
+    if (header == null || header.isBlank()) return null;
     try {
       return Long.parseLong(header.trim());
     } catch (NumberFormatException ex) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid hospital id");
+      return null;
     }
   }
 }

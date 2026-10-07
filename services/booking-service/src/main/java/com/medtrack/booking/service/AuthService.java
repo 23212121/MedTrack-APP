@@ -1,12 +1,14 @@
 package com.medtrack.booking.service;
 
 import com.medtrack.booking.domain.HospitalEntity;
+import com.medtrack.booking.domain.LabTechnicianEntity;
 import com.medtrack.booking.domain.LoginEntity;
 import com.medtrack.booking.domain.LoginStatus;
 import com.medtrack.booking.domain.MedicalStoreEntity;
 import com.medtrack.booking.domain.PatientEntity;
 import com.medtrack.booking.domain.UserDetailsEntity;
 import com.medtrack.booking.repo.HospitalRepository;
+import com.medtrack.booking.repo.LabTechnicianRepository;
 import com.medtrack.booking.repo.LoginRepository;
 import com.medtrack.booking.repo.MedicalStoreRepository;
 import com.medtrack.booking.repo.PatientRepository;
@@ -27,6 +29,7 @@ public class AuthService {
   private final PatientRepository patientRepo;
   private final UserDetailsRepository userDetailsRepo;
   private final MedicalStoreRepository storeRepo;
+  private final LabTechnicianRepository labRepo;
   private final AuthTokenService tokenService;
 
   public AuthService(
@@ -35,12 +38,14 @@ public class AuthService {
       PatientRepository patientRepo,
       UserDetailsRepository userDetailsRepo,
       MedicalStoreRepository storeRepo,
+      LabTechnicianRepository labRepo,
       AuthTokenService tokenService) {
     this.loginRepo = loginRepo;
     this.hospitalRepo = hospitalRepo;
     this.patientRepo = patientRepo;
     this.userDetailsRepo = userDetailsRepo;
     this.storeRepo = storeRepo;
+    this.labRepo = labRepo;
     this.tokenService = tokenService;
   }
 
@@ -59,8 +64,9 @@ public class AuthService {
       case "USER" -> loginDoctor(id.trim(), password);
       case "PATIENT" -> loginPatient(id.trim(), password);
       case "MEDICAL" -> loginMedical(id.trim(), password);
+      case "LAB" -> loginLab(id.trim(), password);
       default -> throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "loginType must be HOSPITAL, USER, PATIENT, or MEDICAL");
+          HttpStatus.BAD_REQUEST, "loginType must be HOSPITAL, USER, PATIENT, MEDICAL, or LAB");
     };
   }
 
@@ -206,6 +212,45 @@ public class AuthService {
     out.put("medicalStoreId", store.getId());
     out.put("storeCode", store.getStoreCode());
     out.put("storeName", store.getStoreName());
+    out.put("token", tokenService.issue(claims));
+    return out;
+  }
+
+  private Map<String, Object> loginLab(String id, String password) {
+    LoginEntity row =
+        authenticate(loginRepo.findByLoginTypeAndLoginIdIgnoreCase("LAB", id), password);
+    LabTechnicianEntity lab =
+        labRepo
+            .findByLabCodeIgnoreCase(row.getLoginId())
+            .orElseThrow(
+                () ->
+                    new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED, "Lab is not registered"));
+    if (!"ACTIVE".equalsIgnoreCase(lab.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Lab is inactive");
+    }
+    HospitalEntity hospital =
+        row.getHospitalId() == null ? null : hospitalRepo.findById(row.getHospitalId()).orElse(null);
+    Map<String, Object> claims = new HashMap<>();
+    claims.put("loginType", "LAB");
+    claims.put("role", "LAB");
+    claims.put("labTechnicianId", lab.getId());
+    claims.put("userId", lab.getId());
+    if (row.getHospitalId() != null) {
+      claims.put("hospitalId", row.getHospitalId());
+    }
+    Map<String, Object> out =
+        baseResult(
+            "LAB",
+            row.getDisplayName() != null && !row.getDisplayName().isBlank()
+                ? row.getDisplayName()
+                : lab.getLabName(),
+            hospital);
+    out.put("role", "LAB");
+    out.put("userId", lab.getId());
+    out.put("labTechnicianId", lab.getId());
+    out.put("labCode", lab.getLabCode());
+    out.put("labName", lab.getLabName());
     out.put("token", tokenService.issue(claims));
     return out;
   }

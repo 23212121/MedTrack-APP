@@ -45,11 +45,17 @@ public class DocumentsSchemaInitializer {
     } catch (Exception ignored) {
       // older Postgres without IF NOT EXISTS on ADD COLUMN — ignore
     }
+    try {
+      jdbc.execute("ALTER TABLE svc.documents ADD COLUMN IF NOT EXISTS lab_id VARCHAR(64)");
+    } catch (Exception ignored) {
+      // older Postgres without IF NOT EXISTS on ADD COLUMN — ignore
+    }
     jdbc.execute(
         "CREATE INDEX IF NOT EXISTS idx_documents_hospital ON svc.documents(hospital_id)");
     jdbc.execute(
         "CREATE INDEX IF NOT EXISTS idx_documents_phone ON svc.documents(phone_number)");
     jdbc.execute(
         "CREATE INDEX IF NOT EXISTS idx_documents_aadhaar ON svc.documents(aadhaar_number)");
+    jdbc.execute("CREATE INDEX IF NOT EXISTS idx_documents_lab ON svc.documents(lab_id)");
   }
 }

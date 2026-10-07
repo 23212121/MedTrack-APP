@@ -89,7 +89,7 @@ public class PatientPortalController {
    */
   @GetMapping("/documents")
   public Map<String, Object> documents(
-      @RequestParam String phone, @RequestParam String patientName) {
+      @RequestParam String phone, @RequestParam(required = false) String patientName) {
     List<Map<String, Object>> rows = documentService.listForPatient(phone, patientName);
     return Map.of("count", rows.size(), "documents", rows);
   }

@@ -10,4 +10,7 @@ public interface WfhRequestRepository extends JpaRepository<WfhRequestEntity, St
 
   List<WfhRequestEntity> findByHospitalIdAndStatusOrderByCreationDateDesc(
       Long hospitalId, String status);
+
+  List<WfhRequestEntity> findByHospitalIdAndEmployeeIdOrderByCreationDateDesc(
+      Long hospitalId, String employeeId);
 }

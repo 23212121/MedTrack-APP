@@ -8,8 +8,10 @@ import {
 } from "../../api";
 import NativeFileInput from "../../components/NativeFileInput";
 import { IndiaStateCityFields } from "../../components/IndiaStateCityFields";
+import UpiQr from "../../components/UpiQr";
 import { session } from "../../dl/MedTrackSession";
 import { toast } from "../../toast";
+import { buildUpiPay } from "../../upi";
 
 const STATUS_LABEL: Record<string, string> = {
   ORDERED: "Ordered",
@@ -149,25 +151,15 @@ async function loadRazorpay(): Promise<new (opts: Record<string, unknown>) => Rz
 
 type UpiPayApp = { id: string; name: string; uri: string };
 
-function upiPayQuery(upi: string, name: string, amount: number, note: string) {
-  const q = new URLSearchParams({
-    pa: upi,
-    pn: name,
-    am: amount.toFixed(2),
-    cu: "INR",
-    tn: note,
-  });
-  return q.toString();
-}
-
 function defaultUpiApps(upi: string, name: string, amount: number, note: string): UpiPayApp[] {
-  const q = upiPayQuery(upi, name, amount, note);
+  const uri = buildUpiPay({ vpa: upi, payeeName: name, amount, note });
+  const q = uri.includes("?") ? uri.slice(uri.indexOf("?") + 1) : "";
   return [
     { id: "gpay", name: "Google Pay", uri: `tez://upi/pay?${q}` },
     { id: "phonepe", name: "PhonePe", uri: `phonepe://pay?${q}` },
     { id: "paytm", name: "Paytm", uri: `paytmmp://pay?${q}` },
     { id: "bhim", name: "BHIM", uri: `bhim://pay?${q}` },
-    { id: "upi", name: "Other UPI apps", uri: `upi://pay?${q}` },
+    { id: "upi", name: "Other UPI apps", uri },
   ];
 }
 
@@ -236,7 +228,10 @@ export default function MedicineOrdersPage({
   const [payShot, setPayShot] = useState<File[]>([]);
   const [paying, setPaying] = useState(false);
   const [payHint, setPayHint] = useState("");
+  const [paySuccess, setPaySuccess] = useState(false);
   const [patientReview, setPatientReview] = useState(false);
+  const [bankQrUrl, setBankQrUrl] = useState("");
+  const [bankStatus, setBankStatus] = useState("");
 
   useEffect(() => {
     setStatus(defaultStatus || "");
@@ -264,6 +259,52 @@ export default function MedicineOrdersPage({
   useEffect(() => {
     void load();
   }, [status, defaultStatus]);
+
+  useEffect(() => {
+    if (!payStep || !patientReview || !detail || paySuccess) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const created = await api.createMedicineRazorpayOrder(detail.id, reviewPayload());
+        if (cancelled) return;
+        if (created.order) setDetail(created.order);
+        const maybeQr = created.order?.upiQrUrl || created.qrImageUrl || created.order?.qrImageUrl;
+        if (maybeQr && !/rzp\.io|razorpay/i.test(maybeQr)) setBankQrUrl(maybeQr);
+      } catch {
+        /* static UPI QR still works */
+      }
+    })();
+    const timer = window.setInterval(async () => {
+      if (!detail) return;
+      try {
+        const latest = await api.verifyMedicineBankPayment(detail.id, reviewPayload());
+        if (cancelled) return;
+        if (latest.order) setDetail(latest.order);
+        const maybeQr = latest.order?.upiQrUrl || latest.qrImageUrl;
+        if (maybeQr && !/rzp\.io|razorpay/i.test(maybeQr)) setBankQrUrl(maybeQr);
+        setBankStatus(latest.bankStatus || "");
+        if (latest.bankVerified || latest.order?.paymentStatus === "PAID") {
+          window.clearInterval(timer);
+          setPaySuccess(true);
+          window.setTimeout(() => {
+            toast.success("Payment successful");
+            setAmountOpen(false);
+            setPatientReview(false);
+            setPayStep(false);
+            setPaySuccess(false);
+            void load();
+          }, 1800);
+        }
+      } catch {
+        /* keep waiting */
+      }
+    }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payStep, patientReview, detail?.id, paySuccess]);
 
   useEffect(() => {
     if (!isPatient) return;
@@ -393,11 +434,53 @@ export default function MedicineOrdersPage({
       if (created.order) setDetail(created.order);
       const match = (created.upiApps || payAppsFor(created.order || detail!)).find((row) => row.id === app.id);
       openUpiApp(match?.uri || app.uri);
-      setPayHint(`Complete payment in ${app.name}, then upload the payment screenshot.`);
+      setPayHint(`Complete payment in ${app.name}. We will confirm with the bank.`);
     } catch (err) {
       openUpiApp(app.uri);
-      setPayHint(`Complete payment in ${app.name}, then upload the payment screenshot.`);
+      setPayHint(`Complete payment in ${app.name}. We will confirm with the bank.`);
       setError(err instanceof Error ? err.message : "");
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  async function confirmLocalMedicinePay() {
+    if (!detail) return;
+    setPaying(true);
+    setError("");
+    try {
+      const latest = await api.verifyMedicineBankPayment(detail.id, reviewPayload());
+      if (latest.order) setDetail(latest.order);
+      if (latest.qrImageUrl) setBankQrUrl(latest.qrImageUrl);
+      setBankStatus(latest.bankStatus || "");
+      if (latest.bankVerified || latest.order?.paymentStatus === "PAID") {
+        setPaySuccess(true);
+        window.setTimeout(() => {
+          toast.success("Payment successful");
+          setAmountOpen(false);
+          setPatientReview(false);
+          setPayStep(false);
+          setPaySuccess(false);
+          void load();
+        }, 1800);
+        return;
+      }
+      if (latest.bankStatus === "GATEWAY_NOT_CONFIGURED") {
+        await api.confirmMedicineLocalUpi(detail.id, reviewPayload());
+        setPaySuccess(true);
+        window.setTimeout(() => {
+          toast.success("Payment successful");
+          setAmountOpen(false);
+          setPatientReview(false);
+          setPayStep(false);
+          setPaySuccess(false);
+          void load();
+        }, 1800);
+        return;
+      }
+      setError(latest.message || "Waiting for the bank to confirm this payment.");
+    } catch (err) {
+      setError(hideAwsDump(err, "Could not confirm payment with the bank"));
     } finally {
       setPaying(false);
     }
@@ -411,7 +494,7 @@ export default function MedicineOrdersPage({
       const created = await api.createMedicineRazorpayOrder(detail!.id, reviewPayload());
       if (created.order) setDetail(created.order);
       if (!created.razorpayOrderId || !created.keyId) {
-        setPayHint("Use Google Pay, PhonePe, Paytm, or another UPI app below, then upload the screenshot.");
+      setPayHint("Pay with the QR. We confirm with the bank, then show the success popup.");
         return;
       }
       const Razorpay = await loadRazorpay();
@@ -537,6 +620,7 @@ export default function MedicineOrdersPage({
     setPayStep(false);
     setPayShot([]);
     setPayHint("");
+    setPaySuccess(false);
     const reviewFromRow =
       isPatient && patientCanEditOrder(order.status, order.amountStatus, order.paymentStatus);
     setPatientReview(reviewFromRow);
@@ -1132,6 +1216,16 @@ export default function MedicineOrdersPage({
                   </label>
                 ) : null}
                 {payStep && patientReview ? (
+                  paySuccess ? (
+                    <div className="appointment-pay-success" aria-live="polite">
+                      <span className="appointment-pay-success-mark" aria-hidden>
+                        ✓
+                      </span>
+                      <h2>Payment successful</h2>
+                      <p className="appointment-pay-amount">{money(grand)}</p>
+                      <p className="muted">Returning to your medicine orders… Confirmed with the bank.</p>
+                    </div>
+                  ) : (
                   <div className="medicine-pay-panel">
                     <p>
                       <strong>Pay {money(grand)}</strong> to {detail.assignedStoreName || "the medical store"}
@@ -1141,11 +1235,15 @@ export default function MedicineOrdersPage({
                         <p className="muted">Scan UPI QR</p>
                         {(() => {
                           const upi = detail.upiId || "medtrackpharmacy@upi";
-                          const uri = `upi://pay?pa=${encodeURIComponent(upi)}&pn=${encodeURIComponent(detail.assignedStoreName || "Medical store")}&am=${grand.toFixed(2)}&cu=INR&tn=${encodeURIComponent(detail.orderNumber)}`;
-                          const qr = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(uri)}`;
+                          const uri = buildUpiPay({
+                            vpa: upi,
+                            payeeName: detail.assignedStoreName || "Medical store",
+                            amount: grand,
+                            note: detail.orderNumber,
+                          });
                           return (
                             <>
-                              <img alt="UPI payment QR" src={qr} width={220} height={220} />
+                              <UpiQr payload={uri} size={220} />
                               <p className="muted">{upi}</p>
                               <a className="link-button" href={uri}>
                                 Open UPI app
@@ -1191,10 +1289,29 @@ export default function MedicineOrdersPage({
                           {paying ? "Opening payment…" : "Cards, netbanking & wallets (Razorpay)"}
                         </button>
                         {payHint ? <p className="patient-note">{payHint}</p> : null}
+                        {bankStatus && bankStatus !== "GATEWAY_NOT_CONFIGURED" ? (
+                          <p className="appointment-pay-bank" aria-live="polite">
+                            {paying ? "Confirming with the bank…" : "Checking with the bank…"}
+                          </p>
+                        ) : (
+                          <p className="appointment-pay-bank" aria-live="polite">
+                            Checking with the bank after you pay…
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          disabled={paying || quoteItems.length === 0}
+                          onClick={() => void confirmLocalMedicinePay()}
+                        >
+                          {paying ? "Confirming with bank…" : "Confirm with bank"}
+                        </button>
                         <p>
-                          <strong>After paying — upload screenshot</strong>
+                          <strong>Or upload a payment screenshot</strong>
                         </p>
-                        <p className="muted">Required for UPI apps. Razorpay success is confirmed automatically.</p>
+                        <p className="muted">
+                          After PhonePe/GPay succeeds, we ask Razorpay to confirm the capture with
+                          the bank, then show the payment successful popup.
+                        </p>
                         <FilePicker files={payShot} onPick={setPayShot} />
                         <button
                           type="button"
@@ -1205,7 +1322,7 @@ export default function MedicineOrdersPage({
                             form.set("payload", JSON.stringify(reviewPayload()));
                             void run(
                               () => api.uploadMedicinePaymentScreenshot(detail.id, form),
-                              "Payment screenshot uploaded",
+                              "Payment successful",
                             );
                           }}
                         >
@@ -1219,6 +1336,7 @@ export default function MedicineOrdersPage({
                       </button>
                     </div>
                   </div>
+                  )
                 ) : (
                   <>
                 {quoteItems.length === 0 ? (

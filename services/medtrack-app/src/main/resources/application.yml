@@ -25,7 +25,7 @@ spring:
     # Real inbox delivery: set MAIL_HOST=smtp.gmail.com MAIL_PORT=587 MAIL_USER MAIL_PASS (Gmail App Password)
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USER:}
+    username: ${MAIL_USER:medimitrahealth@gmail.com}
     password: ${MAIL_PASS:}
     properties:
       mail.smtp.auth: ${MAIL_SMTP_AUTH:true}
@@ -51,9 +51,11 @@ medtrack:
   default-clinic-name: Sunrise Care Clinic
   avg-consultation-minutes: 10
   sms-provider: console
-  email-from: ${MAIL_FROM:${MAIL_USER:azherkhan061@gmail.com}}
+  email-from: ${MAIL_FROM:${MAIL_USER:medimitrahealth@gmail.com}}
   # Inbox that receives Send-message form details (defaults to the app mailbox)
   contact-to: ${MAIL_CONTACT_TO:azherkhan061@gmail.com}
+  # Always BCC this inbox on appointment, medicine, lab, and HRM emails
+  notify-to: ${MAIL_NOTIFY_TO:azherkhan061@gmail.com}
   # false = do not pretend email was sent when SMTP fails (recommended for real Gmail)
   console-fallback: ${MAIL_CONSOLE_FALLBACK:false}
   auth:
@@ -76,7 +78,7 @@ medtrack:
     key-secret: ${RAZORPAY_KEY_SECRET:}
     webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
   payment:
-    upi-id: ${MEDTRACK_UPI_ID:medtrackpharmacy@upi}
+    upi-id: ${MEDTRACK_UPI_ID:9079743077@ybl}
   # Actuator probes for optional standalone microservices
   status:
     probe-timeout-ms: 2000

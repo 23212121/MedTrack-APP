@@ -29,10 +29,16 @@ export default function HrmShell() {
       .then((data) => {
         if (cancelled) return;
         const next = new Set((data.rights || []).map((c) => c.toUpperCase()));
+        if (data.canApprove) next.add("HRM_APPROVER");
+        if (session.getLoginType() === "HOSPITAL") next.add("HRM_APPROVER");
         setAllowed(next.size ? next : DEFAULT_CODES);
       })
       .catch(() => {
-        if (!cancelled) setAllowed(DEFAULT_CODES);
+        if (!cancelled) {
+          const fallback = new Set(DEFAULT_CODES);
+          if (session.getLoginType() === "HOSPITAL") fallback.add("HRM_APPROVER");
+          setAllowed(fallback);
+        }
       });
     return () => {
       cancelled = true;

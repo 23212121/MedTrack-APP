@@ -50,6 +50,7 @@ export function login(
     patientName?: string;
     patientId?: string;
     medicalStoreId?: string;
+    labTechnicianId?: string;
   },
 ): void {
   session.login({
@@ -66,6 +67,7 @@ export function login(
     patientPhone: extras?.patientPhone,
     patientName: extras?.patientName,
     medicalStoreId: extras?.medicalStoreId,
+    labTechnicianId: extras?.labTechnicianId,
   });
 }
 
@@ -86,6 +88,7 @@ export const PUBLIC_PATHS = new Set([
   "/download-file",
   "/patient/login",
   "/patient/register",
+  "/lab-register",
 ]);
 
 export function isPublicPath(pathname: string): boolean {
@@ -97,6 +100,7 @@ export function isPublicPath(pathname: string): boolean {
 /** Where an X close on a public popup should return. */
 export function popupClosePath(): string {
   if (isPatientLoggedIn()) return "/patient";
+  if (session.isLab()) return "/lab";
   if (session.isMedical()) return "/medical";
   if (isLoggedIn()) return "/";
   return "/login";

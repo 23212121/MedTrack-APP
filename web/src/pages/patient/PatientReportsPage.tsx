@@ -6,10 +6,11 @@ import {
   PatientPortalDocument,
   PatientReport,
 } from "../../api";
-import { getPatientPhone } from "../../auth";
+import { getPatientPhone, session } from "../../auth";
 
 export default function PatientReportsPage() {
   const phone = getPatientPhone();
+  const sessionPatientName = session.getPatientName();
   const [reports, setReports] = useState<PatientReport[]>([]);
   const [documents, setDocuments] = useState<PatientPortalDocument[]>([]);
   const [patients, setPatients] = useState<AppointmentPatientOption[]>([]);
@@ -20,14 +21,14 @@ export default function PatientReportsPage() {
   const [busyKey, setBusyKey] = useState("");
 
   async function loadPatients() {
-    if (!phone) return;
+    if (!phone) return [];
     const data = await api.appointmentPatients(phone);
     setPatients(data.patients || []);
     return data.patients || [];
   }
 
   async function loadReports(patientName: string, next = filters) {
-    if (!phone || !patientName) {
+    if (!phone) {
       setReports([]);
       setDocuments([]);
       return;
@@ -37,11 +38,11 @@ export default function PatientReportsPage() {
     try {
       const [reportData, docData] = await Promise.all([
         api.patientReports(phone, {
-          patientName,
+          patientName: patientName || undefined,
           from: next.from || undefined,
           to: next.to || undefined,
         }),
-        api.patientDocuments(phone, patientName),
+        api.patientDocuments(phone, patientName || undefined),
       ]);
       setReports(reportData.reports);
       if (reportData.patients?.length) {
@@ -64,13 +65,16 @@ export default function PatientReportsPage() {
         setLoading(true);
         setError("");
         const list = await loadPatients();
+        const sessionName = sessionPatientName;
         if (list.length === 1) {
           setSelectedPatientName(list[0].patientName);
           await loadReports(list[0].patientName);
+        } else if (sessionName && list.some((p) => p.patientName === sessionName)) {
+          setSelectedPatientName(sessionName);
+          await loadReports(sessionName);
         } else {
-          setReports([]);
-          setDocuments([]);
-          setLoading(false);
+          setSelectedPatientName("");
+          await loadReports("");
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load patients");
@@ -81,12 +85,7 @@ export default function PatientReportsPage() {
 
   function onPatientChange(name: string) {
     setSelectedPatientName(name);
-    if (name) {
-      loadReports(name, filters);
-    } else {
-      setReports([]);
-      setDocuments([]);
-    }
+    loadReports(name, filters);
   }
 
   function onFilter(e: FormEvent) {
@@ -132,7 +131,7 @@ export default function PatientReportsPage() {
         <h2>Medical reports</h2>
         <p className="lead">
           View and download laboratory reports, prescriptions, discharge summaries, and hospital
-          test documents for the selected patient.
+          test documents. Lab uploads for this phone appear here automatically.
         </p>
 
         <form className="row patient-report-filters" onSubmit={onFilter}>
@@ -141,14 +140,14 @@ export default function PatientReportsPage() {
             <select
               value={selectedPatientName}
               onChange={(e) => onPatientChange(e.target.value)}
-              disabled={loading || patients.length === 0}
+              disabled={loading}
             >
               <option value="">
                 {patients.length > 1
-                  ? "Select patient"
+                  ? "All reports for this phone"
                   : patients.length === 0
-                    ? "No patients found"
-                    : "Select patient"}
+                    ? "All reports for this phone"
+                    : patients[0].patientName}
               </option>
               {patients.map((p) => (
                 <option key={`${p.patientId || ""}-${p.patientName}`} value={p.patientName}>
@@ -174,7 +173,7 @@ export default function PatientReportsPage() {
               onChange={(e) => setFilters({ ...filters, to: e.target.value })}
             />
           </label>
-          <button type="submit" disabled={loading || !selectedPatientName}>
+          <button type="submit" disabled={loading}>
             Filter
           </button>
         </form>
@@ -192,16 +191,14 @@ export default function PatientReportsPage() {
 
       <section className="panel">
         <h3 className="patient-report-section-title">Reports</h3>
-        {!selectedPatientName ? (
-          <p className="lead">
-            {patients.length > 1
-              ? "Select a patient name to view reports for this phone number."
-              : "No appointment patients found for this phone number."}
-          </p>
-        ) : loading ? (
+        {loading ? (
           <p className="lead">Loading reports…</p>
         ) : reports.length === 0 ? (
-          <p className="lead">No reports found for {selectedPatientName}.</p>
+          <p className="lead">
+            {selectedPatientName
+              ? `No reports found for ${selectedPatientName}.`
+              : "No lab or hospital reports found for this phone yet."}
+          </p>
         ) : (
           <ul className="patient-report-list">
             {reports.map((r) => (
@@ -217,9 +214,15 @@ export default function PatientReportsPage() {
                   {r.description && <p className="lead">{r.description}</p>}
                 </div>
                 {r.fileUrl ? (
-                  <Link to={downloadUrl(r.fileUrl)} className="btn-link">
-                    Download
-                  </Link>
+                  r.fileUrl.startsWith("/api/") ? (
+                    <a href={downloadUrl(r.fileUrl)} className="btn-link">
+                      Download
+                    </a>
+                  ) : (
+                    <Link to={downloadUrl(r.fileUrl)} className="btn-link">
+                      Download
+                    </Link>
+                  )
                 ) : (
                   <span className="lead">No file</span>
                 )}
@@ -231,12 +234,14 @@ export default function PatientReportsPage() {
 
       <section className="panel">
         <h3 className="patient-report-section-title">Documents</h3>
-        {!selectedPatientName ? (
-          <p className="lead">Select a patient name to view hospital-uploaded documents.</p>
-        ) : loading ? (
+        {loading ? (
           <p className="lead">Loading documents…</p>
         ) : documents.length === 0 ? (
-          <p className="lead">No documents found for {selectedPatientName}.</p>
+          <p className="lead">
+            {selectedPatientName
+              ? `No documents found for ${selectedPatientName}.`
+              : "No uploaded documents found for this phone yet."}
+          </p>
         ) : (
           <table className="table">
             <thead>

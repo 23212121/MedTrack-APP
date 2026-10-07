@@ -26,8 +26,25 @@ export default function AppHeader({
     session.getUsername() ||
     "";
   const medical = session.isMedical();
-  const homeTo = patient ? "/patient" : medical ? "/medical" : loggedIn ? "/" : "/about";
-  const profileTo = patient ? "/patient/profile" : medical ? "/medical" : loggedIn ? "/" : "/login";
+  const lab = session.isLab();
+  const homeTo = patient
+    ? "/patient"
+    : lab
+      ? "/lab"
+      : medical
+        ? "/medical"
+        : loggedIn
+          ? "/"
+          : "/about";
+  const profileTo = patient
+    ? "/patient/profile"
+    : lab
+      ? "/lab"
+      : medical
+        ? "/medical"
+        : loggedIn
+          ? "/"
+          : "/login";
   const logoutTo = patient ? "/patient/logout" : "/logout";
 
   return (

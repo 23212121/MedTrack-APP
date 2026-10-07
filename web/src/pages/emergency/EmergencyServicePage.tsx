@@ -182,14 +182,6 @@ export default function EmergencyServicePage() {
   return (
     <section className="panel emergency-page" aria-label="Check Emergency Service">
       <div className="emergency-page-head">
-        <div>
-          <p className="muted">Emergency</p>
-          <h1>Check Emergency Service</h1>
-          <p className="lead">
-            Search hospitals by state and city, see emergency beds and doctors, then book a bed for the
-            patient. Payment by QR is optional; you can attach a slip if you want.
-          </p>
-        </div>
         <VoiceEmergency
           draft={{
             state,

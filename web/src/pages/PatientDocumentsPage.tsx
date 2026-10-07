@@ -106,11 +106,11 @@ export default function PatientDocumentsPage() {
       toast.success(
         s3Ok === saved
           ? saved === 1
-            ? "Document uploaded to Amazon S3."
-            : `${saved} document sets uploaded to Amazon S3.`
+            ? "Document uploaded to Amazon S3. If this patient has a booked appointment, they were notified by SMS, email, and in-app."
+            : `${saved} document sets uploaded to Amazon S3. Patients with booked appointments were notified.`
           : saved === 1
-            ? "Document saved."
-            : `${saved} document sets saved.`,
+            ? "Document saved. If this patient has a booked appointment, they were notified."
+            : `${saved} document sets saved. Patients with booked appointments were notified.`,
       );
       setRows([newRow()]);
     } catch (err) {

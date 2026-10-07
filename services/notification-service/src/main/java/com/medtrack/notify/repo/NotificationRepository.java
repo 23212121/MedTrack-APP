@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface NotificationRepository extends JpaRepository<NotificationEntity, String> {
   List<NotificationEntity> findByVisitIdOrderByCreatedAtDesc(String visitId);
   List<NotificationEntity> findTop50ByOrderByCreatedAtDesc();
+  List<NotificationEntity> findTop50ByRecipientOrderByCreatedAtDesc(String recipient);
   boolean existsByVisitIdAndEventCodeAndChannelAndStatusIn(
       String visitId, String eventCode, String channel, List<String> statuses);
 }

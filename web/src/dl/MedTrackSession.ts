@@ -12,11 +12,12 @@ export type MedTrackSessionData = {
   hospitalId: string;
   hospitalName?: string;
   hospitalCode?: string;
-  /** HOSPITAL | USER | PATIENT | MEDICAL */
+  /** HOSPITAL | USER | PATIENT | MEDICAL | LAB */
   loginType?: string;
-  /** Doctor ID when loginType is USER; hospital ID when HOSPITAL; USR… when PATIENT; store id when MEDICAL */
+  /** Doctor ID when loginType is USER; hospital ID when HOSPITAL; USR… when PATIENT; store id when MEDICAL; lab id when LAB */
   userId?: string;
   medicalStoreId?: string;
+  labTechnicianId?: string;
   role?: string;
   accessToken?: string;
   /** Same as userId for PATIENT logins (USR000001). Legacy UUID for old phone-only accounts. */
@@ -34,6 +35,10 @@ function read(): MedTrackSessionData | null {
     if (!data?.username || !data?.password) return null;
     if (data.loginType === "PATIENT") {
       if (!data.patientPhone && !data.userId && !data.patientId) return null;
+      return data;
+    }
+    if (data.loginType === "LAB") {
+      if (!data.userId && !data.labTechnicianId && !data.username) return null;
       return data;
     }
     if (!data?.hospitalId) return null;
@@ -77,6 +82,9 @@ export const session = {
     if (s.loginType === "PATIENT") {
       return Boolean(s.patientPhone || s.userId || s.patientId);
     }
+    if (s.loginType === "LAB") {
+      return Boolean(s.userId || s.labTechnicianId || s.username);
+    }
     return Boolean(s.hospitalId);
   },
 
@@ -100,8 +108,16 @@ export const session = {
     return read()?.loginType === "MEDICAL";
   },
 
+  isLab(): boolean {
+    return read()?.loginType === "LAB";
+  },
+
   getMedicalStoreId(): string {
     return read()?.medicalStoreId ?? (read()?.loginType === "MEDICAL" ? read()?.userId ?? "" : "");
+  },
+
+  getLabTechnicianId(): string {
+    return read()?.labTechnicianId ?? (read()?.loginType === "LAB" ? read()?.userId ?? "" : "");
   },
 
   getLoginType(): string {
@@ -176,8 +192,10 @@ export const session = {
     patientPhone?: string;
     patientName?: string;
     medicalStoreId?: string;
+    labTechnicianId?: string;
   }): MedTrackSessionData {
     const isPatient = input.loginType === "PATIENT";
+    const isLab = input.loginType === "LAB";
     const data: MedTrackSessionData = {
       username: String(input.username).trim(),
       password: String(input.password),
@@ -196,6 +214,7 @@ export const session = {
       patientPhone: input.patientPhone?.trim() || undefined,
       patientName: input.patientName?.trim() || undefined,
       medicalStoreId: input.medicalStoreId?.trim() || undefined,
+      labTechnicianId: input.labTechnicianId?.trim() || input.userId?.trim() || undefined,
       loggedInAt: new Date().toISOString(),
     };
     if (!data.username || !data.password) {
@@ -204,7 +223,10 @@ export const session = {
     if (isPatient && !data.patientPhone && !data.userId && !data.patientId) {
       throw new Error("patientId, userId, or patientPhone is required for patient login");
     }
-    if (!isPatient && !data.hospitalId) {
+    if (isLab && !data.userId && !data.labTechnicianId) {
+      throw new Error("lab technician id is required for lab login");
+    }
+    if (!isPatient && !isLab && !data.hospitalId) {
       throw new Error("username, password and hospitalId are required");
     }
     write(data);

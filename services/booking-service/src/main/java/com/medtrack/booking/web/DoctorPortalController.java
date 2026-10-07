@@ -69,7 +69,7 @@ public class DoctorPortalController {
   public Map<String, Object> uploadDocuments(
       HttpServletRequest request,
       @PathVariable("appointmentId") String appointmentId,
-      @RequestParam("aadhaarNumber") String aadhaarNumber,
+      @RequestParam(value = "aadhaarNumber", required = false) String aadhaarNumber,
       @RequestParam(value = "files", required = false) MultipartFile[] files) {
     DoctorSession doctor = identity.requireDoctor(request);
     String uploadedBy = request.getHeader("X-User");

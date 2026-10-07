@@ -20,12 +20,17 @@ public class HrmWfhService {
   private final AuditContext audit;
   private final WfhRequestRepository wfhRepo;
   private final HrmAppService hrm;
+  private final HrmNotificationService mail;
 
   public HrmWfhService(
-      AuditContext audit, WfhRequestRepository wfhRepo, @Lazy HrmAppService hrm) {
+      AuditContext audit,
+      WfhRequestRepository wfhRepo,
+      @Lazy HrmAppService hrm,
+      HrmNotificationService mail) {
     this.audit = audit;
     this.wfhRepo = wfhRepo;
     this.hrm = hrm;
+    this.mail = mail;
   }
 
   public List<WfhRequestEntity> list() {
@@ -58,7 +63,19 @@ public class HrmWfhService {
     req.setNotifyTo(str(body.get("notifyTo")));
     req.setStatus("Pending");
     req.touchAudit(audit.hospitalId(), audit.doctorId(), audit.user());
-    return wfhRepo.save(req);
+    WfhRequestEntity saved = wfhRepo.save(req);
+    mail.notify(
+        saved.getEmployeeId(),
+        saved.getEmployeeName(),
+        "WFH requested",
+        "Work-from-home request submitted for approver: "
+            + saved.getFromDate()
+            + " to "
+            + saved.getToDate()
+            + " ("
+            + saved.getDays()
+            + " day(s)).");
+    return saved;
   }
 
   @Transactional
@@ -73,12 +90,27 @@ public class HrmWfhService {
     if (!"Pending".equalsIgnoreCase(req.getStatus())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "WFH is already " + req.getStatus());
     }
-    if (!"Approved".equalsIgnoreCase(status) && !"Rejected".equalsIgnoreCase(status)) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status must be Approved or Rejected");
+    if (!"Approved".equalsIgnoreCase(status)
+        && !"Rejected".equalsIgnoreCase(status)
+        && !"Dismissed".equalsIgnoreCase(status)
+        && !"Dismiss".equalsIgnoreCase(status)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status must be Approved or Dismissed");
     }
-    req.setStatus("Approved".equalsIgnoreCase(status) ? "Approved" : "Rejected");
+    req.setStatus("Approved".equalsIgnoreCase(status) ? "Approved" : "Dismissed");
     req.touchAudit(audit.hospitalId(), audit.doctorId(), audit.user());
-    return wfhRepo.save(req);
+    WfhRequestEntity saved = wfhRepo.save(req);
+    mail.notify(
+        saved.getEmployeeId(),
+        saved.getEmployeeName(),
+        "WFH " + saved.getStatus(),
+        "Your work-from-home request ("
+            + saved.getFromDate()
+            + " to "
+            + saved.getToDate()
+            + ") is "
+            + saved.getStatus()
+            + ".");
+    return saved;
   }
 
   private static String str(Object o) {

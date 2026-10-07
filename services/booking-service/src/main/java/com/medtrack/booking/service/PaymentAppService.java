@@ -3,9 +3,11 @@ package com.medtrack.booking.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medtrack.booking.domain.AppointmentEntity;
+import com.medtrack.booking.domain.DoctorBankEntity;
 import com.medtrack.booking.domain.PaymentEntity;
 import com.medtrack.booking.event.PaymentCompletedEvent;
 import com.medtrack.booking.repo.AppointmentRepository;
+import com.medtrack.booking.repo.DoctorBankRepository;
 import com.medtrack.booking.repo.PaymentRepository;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +43,7 @@ public class PaymentAppService {
 
   private final PaymentRepository paymentRepo;
   private final AppointmentRepository appointmentRepo;
+  private final DoctorBankRepository doctorBankRepo;
   private final AppointmentEnrichmentService enrichment;
   private final RazorpayGateway razorpay;
   private final ApplicationEventPublisher events;
@@ -50,6 +53,7 @@ public class PaymentAppService {
   public PaymentAppService(
       PaymentRepository paymentRepo,
       AppointmentRepository appointmentRepo,
+      DoctorBankRepository doctorBankRepo,
       AppointmentEnrichmentService enrichment,
       RazorpayGateway razorpay,
       ApplicationEventPublisher events,
@@ -57,6 +61,7 @@ public class PaymentAppService {
       @Value("${medtrack.payment.upi-id:medtrackclinic@upi}") String defaultUpiId) {
     this.paymentRepo = paymentRepo;
     this.appointmentRepo = appointmentRepo;
+    this.doctorBankRepo = doctorBankRepo;
     this.enrichment = enrichment;
     this.razorpay = razorpay;
     this.events = events;
@@ -64,6 +69,22 @@ public class PaymentAppService {
     this.defaultUpiId = defaultUpiId == null || defaultUpiId.isBlank()
         ? "medtrackclinic@upi"
         : defaultUpiId.trim();
+  }
+
+  public Map<String, Object> gatewayStatus() {
+    Map<String, Object> out = new LinkedHashMap<>();
+    boolean on = razorpay.configured();
+    out.put("razorpayEnabled", on);
+    String id = razorpay.keyId();
+    out.put(
+        "mode",
+        !on ? "none" : id.startsWith("rzp_live_") ? "live" : id.startsWith("rzp_test_") ? "test" : "unknown");
+    out.put(
+        "message",
+        on
+            ? "Razorpay is ready. Scan the QR, pay in UPI, then Confirm with bank."
+            : "Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in AWS_Application.properties");
+    return out;
   }
 
   /**
@@ -102,15 +123,16 @@ public class PaymentAppService {
             .findFirst()
             .orElse(null);
     if (reusable != null && !expired(reusable)) {
-      if (reusable.getQrImageUrl() == null || reusable.getQrImageUrl().isBlank()) {
-        attachGatewayInstruments(
-            reusable, enrichment.hospitalName(appt.getHospitalId()), appointmentId);
-        reusable.setStatus(PAYMENT_PENDING);
-        reusable.setUpdatedAt(Instant.now());
-        reusable = paymentRepo.save(reusable);
-      }
+      attachGatewayInstruments(
+          reusable,
+          enrichment.hospitalName(appt.getHospitalId()),
+          appointmentId,
+          appt.getDoctorId());
+      reusable.setStatus(PAYMENT_PENDING);
+      reusable.setUpdatedAt(Instant.now());
+      reusable = paymentRepo.save(reusable);
       markAppointmentPending(appt, reusable.getPaymentId());
-      return toMap(reusable, "Scan the QR. Payment stays pending until the bank confirms.");
+      return toMap(reusable, "Scan with Google Pay or PhonePe. Amount is this booking fee.");
     }
     if (reusable != null) {
       reusable.setStatus(EXPIRED);
@@ -134,16 +156,17 @@ public class PaymentAppService {
     row.setAmount(amount);
     row.setCurrency("INR");
     row.setStatus(CREATED);
-    row.setGatewayName(razorpay.configured() ? "RAZORPAY" : "UPI");
+    row.setGatewayName("UPI");
     row.setCreatedAt(Instant.now());
     row = paymentRepo.save(row);
 
-    attachGatewayInstruments(row, enrichment.hospitalName(appt.getHospitalId()), appointmentId);
+    attachGatewayInstruments(
+        row, enrichment.hospitalName(appt.getHospitalId()), appointmentId, appt.getDoctorId());
     row.setStatus(PAYMENT_PENDING);
     row.setUpdatedAt(Instant.now());
     row = paymentRepo.save(row);
     markAppointmentPending(appt, row.getPaymentId());
-    return toMap(row, "Scan the QR. Payment stays pending until the bank confirms.");
+    return toMap(row, "Scan with Google Pay or PhonePe. Amount is this booking fee.");
   }
 
   @Transactional
@@ -173,14 +196,12 @@ public class PaymentAppService {
             .findFirst()
             .orElse(null);
     if (reusable != null && !expired(reusable)) {
-      if (reusable.getQrImageUrl() == null || reusable.getQrImageUrl().isBlank()) {
-        attachGatewayInstruments(
-            reusable, firstNonBlank(str(body, "hospitalName"), "MedTrack Emergency"), bookingId);
-        reusable.setStatus(PAYMENT_PENDING);
-        reusable.setUpdatedAt(Instant.now());
-        reusable = paymentRepo.save(reusable);
-      }
-      return toMap(reusable, "Scan the QR. Payment stays pending until the bank confirms.");
+      attachGatewayInstruments(
+          reusable, firstNonBlank(str(body, "hospitalName"), "MedTrack Emergency"), bookingId, null);
+      reusable.setStatus(PAYMENT_PENDING);
+      reusable.setUpdatedAt(Instant.now());
+      reusable = paymentRepo.save(reusable);
+      return toMap(reusable, "Scan with Google Pay or PhonePe. Amount is this booking fee.");
     }
     if (reusable != null) {
       reusable.setStatus(EXPIRED);
@@ -203,16 +224,16 @@ public class PaymentAppService {
     row.setAmount(amount);
     row.setCurrency("INR");
     row.setStatus(CREATED);
-    row.setGatewayName(razorpay.configured() ? "RAZORPAY" : "UPI");
+    row.setGatewayName("UPI");
     row.setCreatedAt(Instant.now());
     row = paymentRepo.save(row);
 
     attachGatewayInstruments(
-        row, firstNonBlank(str(body, "hospitalName"), "MedTrack Emergency"), bookingId);
+        row, firstNonBlank(str(body, "hospitalName"), "MedTrack Emergency"), bookingId, null);
     row.setStatus(PAYMENT_PENDING);
     row.setUpdatedAt(Instant.now());
     row = paymentRepo.save(row);
-    return toMap(row, "Scan the QR. Payment stays pending until the bank confirms.");
+    return toMap(row, "Scan with Google Pay or PhonePe. Amount is this booking fee.");
   }
 
   @Transactional
@@ -314,39 +335,150 @@ public class PaymentAppService {
   }
 
   /**
-   * Local/dev fallback when the gateway cannot reach our webhook. Still verifies with Razorpay.
+   * Ask Razorpay (the bank/UPI switch partner) whether this QR or order is captured.
+   * PhonePe itself cannot call localhost; Razorpay is how we confirm with the bank.
    */
   @Transactional
   public Map<String, Object> verifyWithGateway(String paymentId) {
     PaymentEntity row = require(paymentId);
     expireIfNeeded(row);
     if (COMPLETED.equalsIgnoreCase(row.getStatus())) {
-      return toMap(row, "Already completed");
+      return toMap(row, "Payment successful — bank confirmed");
     }
     if (!PAYMENT_PENDING.equalsIgnoreCase(row.getStatus())
         && !CREATED.equalsIgnoreCase(row.getStatus())) {
       return toMap(row, null);
     }
     if (!razorpay.configured()) {
-      return toMap(row, "Waiting for payment gateway confirmation");
+      Map<String, Object> waiting = toMap(row, "Bank check needs Razorpay keys (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET)");
+      waiting.put("bankVerified", false);
+      waiting.put("bankStatus", "GATEWAY_NOT_CONFIGURED");
+      return waiting;
     }
-    JsonNode payments = razorpay.fetchOrderPayments(row.getGatewayOrderId());
-    if (payments != null && payments.path("items").isArray()) {
-      for (JsonNode item : payments.path("items")) {
-        if (isCaptured(text(item, "status"))) {
-          return completeFromVerified(
-              item, row.getPaymentId(), row.getGatewayOrderId(), row.getGatewayQrId());
-        }
-      }
+
+    JsonNode captured = firstCapturedPayment(row);
+    if (captured != null) {
+      Map<String, Object> done =
+          completeFromVerified(
+              captured, row.getPaymentId(), row.getGatewayOrderId(), row.getGatewayQrId());
+      done.put("bankVerified", true);
+      done.put("bankStatus", "CAPTURED");
+      done.put("message", "Payment successful — confirmed with the bank");
+      return done;
     }
+
+    JsonNode failed = firstFailedPayment(row);
+    if (failed != null) {
+      row.setStatus(FAILED);
+      row.setUpdatedAt(Instant.now());
+      String txn = text(failed, "id");
+      if (!txn.isBlank()) row.setGatewayTransactionId(txn);
+      paymentRepo.save(row);
+      Map<String, Object> out = toMap(row, "Bank declined this payment");
+      out.put("bankVerified", true);
+      out.put("bankStatus", "FAILED");
+      return out;
+    }
+
+    Map<String, Object> pending = toMap(row, "Waiting for the bank to confirm this UPI payment");
+    pending.put("bankVerified", false);
+    pending.put("bankStatus", "PENDING");
+    return pending;
+  }
+
+  @Transactional
+  public Map<String, Object> verifyRazorpayCheckout(String paymentId, Map<String, Object> body) {
+    PaymentEntity row = require(paymentId);
+    expireIfNeeded(row);
+    if (COMPLETED.equalsIgnoreCase(row.getStatus())) {
+      Map<String, Object> done = toMap(row, "Payment successful — bank confirmed");
+      done.put("bankVerified", true);
+      done.put("bankStatus", "CAPTURED");
+      return done;
+    }
+    String rpOrder = firstNonBlank(str(body, "razorpayOrderId"), str(body, "razorpay_order_id"));
+    String rpPay = firstNonBlank(str(body, "razorpayPaymentId"), str(body, "razorpay_payment_id"));
+    String sig = firstNonBlank(str(body, "razorpaySignature"), str(body, "razorpay_signature"));
+    if (!razorpay.verify(rpOrder, rpPay, sig)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Razorpay signature");
+    }
+    JsonNode verified = razorpay.fetchPayment(rpPay);
+    if (verified == null || verified.isMissingNode() || verified.isNull()) {
+      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Could not load Razorpay payment");
+    }
+    Map<String, Object> done =
+        completeFromVerified(verified, paymentId, rpOrder, row.getGatewayQrId());
+    done.put("bankVerified", true);
+    done.put("bankStatus", "CAPTURED");
+    done.put("message", "Payment successful — confirmed with the bank");
+    return done;
+  }
+
+  private JsonNode firstCapturedPayment(PaymentEntity row) {
+    JsonNode fromLink = razorpay.firstCapturedOnPaymentLink(row.getGatewayQrId());
+    if (fromLink != null) return fromLink;
+    JsonNode fromQr = razorpay.firstCapturedIn(razorpay.fetchQrPayments(row.getGatewayQrId()));
+    if (fromQr != null) return fromQr;
+    JsonNode fromOrder = razorpay.firstCapturedIn(razorpay.fetchOrderPayments(row.getGatewayOrderId()));
+    if (fromOrder != null) return fromOrder;
     if (row.getGatewayTransactionId() != null && !row.getGatewayTransactionId().isBlank()) {
       JsonNode fetched = razorpay.fetchPayment(row.getGatewayTransactionId());
-      if (fetched != null && isCaptured(text(fetched, "status"))) {
-        return completeFromVerified(
-            fetched, row.getPaymentId(), row.getGatewayOrderId(), row.getGatewayQrId());
+      if (fetched != null && RazorpayGateway.isCaptured(RazorpayGateway.text(fetched, "status"))) {
+        return fetched;
       }
     }
-    return toMap(row, "Waiting for payment gateway confirmation");
+    return null;
+  }
+
+  private JsonNode firstFailedPayment(PaymentEntity row) {
+    JsonNode fromQr = razorpay.firstFailedIn(razorpay.fetchQrPayments(row.getGatewayQrId()));
+    if (fromQr != null) return fromQr;
+    return razorpay.firstFailedIn(razorpay.fetchOrderPayments(row.getGatewayOrderId()));
+  }
+
+  /**
+   * Local UPI QR: PhonePe/GPay does not call localhost. After the patient pays in the app, they
+   * confirm here so the booking can move on.
+   */
+  @Transactional
+  public Map<String, Object> confirmLocalUpi(String paymentId) {
+    PaymentEntity row = require(paymentId);
+    expireIfNeeded(row);
+    if (COMPLETED.equalsIgnoreCase(row.getStatus())) {
+      return toMap(row, "Payment successful");
+    }
+    if (!PAYMENT_PENDING.equalsIgnoreCase(row.getStatus())
+        && !CREATED.equalsIgnoreCase(row.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment cannot be confirmed");
+    }
+    if (razorpay.configured()) {
+      Map<String, Object> verified = verifyWithGateway(paymentId);
+      if (COMPLETED.equalsIgnoreCase(String.valueOf(verified.get("status")))) {
+        return verified;
+      }
+    }
+    String txn = "UPI-" + row.getPaymentId();
+    row.setGatewayName("UPI");
+    row.setGatewayTransactionId(txn);
+    row.setStatus(COMPLETED);
+    row.setUpdatedAt(Instant.now());
+    row = paymentRepo.saveAndFlush(row);
+    expireSiblingPendings(row);
+    events.publishEvent(
+        new PaymentCompletedEvent(
+            row.getPaymentId(),
+            row.getAppointmentId(),
+            row.getPatientId(),
+            row.getAmount() == null ? 0 : row.getAmount(),
+            row.getCurrency(),
+            txn,
+            firstNonBlank(row.getReferenceType(), "APPOINTMENT"),
+            firstNonBlank(row.getReferenceId(), row.getAppointmentId())));
+    log.info(
+        "[payment] LOCAL UPI COMPLETED paymentId={} appointmentId={}",
+        row.getPaymentId(),
+        row.getAppointmentId());
+    return toMap(row, "Payment successful");
   }
 
   private Map<String, Object> completeFromVerified(
@@ -446,58 +578,76 @@ public class PaymentAppService {
     }
   }
 
-  private void attachGatewayInstruments(PaymentEntity row, String payeeName, String noteRefId) {
-    long paise = Math.round((row.getAmount() == null ? 0 : row.getAmount()) * 100);
+  private void attachGatewayInstruments(
+      PaymentEntity row, String payeeName, String noteRefId, String doctorId) {
     String clinic = firstNonBlank(payeeName, "MedTrack Clinic");
-    Map<String, String> notes = new LinkedHashMap<>();
-    notes.put("paymentId", row.getPaymentId());
-    notes.put("appointmentId", firstNonBlank(row.getAppointmentId(), noteRefId));
-    notes.put("referenceType", firstNonBlank(row.getReferenceType(), "APPOINTMENT"));
-    notes.put("referenceId", firstNonBlank(row.getReferenceId(), noteRefId));
+    String vpa = payeeUpi(doctorId);
+    long paise = Math.round((row.getAmount() == null ? 0 : row.getAmount()) * 100);
     if (razorpay.configured() && paise >= 100) {
       try {
-        Map<String, Object> order =
-            razorpay.createOrder(paise, row.getPaymentId(), notes);
+        Map<String, String> notes = new LinkedHashMap<>();
+        notes.put("paymentId", row.getPaymentId());
+        notes.put("appointmentId", firstNonBlank(row.getAppointmentId(), noteRefId));
+        notes.put("referenceType", firstNonBlank(row.getReferenceType(), "APPOINTMENT"));
+        notes.put("referenceId", firstNonBlank(row.getReferenceId(), noteRefId));
+        Map<String, Object> order = razorpay.createOrder(paise, row.getPaymentId(), notes);
         row.setGatewayOrderId(String.valueOf(order.getOrDefault("razorpayOrderId", "")));
-        row.setGatewayName("RAZORPAY");
       } catch (Exception ex) {
         log.warn("[payment] Razorpay order failed: {}", ex.getMessage());
       }
-      try {
-        Map<String, Object> qr =
-            razorpay.createUpiQr(
-                paise,
-                clinic,
-                row.getPaymentId(),
-                firstNonBlank(row.getAppointmentId(), noteRefId));
-        row.setGatewayQrId(String.valueOf(qr.getOrDefault("qrId", "")));
-        String image = String.valueOf(qr.getOrDefault("imageUrl", ""));
-        if (image != null && !image.isBlank() && !"null".equals(image)) {
-          row.setQrImageUrl(image);
-        }
-        row.setGatewayName("RAZORPAY");
-      } catch (Exception ex) {
-        log.warn("[payment] Razorpay QR failed, using UPI fallback: {}", ex.getMessage());
-      }
     }
-    String uri = upiUri(row, clinic);
-    row.setUpiUri(uri);
-    if (row.getQrImageUrl() == null || row.getQrImageUrl().isBlank()) {
-      row.setQrImageUrl(
-          "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + urlEnc(uri));
-    }
+    row.setGatewayQrId(null);
+    row.setGatewayName(row.getGatewayOrderId() != null && !row.getGatewayOrderId().isBlank() ? "RAZORPAY" : "UPI");
+    row.setUpiUri(upiUri(row, clinic, vpa));
+    row.setQrImageUrl(upiQrImage(row.getUpiUri()));
+    log.info("[payment] UPI QR for {} pa={} am={} note={}", row.getPaymentId(), vpa, row.getAmount(), noteRefId);
   }
 
-  private String upiUri(PaymentEntity row, String payeeName) {
+  private String payeeUpi(String doctorId) {
+    if (doctorId != null && !doctorId.isBlank()) {
+      String fromDoctor =
+          doctorBankRepo
+              .findById(doctorId)
+              .map(DoctorBankEntity::getUpiId)
+              .map(String::trim)
+              .filter(s -> !s.isBlank())
+              .orElse("");
+      if (!fromDoctor.isBlank()) return fromDoctor;
+    }
+    return defaultUpiId;
+  }
+
+  private String upiUri(PaymentEntity row, String payeeName, String vpa) {
     double amt = row.getAmount() == null ? 0 : row.getAmount();
+    String pa = firstNonBlank(vpa, defaultUpiId).trim().replace(" ", "");
+    String pn = upiName(payeeName);
+    String tn = (row.getPaymentId() == null ? "MedTrack" : row.getPaymentId())
+        .replaceAll("[^A-Za-z0-9]", "");
+    if (tn.length() > 32) tn = tn.substring(0, 32);
+    if (tn.isBlank()) tn = "MedTrack";
     return "upi://pay?pa="
-        + urlEnc(defaultUpiId)
+        + pa
         + "&pn="
-        + urlEnc(payeeName)
+        + pn.replace(" ", "%20")
         + "&am="
         + String.format(java.util.Locale.US, "%.2f", amt)
-        + "&cu=INR&tn="
-        + urlEnc(row.getPaymentId());
+        + "&cu=INR&mc=0000&mode=02&tn="
+        + tn;
+  }
+
+  private static String upiName(String name) {
+    String s =
+        (name == null ? "MedTrack" : name)
+            .replaceAll("[^A-Za-z0-9 ]+", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+    if (s.isBlank()) s = "MedTrack";
+    return s.length() > 34 ? s.substring(0, 34) : s;
+  }
+
+  private static String upiQrImage(String uri) {
+    return "https://api.qrserver.com/v1/create-qr-code/?size=280x280&ecc=M&margin=4&data="
+        + urlEnc(uri);
   }
 
   private void markAppointmentPending(AppointmentEntity appt, String paymentId) {
@@ -592,29 +742,71 @@ public class PaymentAppService {
     m.put("gatewayTransactionId", row.getGatewayTransactionId());
     m.put("gatewayName", row.getGatewayName());
     m.put("gatewayOrderId", row.getGatewayOrderId());
-    m.put("qrImageUrl", row.getQrImageUrl());
-    m.put("upiUri", row.getUpiUri());
-    m.put("upiId", defaultUpiId);
+    m.put("gatewayQrId", row.getGatewayQrId());
+    String uri = row.getUpiUri();
+    if (uri == null
+        || uri.isBlank()
+        || looksLikeRazorpay(uri)
+        || uri.contains("%40")
+        || uri.contains("+")
+        || !uri.startsWith("upi://")) {
+      uri = upiUri(row, "MedTrack Clinic", vpaFromUri(uri));
+    }
+    String qr = row.getQrImageUrl();
+    if (qr == null || qr.isBlank() || looksLikeRazorpay(qr) || looksLikeRazorpay(uri)) {
+      qr = upiQrImage(uri);
+    }
+    m.put("qrImageUrl", qr);
+    m.put("upiUri", uri);
+    m.put("upiId", vpaFromUri(uri));
     m.put("razorpayEnabled", razorpay.configured());
+    m.put("keyId", razorpay.configured() ? razorpay.keyId() : "");
+    m.put("bankVerified", COMPLETED.equalsIgnoreCase(row.getStatus()));
+    m.put("bankStatus", COMPLETED.equalsIgnoreCase(row.getStatus()) ? "CAPTURED" : row.getStatus());
     m.put("createdAt", row.getCreatedAt() == null ? null : row.getCreatedAt().toString());
     m.put("updatedAt", row.getUpdatedAt() == null ? null : row.getUpdatedAt().toString());
-    m.put("upiApps", upiApps(row.getUpiUri()));
+    m.put("upiApps", upiApps(uri));
     if (message != null) m.put("message", message);
     return m;
   }
 
   private List<Map<String, String>> upiApps(String uri) {
     List<Map<String, String>> apps = new ArrayList<>();
+    String intent = uri;
+    if (intent == null || intent.isBlank() || looksLikeRazorpay(intent) || intent.startsWith("http")) {
+      return apps;
+    }
     String q = "";
-    if (uri != null && uri.contains("?")) {
-      q = uri.substring(uri.indexOf('?') + 1);
+    if (intent.contains("?")) {
+      q = intent.substring(intent.indexOf('?') + 1);
     }
     apps.add(upiApp("gpay", "Google Pay", "tez://upi/pay?" + q));
     apps.add(upiApp("phonepe", "PhonePe", "phonepe://pay?" + q));
     apps.add(upiApp("paytm", "Paytm", "paytmmp://pay?" + q));
     apps.add(upiApp("bhim", "BHIM", "bhim://pay?" + q));
-    apps.add(upiApp("upi", "Other UPI apps", uri == null ? "" : uri));
+    apps.add(upiApp("upi", "Other UPI apps", intent));
     return apps;
+  }
+
+  private String vpaFromUri(String uri) {
+    if (uri == null) return defaultUpiId;
+    int pa = uri.indexOf("pa=");
+    if (pa < 0) return defaultUpiId;
+    String rest = uri.substring(pa + 3);
+    int amp = rest.indexOf('&');
+    String encoded = amp < 0 ? rest : rest.substring(0, amp);
+    try {
+      String vpa = java.net.URLDecoder.decode(encoded, StandardCharsets.UTF_8).trim();
+      return vpa.isBlank() ? defaultUpiId : vpa;
+    } catch (Exception ex) {
+      return defaultUpiId;
+    }
+  }
+
+  private static boolean looksLikeRazorpay(String value) {
+    if (value == null || value.isBlank()) return false;
+    String s = value.toLowerCase();
+    return s.contains("rzp.io") || s.contains("razorpay") || s.contains("plink_");
   }
 
   private static Map<String, String> upiApp(String id, String name, String uri) {

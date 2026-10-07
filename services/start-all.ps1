@@ -29,13 +29,32 @@ $env:Path = "$Jdk17\bin;" + $env:Path
 Write-Host "Using JAVA_HOME=$env:JAVA_HOME"
 & "$Jdk17\bin\java.exe" -version
 
+Write-Host "Stopping anything on port 8090 so Maven can rewrite the JAR..."
+Get-NetTCPConnection -LocalPort 8090 -State Listen -ErrorAction SilentlyContinue |
+  ForEach-Object {
+    Write-Host "  taskkill PID $($_.OwningProcess)"
+    Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+  }
+Get-CimInstance Win32_Process -Filter "Name='java.exe'" |
+  Where-Object {
+    $_.CommandLine -like '*medtrack-app-1.0.0-SNAPSHOT.jar*' -or
+    $_.CommandLine -like '*medtrack-app-running.jar*'
+  } |
+  ForEach-Object {
+    Write-Host "  stop java PID $($_.ProcessId)"
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+  }
+Start-Sleep -Seconds 2
+
 Write-Host "Building medtrack-app..."
 mvn -q -pl medtrack-app -am package -DskipTests
 
 $jar = Join-Path $PSScriptRoot "medtrack-app\target\medtrack-app-1.0.0-SNAPSHOT.jar"
+$run = Join-Path $PSScriptRoot "medtrack-app\target\medtrack-app-running.jar"
 if (-not (Test-Path $jar)) {
   throw "Build did not produce $jar"
 }
 
+Copy-Item $jar $run -Force
 Write-Host "Starting medtrack-app on http://localhost:8090 ..."
-& "$Jdk17\bin\java.exe" -jar $jar
+& "$Jdk17\bin\java.exe" -jar $run

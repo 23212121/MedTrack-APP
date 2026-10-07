@@ -90,6 +90,10 @@ public class MedicineOrderSchemaInitializer {
     jdbc.execute(
         "ALTER TABLE svc.medicine_orders ADD COLUMN IF NOT EXISTS razorpay_payment_id VARCHAR(80)");
     jdbc.execute(
+        "ALTER TABLE svc.medicine_orders ADD COLUMN IF NOT EXISTS razorpay_qr_id VARCHAR(80)");
+    jdbc.execute(
+        "ALTER TABLE svc.medicine_orders ADD COLUMN IF NOT EXISTS razorpay_qr_image_url VARCHAR(500)");
+    jdbc.execute(
         "ALTER TABLE svc.medical_stores ADD COLUMN IF NOT EXISTS upi_id VARCHAR(120)");
     jdbc.execute(
         "ALTER TABLE svc.medical_stores ADD COLUMN IF NOT EXISTS city VARCHAR(120)");

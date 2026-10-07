@@ -23,11 +23,6 @@ export default function NotificationsPage() {
 
   return (
     <section>
-      <h1>Mail & phone notifications</h1>
-      <p className="lead">
-        Checkup lifecycle alerts: booking, check-in, start, delay, you’re next, completion, and
-        overtime fee — SMS (phone) and email.
-      </p>
       {error && <div className="msg error">{error}</div>}
       <div className="panel">
         <div className="row" style={{ marginBottom: "0.8rem" }}>
@@ -52,7 +47,13 @@ export default function NotificationsPage() {
                 <td>{new Date(n.createdAt).toLocaleString()}</td>
                 <td>{n.eventCode}</td>
                 <td>
-                  <span className="badge">{n.channel === "SMS" ? "Phone/SMS" : "Email"}</span>
+                  <span className="badge">
+                    {n.channel === "SMS"
+                      ? "Phone/SMS"
+                      : n.channel === "APP"
+                        ? "In-app"
+                        : "Email"}
+                  </span>
                 </td>
                 <td>{n.recipient}</td>
                 <td>{n.status}</td>

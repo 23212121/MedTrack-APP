@@ -136,13 +136,16 @@ public class ScheduleController {
 
   @GetMapping("/fees/{doctorId}")
   public FeeRuleEntity fees(@PathVariable String doctorId) {
-    return service.feeRule(doctorId)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fee rule not found"));
+    return service.feeRuleOrDefault(doctorId);
   }
 
   @PutMapping("/fees/{doctorId}")
-  public FeeRuleEntity upsertFees(@PathVariable String doctorId, @RequestBody FeeRuleRequest body) {
-    return service.upsertFeeRule(doctorId, body);
+  public FeeRuleEntity upsertFees(
+      @PathVariable String doctorId,
+      @RequestHeader(value = "X-Hospital-Id", required = false) String hospitalHeader,
+      @RequestBody FeeRuleRequest body) {
+    Long hospitalId = body.hospitalId() != null ? body.hospitalId() : parseHospitalId(hospitalHeader);
+    return service.upsertFeeRule(doctorId, body, hospitalId);
   }
 
   @PostMapping("/fees/calculate")
@@ -194,6 +197,7 @@ public class ScheduleController {
 
   public record FeeRuleRequest(
       String clinicId,
+      Long hospitalId,
       Double baseConsultFee,
       Integer fixedConsultMinutes,
       Double overtimeFeeAmount,

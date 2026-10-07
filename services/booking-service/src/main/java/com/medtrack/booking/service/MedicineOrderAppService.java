@@ -1,6 +1,7 @@
 package com.medtrack.booking.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medtrack.booking.domain.MedicalStoreEntity;
 import com.medtrack.booking.domain.MedicineOrderAmountHistoryEntity;
@@ -20,6 +21,12 @@ import com.medtrack.booking.repo.MedicineOrderNotificationRepository;
 import com.medtrack.booking.repo.MedicineOrderPharmacyResponseRepository;
 import com.medtrack.booking.repo.MedicineOrderRepository;
 import com.medtrack.booking.repo.MedicineOrderStatusHistoryRepository;
+import com.medtrack.booking.repo.PatientRepository;
+import com.medtrack.booking.repo.UserDetailsRepository;
+import com.medtrack.booking.domain.PatientEntity;
+import com.medtrack.booking.domain.UserDetailsEntity;
+import com.medtrack.common.dto.NotifyRequest;
+import com.medtrack.notify.service.NotificationAppService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -63,6 +70,9 @@ public class MedicineOrderAppService {
   private final ObjectMapper mapper;
   private final S3DocumentStorageService s3;
   private final RazorpayGateway razorpay;
+  private final NotificationAppService notificationAppService;
+  private final PatientRepository patientRepo;
+  private final UserDetailsRepository userDetailsRepo;
   private final Path uploadRoot;
   private final String defaultUpiId;
 
@@ -79,6 +89,9 @@ public class MedicineOrderAppService {
       ObjectMapper mapper,
       S3DocumentStorageService s3,
       RazorpayGateway razorpay,
+      NotificationAppService notificationAppService,
+      PatientRepository patientRepo,
+      UserDetailsRepository userDetailsRepo,
       @Value("${medtrack.upload-dir:uploads/patient-documents}") String uploadDir,
       @Value("${medtrack.payment.upi-id:medtrackpharmacy@upi}") String defaultUpiId) {
     this.orderRepo = orderRepo;
@@ -93,6 +106,9 @@ public class MedicineOrderAppService {
     this.mapper = mapper;
     this.s3 = s3;
     this.razorpay = razorpay;
+    this.notificationAppService = notificationAppService;
+    this.patientRepo = patientRepo;
+    this.userDetailsRepo = userDetailsRepo;
     this.defaultUpiId = defaultUpiId == null || defaultUpiId.isBlank() ? "medtrackpharmacy@upi" : defaultUpiId.trim();
     this.uploadRoot = Path.of(uploadDir).toAbsolutePath().normalize().getParent()
         .resolve("medicine-orders");
@@ -591,11 +607,16 @@ public class MedicineOrderAppService {
     out.put("amount", paise);
     out.put("currency", "INR");
     if (razorpay.configured()) {
-      Map<String, Object> created = razorpay.createOrder(paise, order.getOrderNumber(), order.getId());
-      order.setRazorpayOrderId(String.valueOf(created.get("razorpayOrderId")));
-      order.setPaymentMethod("RAZORPAY");
+      if (order.getRazorpayOrderId() == null || order.getRazorpayOrderId().isBlank()) {
+        Map<String, Object> created = razorpay.createOrder(paise, order.getOrderNumber(), order.getId());
+        order.setRazorpayOrderId(String.valueOf(created.get("razorpayOrderId")));
+      }
+      order.setPaymentMethod("UPI");
       orderRepo.save(order);
-      out.putAll(created);
+      out.put("razorpayOrderId", order.getRazorpayOrderId());
+      out.put("keyId", razorpay.keyId());
+      out.put("qrId", "");
+      out.put("qrImageUrl", "");
     }
     out.put("order", detail(order, actor, true));
     return out;
@@ -634,6 +655,99 @@ public class MedicineOrderAppService {
     storeDocuments(order, selected, actor.label(), false, "PAYMENT");
     String prev = order.getStatus();
     finishPatientAccept(order, actor, prev, "PAID", "UPI_SCREENSHOT", null, null);
+    return detail(order, actor, true);
+  }
+
+  @Transactional
+  public Map<String, Object> verifyBankPayment(Actor actor, String id, Map<String, Object> body) {
+    MedicineOrderEntity order = require(id);
+    assertPatientOrHospitalRead(actor, order, true);
+    Map<String, Object> payload = body == null ? Map.of() : body;
+    applyPatientQuantity(order, payload);
+    Map<String, Object> out = new LinkedHashMap<>();
+    if ("PAID".equalsIgnoreCase(blankTo(order.getPaymentStatus(), "UNPAID"))) {
+      out.put("bankVerified", true);
+      out.put("bankStatus", "CAPTURED");
+      out.put("message", "Payment successful — bank confirmed");
+      out.put("razorpayEnabled", razorpay.configured());
+      out.put("qrImageUrl", order.getRazorpayQrImageUrl());
+      out.put("order", detail(order, actor, true));
+      return out;
+    }
+    assertAwaitingPatientApproval(order);
+    if (!razorpay.configured()) {
+      out.put("bankVerified", false);
+      out.put("bankStatus", "GATEWAY_NOT_CONFIGURED");
+      out.put("message", "Bank check needs Razorpay keys (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET)");
+      out.put("razorpayEnabled", false);
+      out.put("order", detail(order, actor, true));
+      return out;
+    }
+    JsonNode captured = razorpay.firstCapturedOnPaymentLink(order.getRazorpayQrId());
+    if (captured == null) {
+      captured = razorpay.firstCapturedIn(razorpay.fetchQrPayments(order.getRazorpayQrId()));
+    }
+    if (captured == null) {
+      captured = razorpay.firstCapturedIn(razorpay.fetchOrderPayments(order.getRazorpayOrderId()));
+    }
+    if (captured != null) {
+      String txn = RazorpayGateway.text(captured, "id");
+      String prev = order.getStatus();
+      finishPatientAccept(
+          order,
+          actor,
+          prev,
+          "PAID",
+          "RAZORPAY",
+          firstNonBlank(order.getRazorpayOrderId(), RazorpayGateway.text(captured, "order_id")),
+          txn);
+      out.put("bankVerified", true);
+      out.put("bankStatus", "CAPTURED");
+      out.put("message", "Payment successful — confirmed with the bank");
+      out.put("razorpayEnabled", true);
+      out.put("qrImageUrl", order.getRazorpayQrImageUrl());
+      out.put("order", detail(order, actor, true));
+      return out;
+    }
+    JsonNode failed = razorpay.firstFailedIn(razorpay.fetchQrPayments(order.getRazorpayQrId()));
+    if (failed == null) {
+      failed = razorpay.firstFailedIn(razorpay.fetchOrderPayments(order.getRazorpayOrderId()));
+    }
+    out.put("bankVerified", false);
+    out.put("bankStatus", failed != null ? "FAILED" : "PENDING");
+    out.put(
+        "message",
+        failed != null
+            ? "Bank declined this payment"
+            : "Waiting for the bank to confirm this UPI payment");
+    out.put("razorpayEnabled", true);
+    out.put("qrImageUrl", order.getRazorpayQrImageUrl());
+    out.put("order", detail(order, actor, true));
+    return out;
+  }
+
+  @Transactional
+  public Map<String, Object> payWithLocalUpi(Actor actor, String id, Map<String, Object> body) {
+    MedicineOrderEntity order = require(id);
+    assertPatientOrHospitalRead(actor, order, true);
+    assertAwaitingPatientApproval(order);
+    applyPatientQuantity(order, body == null ? Map.of() : body);
+    if (razorpay.configured()) {
+      Map<String, Object> verified = verifyBankPayment(actor, id, body == null ? Map.of() : body);
+      if (Boolean.TRUE.equals(verified.get("bankVerified"))) {
+        Object orderMap = verified.get("order");
+        if (orderMap instanceof Map<?, ?>) {
+          @SuppressWarnings("unchecked")
+          Map<String, Object> typed = (Map<String, Object>) orderMap;
+          return typed;
+        }
+      }
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT,
+          "Waiting for the bank to confirm this UPI payment. Scan the Razorpay QR, then tap Confirm with bank.");
+    }
+    String prev = order.getStatus();
+    finishPatientAccept(order, actor, prev, "PAID", "UPI", null, null);
     return detail(order, actor, true);
   }
 
@@ -1194,6 +1308,8 @@ public class MedicineOrderAppService {
     m.put("paymentStatus", blankTo(o.getPaymentStatus(), "UNPAID"));
     m.put("paymentMethod", o.getPaymentMethod());
     m.put("razorpayEnabled", razorpay.configured());
+    m.put("qrImageUrl", o.getRazorpayQrImageUrl());
+    m.put("razorpayQrId", o.getRazorpayQrId());
     m.put("bookedBy", o.getBookedBy());
     m.put("cancelReason", o.getCancelReason());
     m.put("cancelledAt", o.getCancelledAt() != null ? o.getCancelledAt().toString() : null);
@@ -1271,31 +1387,33 @@ public class MedicineOrderAppService {
   }
 
   private void putPayment(Map<String, Object> m, MedicineOrderEntity o) {
-    String upi = storeUpi(o);
+    String upi = storeUpi(o).trim().replace(" ", "");
     double amt = o.getCurrentAmount() == null ? 0 : o.getCurrentAmount();
-    String uri =
-        "upi://pay?pa="
-            + urlEnc(upi)
+    String pn =
+        blankTo(o.getAssignedStoreName(), "Medical store")
+            .replaceAll("[^A-Za-z0-9 ]+", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+    if (pn.isBlank()) pn = "Medical store";
+    if (pn.length() > 34) pn = pn.substring(0, 34);
+    String tn = blankTo(o.getOrderNumber(), "medicine").replaceAll("[^A-Za-z0-9]", "");
+    if (tn.length() > 32) tn = tn.substring(0, 32);
+    if (tn.isBlank()) tn = "MedTrack";
+    String q =
+        "pa="
+            + upi
             + "&pn="
-            + urlEnc(blankTo(o.getAssignedStoreName(), "Medical store"))
+            + pn.replace(" ", "%20")
             + "&am="
             + formatAmt(amt)
-            + "&cu=INR&tn="
-            + urlEnc(blankTo(o.getOrderNumber(), "medicine"));
+            + "&cu=INR&mc=0000&mode=02&tn="
+            + tn;
+    String uri = "upi://pay?" + q;
     m.put("upiId", upi);
     m.put("upiUri", uri);
     m.put(
         "upiQrUrl",
-        "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + urlEnc(uri));
-    String q =
-        "pa="
-            + urlEnc(upi)
-            + "&pn="
-            + urlEnc(blankTo(o.getAssignedStoreName(), "Medical store"))
-            + "&am="
-            + formatAmt(amt)
-            + "&cu=INR&tn="
-            + urlEnc(blankTo(o.getOrderNumber(), "medicine"));
+        "https://api.qrserver.com/v1/create-qr-code/?size=240x240&ecc=M&margin=4&data=" + urlEnc(uri));
     List<Map<String, String>> apps = new ArrayList<>();
     apps.add(upiApp("gpay", "Google Pay", "tez://upi/pay?" + q));
     apps.add(upiApp("phonepe", "PhonePe", "phonepe://pay?" + q));
@@ -1502,6 +1620,55 @@ public class MedicineOrderAppService {
 
   private void notifyPatient(MedicineOrderEntity order, String title, String message) {
     saveNotif(order.getHospitalId(), null, order.getPatientPhone(), "PATIENT", order.getId(), title, message);
+    emailMedicine(order, title, message);
+  }
+
+  private void emailMedicine(MedicineOrderEntity order, String title, String message) {
+    try {
+      String phone = order.getPatientPhone() == null ? "" : order.getPatientPhone().replaceAll("\\D", "");
+      String email = emailForPhone(phone);
+      Map<String, String> extra = new LinkedHashMap<>();
+      extra.put("message", message);
+      extra.put("orderNumber", order.getOrderNumber() == null ? order.getId() : order.getOrderNumber());
+      extra.put("title", title);
+      NotifyRequest req =
+          new NotifyRequest(
+              order.getHospitalId() == null ? "10001" : String.valueOf(order.getHospitalId()),
+              order.getId(),
+              phone,
+              "MEDICINE_ORDER",
+              order.getPatientName(),
+              phone.isBlank() ? null : phone,
+              email,
+              !phone.isBlank(),
+              true,
+              order.getAssignedStoreName(),
+              "MedTrack Pharmacy",
+              null,
+              null,
+              null,
+              order.getStatus(),
+              null,
+              order.getCurrentAmount(),
+              "INR",
+              extra);
+      notificationAppService.send(req);
+    } catch (Exception ex) {
+      log.warn("[medicine-mail] failed for {}: {}", order.getId(), ex.getMessage());
+    }
+  }
+
+  private String emailForPhone(String phone) {
+    if (phone == null || phone.isBlank()) return null;
+    String fromPatient =
+        patientRepo.findByPhone(phone).map(PatientEntity::getEmail).filter(e -> e != null && !e.isBlank()).orElse(null);
+    if (fromPatient != null) return fromPatient.trim();
+    return userDetailsRepo
+        .findByPhone(phone)
+        .map(UserDetailsEntity::getEmail)
+        .filter(e -> e != null && !e.isBlank())
+        .map(String::trim)
+        .orElse(null);
   }
 
   private void notifyStore(MedicineOrderEntity order, String title, String message) {

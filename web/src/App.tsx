@@ -1,12 +1,14 @@
-import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { isLoggedIn, isPatientLoggedIn, isPublicPath, popupClosePath } from "./auth";
 import { session } from "./dl/MedTrackSession";
 import { useT } from "./i18n";
 import AppHeader from "./components/AppHeader";
+import SidebarNav, { SidebarIconLink } from "./components/SidebarNav";
 import { knownPaths, doctorNavGroups, navGroups, pageTitles } from "./nav";
 import { patientKnownPaths, patientNavGroups, patientPageTitles } from "./patientNav";
 import { medicalKnownPaths, medicalNavGroups, medicalPageTitles } from "./medicalNav";
+import { labKnownPaths, labNavGroups, labPageTitles } from "./labNav";
 import AboutPage from "./pages/AboutPage";
 import HomePage from "./pages/HomePage";
 import SchedulesPage from "./pages/SchedulesPage";
@@ -56,6 +58,11 @@ import MedicalCheckOrderPage from "./pages/medicine/MedicalCheckOrderPage";
 import MedicalStoresPage from "./pages/medicine/MedicalStoresPage";
 import MedicalNotificationsPage from "./pages/medicine/MedicalNotificationsPage";
 import EmergencyServicePage from "./pages/emergency/EmergencyServicePage";
+import LabDashboardPage from "./pages/lab/LabDashboardPage";
+import LabPatientsPage from "./pages/lab/LabPatientsPage";
+import LabReportsPage from "./pages/lab/LabReportsPage";
+import LabsPage from "./pages/lab/LabsPage";
+import LabRegisterPage from "./pages/lab/LabRegisterPage";
 
 export default function App() {
   const t = useT();
@@ -71,10 +78,13 @@ export default function App() {
   const isMedicalUser = session.isMedical();
   const isMedicalRoute =
     location.pathname === "/medical" || location.pathname.startsWith("/medical/");
+  const isLabUser = session.isLab();
+  const isLabRoute = location.pathname === "/lab" || location.pathname.startsWith("/lab/");
   const isUnknown =
     !knownPaths.has(location.pathname) &&
     !patientKnownPaths.has(location.pathname) &&
     !medicalKnownPaths.has(location.pathname) &&
+    !labKnownPaths.has(location.pathname) &&
     !isPublic;
   const title =
     location.pathname === "/"
@@ -91,7 +101,12 @@ export default function App() {
       return <Navigate to="/patient" replace />;
     }
     if (loggedIn && !patientLoggedIn && location.pathname === "/login") {
-      return <Navigate to={session.isMedical() ? "/medical" : "/"} replace />;
+      return (
+        <Navigate
+          to={session.isLab() ? "/lab" : session.isMedical() ? "/medical" : "/"}
+          replace
+        />
+      );
     }
     const isBook =
       location.pathname === "/book" ||
@@ -99,7 +114,8 @@ export default function App() {
     const isQueue = location.pathname === "/queue";
     const isTrack = location.pathname === "/track";
     const isInfo = location.pathname === "/about";
-    const widePublic = location.pathname === "/hospital-register";
+    const widePublic =
+      location.pathname === "/hospital-register" || location.pathname === "/lab-register";
     const fullBleed = isBook || isQueue || isTrack;
     const isLogin = location.pathname === "/login";
     const isPopupPage =
@@ -137,6 +153,7 @@ export default function App() {
             <Route path="/download-file" element={<DownloadFilePage />} />
             <Route path="/patient/login" element={<PatientLoginPage />} />
             <Route path="/patient/register" element={<PatientRegisterPage />} />
+            <Route path="/lab-register" element={<LabRegisterPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </main>
@@ -183,40 +200,24 @@ export default function App() {
             </div>
           </div>
 
-          <nav className="sidebar-nav">
-            {patientNavGroups.map((group) => (
-              <div key={group.title} className="sidebar-group">
-                <p className="sidebar-group-title">{t(group.title)}</p>
-                <ul>
-                  {group.items.map((item) => (
-                    <li key={item.to}>
-                      <NavLink
-                        to={item.to}
-                        end={item.end}
-                        onClick={() => setSidebarOpen(false)}
-                      >
-                        <span className="nav-label">{t(item.label)}</span>
-                        <span className="nav-hint">{t(item.hint)}</span>
-                      </NavLink>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </nav>
+          <SidebarNav groups={patientNavGroups} onNavigate={() => setSidebarOpen(false)} />
 
           <div className="sidebar-footer">
-            <p>
+            <p className="sidebar-footer-meta">
               <strong>{patientName}</strong>
               <br />
               {session.getPatientPhone() || session.getPatientId()}
             </p>
-            <NavLink to="/patient/profile" onClick={() => setSidebarOpen(false)}>
-              {t("Profile")}
-            </NavLink>
-            <NavLink to="/patient/logout" onClick={() => setSidebarOpen(false)}>
-              {t("Sign out")}
-            </NavLink>
+            <SidebarIconLink
+              to="/patient/profile"
+              label="Profile"
+              onNavigate={() => setSidebarOpen(false)}
+            />
+            <SidebarIconLink
+              to="/patient/logout"
+              label="Sign out"
+              onNavigate={() => setSidebarOpen(false)}
+            />
           </div>
         </aside>
 
@@ -256,6 +257,69 @@ export default function App() {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
+  if (isLabUser && !isLabRoute && location.pathname !== "/logout") {
+    return <Navigate to="/lab" replace />;
+  }
+
+  if (isLabUser && isLabRoute) {
+    const labTitle =
+      location.pathname === "/lab" ? "Dashboard" : (labPageTitles[location.pathname] ?? "Lab");
+    return (
+      <div className={`app-shell app-shell--sidebar${sidebarOpen ? " is-open" : ""}`}>
+        <AppHeader
+          showMenuButton
+          onMenuClick={() => setSidebarOpen(true)}
+          pageTitle={labTitle}
+        />
+        {sidebarOpen && (
+          <button
+            type="button"
+            className="sidebar-backdrop"
+            aria-label={t("Close menu")}
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        <aside className="sidebar" aria-label={t("Lab technician navigation")}>
+          <div className="sidebar-brand">
+            <span className="sidebar-mark" aria-hidden="true">
+              Lb
+            </span>
+            <div>
+              <div className="brand">MedTrack</div>
+              <p className="sidebar-tagline">Lab technician</p>
+            </div>
+          </div>
+          <SidebarNav groups={labNavGroups} onNavigate={() => setSidebarOpen(false)} />
+          <div className="sidebar-footer">
+            <p className="sidebar-footer-meta">
+              <strong>{session.getUsername()}</strong>
+              <br />
+              {session.getHospitalId()
+                ? t("Hospital {id}", { id: String(session.getHospitalId()) })
+                : "Independent lab"}
+            </p>
+            <SidebarIconLink to="/logout" label="Logout" onNavigate={() => setSidebarOpen(false)} />
+          </div>
+        </aside>
+        <div className="workspace">
+          <main
+            className={`content content--workspace${
+              location.pathname === "/lab" ? " content--dashboard" : ""
+            }`}
+          >
+            <Routes>
+              <Route path="/lab" element={<LabDashboardPage />} />
+              <Route path="/lab/patients" element={<LabPatientsPage />} />
+              <Route path="/lab/uploads" element={<LabReportsPage />} />
+              <Route path="/logout" element={<LogoutPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   if (isMedicalUser && !isMedicalRoute && location.pathname !== "/logout") {
     return <Navigate to="/medical" replace />;
   }
@@ -290,38 +354,16 @@ export default function App() {
               <p className="sidebar-tagline">{t("Medical store")}</p>
             </div>
           </div>
-          <nav className="sidebar-nav">
-            {medicalNavGroups.map((group) => (
-              <div key={group.title} className="sidebar-group">
-                <p className="sidebar-group-title">{t(group.title)}</p>
-                <ul>
-                  {group.items.map((item) => (
-                    <li key={item.to}>
-                      <NavLink
-                        to={item.to}
-                        end={item.end === true}
-                        onClick={() => setSidebarOpen(false)}
-                      >
-                        <span className="nav-label">{t(item.label)}</span>
-                        <span className="nav-hint">{t(item.hint)}</span>
-                      </NavLink>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </nav>
+          <SidebarNav groups={medicalNavGroups} onNavigate={() => setSidebarOpen(false)} />
           <div className="sidebar-footer">
-            <p>
+            <p className="sidebar-footer-meta">
               <strong>{session.getUsername()}</strong>
               <br />
               {t("Hospital {id}", { id: String(session.getHospitalId() || "") })}
               <br />
               {t("Store {id}", { id: String(session.getMedicalStoreId() || "") })}
             </p>
-            <NavLink to="/logout" onClick={() => setSidebarOpen(false)}>
-              {t("Logout")}
-            </NavLink>
+            <SidebarIconLink to="/logout" label="Logout" onNavigate={() => setSidebarOpen(false)} />
           </div>
         </aside>
         <div className="workspace">
@@ -418,31 +460,11 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="sidebar-nav">
-          {sidebarGroups.map((group) => (
-            <div key={group.title} className="sidebar-group">
-              <p className="sidebar-group-title">{t(group.title)}</p>
-              <ul>
-                {group.items.map((item) => (
-                  <li key={item.to}>
-                    <NavLink
-                      to={item.to}
-                      end={item.end === true}
-                      onClick={() => setSidebarOpen(false)}
-                    >
-                      <span className="nav-label">{t(item.label)}</span>
-                      <span className="nav-hint">{t(item.hint)}</span>
-                    </NavLink>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </nav>
+        <SidebarNav groups={sidebarGroups} onNavigate={() => setSidebarOpen(false)} />
 
         <div className="sidebar-footer">
           {hospitalLabel && (
-            <p>
+            <p className="sidebar-footer-meta">
               <strong>{hospitalLabel}</strong>
               <br />
               {t("Hospital {id}", { id: String(session.getHospitalId() || "") })}
@@ -451,10 +473,8 @@ export default function App() {
               {session.getUserId() || session.getUsername()}
             </p>
           )}
-          {!hospitalLabel && <p>{t("MedTrack session")}</p>}
-          <NavLink to="/logout" onClick={() => setSidebarOpen(false)}>
-            {t("Logout")}
-          </NavLink>
+          {!hospitalLabel && <p className="sidebar-footer-meta">{t("MedTrack session")}</p>}
+          <SidebarIconLink to="/logout" label="Logout" onNavigate={() => setSidebarOpen(false)} />
         </div>
       </aside>
 
@@ -490,6 +510,7 @@ export default function App() {
             />
             <Route path="/medicine-orders" element={<MedicineOrdersPage title="Medicine orders" />} />
             <Route path="/medical-stores" element={<MedicalStoresPage />} />
+            <Route path="/labs" element={<LabsPage />} />
             <Route path="/hrm" element={<HrmShell />}>
               <Route index element={<HrmHomePage />} />
               <Route path="attendance" element={<HrmAttendancePage />} />

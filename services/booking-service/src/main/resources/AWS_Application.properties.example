@@ -19,3 +19,8 @@ aws.s3.secret-key=
 aws.s3.prefix=patient-documents
 aws.s3.endpoint=
 aws.s3.path-style-access=false
+
+# Razorpay — copy to AWS_Application.properties (gitignored) or set as env vars
+# RAZORPAY_KEY_ID=rzp_test_xxxx
+# RAZORPAY_KEY_SECRET=
+# RAZORPAY_WEBHOOK_SECRET=

@@ -13,6 +13,9 @@ public class PatientEntity {
   @Column(nullable = false, unique = true, length = 32)
   private String phone;
 
+  @Column(name = "aadhaar_number", length = 20)
+  private String aadhaarNumber;
+
   @Column(nullable = false)
   private String password;
 
@@ -54,6 +57,14 @@ public class PatientEntity {
 
   public void setPhone(String phone) {
     this.phone = phone;
+  }
+
+  public String getAadhaarNumber() {
+    return aadhaarNumber;
+  }
+
+  public void setAadhaarNumber(String aadhaarNumber) {
+    this.aadhaarNumber = aadhaarNumber;
   }
 
   public String getPassword() {

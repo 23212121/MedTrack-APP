@@ -1,14 +1,19 @@
 package com.medtrack.booking.service;
 
+import com.medtrack.booking.domain.AppointmentEntity;
 import com.medtrack.booking.domain.BookingEntity;
 import com.medtrack.booking.domain.PatientEntity;
 import com.medtrack.booking.domain.UserDetailsEntity;
+import com.medtrack.booking.event.DocumentUploadedEvent;
 import com.medtrack.booking.event.PaymentCompletedEvent;
 import com.medtrack.booking.repo.AppointmentRepository;
 import com.medtrack.booking.repo.PatientRepository;
 import com.medtrack.booking.repo.UserDetailsRepository;
 import com.medtrack.common.dto.NotifyRequest;
 import com.medtrack.notify.service.NotificationAppService;
+import com.medtrack.visit.domain.VisitEntity;
+import com.medtrack.visit.repo.VisitRepository;
+import com.medtrack.visit.service.VisitAppService;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -31,18 +36,24 @@ public class BookingNotificationService {
   private final PatientRepository patientRepo;
   private final UserDetailsRepository userDetailsRepo;
   private final AppointmentRepository appointmentRepo;
+  private final VisitRepository visitRepo;
+  private final VisitAppService visitAppService;
 
   public BookingNotificationService(
       NotificationAppService notificationAppService,
       AppointmentEnrichmentService enrichment,
       PatientRepository patientRepo,
       UserDetailsRepository userDetailsRepo,
-      AppointmentRepository appointmentRepo) {
+      AppointmentRepository appointmentRepo,
+      VisitRepository visitRepo,
+      VisitAppService visitAppService) {
     this.notificationAppService = notificationAppService;
     this.enrichment = enrichment;
     this.patientRepo = patientRepo;
     this.userDetailsRepo = userDetailsRepo;
     this.appointmentRepo = appointmentRepo;
+    this.visitRepo = visitRepo;
+    this.visitAppService = visitAppService;
   }
 
   public void notifyAppointmentBooked(BookingEntity booking, String patientEmailFromRequest) {
@@ -154,6 +165,153 @@ public class BookingNotificationService {
           event.appointmentId(),
           ex.getMessage());
     }
+  }
+
+  /** SMS + email + in-app when files are attached for a patient who has a booked appointment. */
+  public void notifyDocumentAttached(DocumentUploadedEvent event) {
+    if (event == null) return;
+    String phone = normalizePhone(event.phone());
+    AppointmentEntity appt =
+        phone.isBlank() ? null : latestActiveAppointment(phone, event.hospitalId());
+    try {
+      String email =
+          phone.isBlank()
+              ? null
+              : firstNonBlank(emailFromPatientRecord(phone), emailFromUserDetails(phone));
+      String doctor = appt != null ? enrichment.doctorName(appt.getDoctorId()) : "";
+      String clinic = enrichment.hospitalName(event.hospitalId() != null ? event.hospitalId() : (appt == null ? null : appt.getHospitalId()));
+      if (clinic == null || clinic.isBlank()) clinic = "MedTrack Clinic";
+      String token =
+          appt == null || appt.getTokenNumber() == null ? "—" : String.valueOf(appt.getTokenNumber());
+      String when = appt == null ? "" : formatAppointmentWhen(appt);
+      int count = Math.max(1, event.fileCount());
+      Map<String, String> extra = new HashMap<>();
+      extra.put("fileCount", String.valueOf(count));
+      extra.put("fileNames", event.fileNames() == null ? "" : event.fileNames());
+      extra.put("documentType", event.documentType() == null ? "" : event.documentType());
+      extra.put("appointmentId", appt == null ? "" : appt.getId());
+      extra.put("documentId", event.documentId());
+      String visitId = event.documentId();
+      if (appt != null) {
+        String resolved = resolveVisitId(appt, phone);
+        if (resolved != null && !resolved.isBlank()) visitId = resolved;
+      }
+
+      NotifyRequest req =
+          new NotifyRequest(
+              event.hospitalId() == null ? "10001" : String.valueOf(event.hospitalId()),
+              visitId,
+              phone.isBlank() ? null : phone,
+              "DOCUMENT_ATTACHED",
+              firstNonBlank(event.patientName(), appt == null ? null : appt.getPatientName()),
+              phone.isBlank() ? null : phone,
+              email,
+              !phone.isBlank(),
+              true,
+              doctor,
+              clinic,
+              when,
+              token,
+              null,
+              appt == null ? "UPLOADED" : appt.getStatus(),
+              null,
+              null,
+              null,
+              extra);
+
+      Map<String, Object> result = notificationAppService.send(req);
+      log.info(
+          "[booking-notify] DOCUMENT_ATTACHED doc={} appt={} phone={} email={} files={} result={}",
+          event.documentId(),
+          appt == null ? "(none)" : appt.getId(),
+          phone.isBlank() ? "(none)" : phone,
+          email == null || email.isBlank() ? "(none)" : email,
+          count,
+          result.get("eventCode"));
+    } catch (Exception ex) {
+      log.warn(
+          "[booking-notify] document notify failed for {}: {}",
+          event.documentId(),
+          ex.getMessage());
+    }
+  }
+
+  private AppointmentEntity latestActiveAppointment(String phone, Long hospitalId) {
+    AppointmentEntity found = findActiveAppointment(phone, hospitalId);
+    if (found != null) return found;
+    if (phone.length() == 12 && phone.startsWith("91")) {
+      return findActiveAppointment(phone.substring(2), hospitalId);
+    }
+    if (phone.length() == 10) {
+      return findActiveAppointment("91" + phone, hospitalId);
+    }
+    return null;
+  }
+
+  private AppointmentEntity findActiveAppointment(String phone, Long hospitalId) {
+    AppointmentEntity any = null;
+    for (AppointmentEntity a : appointmentRepo.findByPhoneNumberOrderByCreatedDateDesc(phone)) {
+      String st = a.getStatus() == null ? "" : a.getStatus().trim().toUpperCase();
+      if (st.contains("CANCEL")) continue;
+      if (hospitalId != null && hospitalId > 0 && hospitalId.equals(a.getHospitalId())) {
+        return a;
+      }
+      if (any == null) any = a;
+    }
+    return any;
+  }
+
+  private String resolveVisitId(AppointmentEntity appt, String phone) {
+    VisitEntity picked = null;
+    for (VisitEntity v : visitRepo.findByPatientPhoneContainingOrderByCreatedAtDesc(phone)) {
+      String st = v.getStatus() == null ? "" : v.getStatus().trim().toUpperCase();
+      if (st.contains("CANCEL")) continue;
+      if (appt.getHospitalId() != null
+          && v.getHospitalId() != null
+          && appt.getHospitalId().equals(v.getHospitalId())
+          && appt.getDoctorId() != null
+          && appt.getDoctorId().equals(v.getDoctorId())) {
+        return v.getId();
+      }
+      if (picked == null) picked = v;
+    }
+    return picked == null ? createVisitForNotify(appt, phone) : picked.getId();
+  }
+
+  private String createVisitForNotify(AppointmentEntity appt, String phone) {
+    try {
+      Map<String, Object> body = new HashMap<>();
+      body.put("clinicId", String.valueOf(appt.getHospitalId()));
+      body.put("hospitalId", appt.getHospitalId());
+      body.put("patientName", appt.getPatientName());
+      body.put("patientPhone", phone);
+      body.put("doctorId", appt.getDoctorId());
+      body.put("doctorName", enrichment.doctorName(appt.getDoctorId()));
+      body.put("status", appt.getStatus() == null || appt.getStatus().isBlank() ? "BOOKED" : appt.getStatus());
+      body.put("skipBookingNotify", true);
+      if (appt.getTokenNumber() != null) {
+        body.put("tokenNumber", appt.getTokenNumber());
+      }
+      if (appt.getAppointmentTime() != null) {
+        body.put("scheduledStart", appt.getAppointmentTime().toString());
+      }
+      if (appt.getReason() != null && !appt.getReason().isBlank()) {
+        body.put("reason", appt.getReason());
+      }
+      return visitAppService.create(body).getId();
+    } catch (Exception ex) {
+      log.warn("[booking-notify] could not create visit for document notify: {}", ex.getMessage());
+      return null;
+    }
+  }
+
+  private static String formatAppointmentWhen(AppointmentEntity appt) {
+    String date =
+        appt.getAppointmentDate() == null ? "" : DATE_FMT.format(appt.getAppointmentDate());
+      String time =
+        appt.getAppointmentTime() == null ? "" : TIME_FMT.format(appt.getAppointmentTime());
+    if (!date.isBlank() && !time.isBlank()) return date + " at " + time;
+    return !date.isBlank() ? date : (time.isBlank() ? "TBD" : time);
   }
 
   private String emailFromPatientRecord(String phone) {

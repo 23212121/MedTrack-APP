@@ -39,9 +39,9 @@ const PORTAL_TILES = [
   },
   {
     to: "/patient/notifications",
-    group: "Pharmacy",
+    group: "Alerts",
     title: "Notifications",
-    text: "Quote ready and order updates from the medical store",
+    text: "Appointment, document, and pharmacy updates",
   },
 ] as const;
 

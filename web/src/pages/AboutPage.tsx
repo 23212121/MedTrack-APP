@@ -88,8 +88,14 @@ const MODULES = [
   {
     group: "Patient",
     title: "Documents & reports",
-    text: "Hospitals upload test files; patients view reports and prescriptions tied to their visits.",
+    text: "Hospitals and diagnostic labs upload test files; patients view reports and prescriptions tied to their phone.",
     to: "/patient/login",
+  },
+  {
+    group: "Lab",
+    title: "Lab technician portal",
+    text: "Search patients by phone or Aadhaar, upload multiple test reports to S3, and patients find them on the Reports tab.",
+    to: "/login",
   },
   {
     group: "Pharmacy",
@@ -150,7 +156,7 @@ const QUICK_ACTIONS = [
   { to: "/queue", label: "Patient queue", hint: "Live wait times" },
   { to: "/hospital-register", label: "Register a hospital", hint: "Get a hospital ID" },
   { to: "/patient/login", label: "Patient portal", hint: "Reports, chat, orders" },
-  { to: "/login", label: "Staff / doctor login", hint: "Hospital, doctor, store" },
+  { to: "/login", label: "Staff / doctor login", hint: "Hospital, doctor, store, lab" },
 ];
 
 const CONTACT_EMAIL = "azherkhan061@gmail.com";

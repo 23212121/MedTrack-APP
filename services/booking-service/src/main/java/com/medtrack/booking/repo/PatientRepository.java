@@ -8,7 +8,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface PatientRepository extends JpaRepository<PatientEntity, String> {
   Optional<PatientEntity> findByPhone(String phone);
 
+  Optional<PatientEntity> findByAadhaarNumber(String aadhaarNumber);
+
   boolean existsByPhone(String phone);
+
+  List<PatientEntity> findTop200ByOrderByCreatedAtDesc();
 
   List<PatientEntity> findTop20ByNameContainingIgnoreCaseOrderByNameAsc(String name);
 }

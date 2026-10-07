@@ -15,6 +15,7 @@ import { useT } from "../i18n";
 import { toast } from "../toast";
 import VoiceBooking from "../voice/VoiceBooking";
 import AppointmentPaymentModal from "../components/AppointmentPaymentModal";
+import NativeFileInput from "../components/NativeFileInput";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -191,6 +192,7 @@ export default function BookingsPage({
   const [voiceList, setVoiceList] = useState<Booking[] | null>(null);
   const [voiceListNote, setVoiceListNote] = useState("");
   const [payModal, setPayModal] = useState<AppointmentPayment | null>(null);
+  const [attachFiles, setAttachFiles] = useState<File[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
 
   const hospitalDoctors = useMemo(() => {
@@ -767,6 +769,7 @@ export default function BookingsPage({
       navigate("/patient/status");
       return;
     }
+    setAttachFiles([]);
     if (publicMode) {
       setForm(blankPublicForm);
       if (!hospitalIdFilter) setSelectedHospitalId("");
@@ -841,8 +844,35 @@ export default function BookingsPage({
             : ""
         }.`,
       );
+      if (attachFiles.length) {
+        const hid =
+          form.hospitalId !== ""
+            ? Number(form.hospitalId)
+            : selectedHospitalId
+              ? Number(selectedHospitalId)
+              : undefined;
+        try {
+          await api.uploadPatientDocuments({
+            patientName: form.patientName.trim(),
+            phoneNumber: form.patientPhone.trim(),
+            documentType: "APPOINTMENT",
+            hospitalId: hid,
+            files: attachFiles.slice(0, 5),
+          });
+          toast.success(
+            "Documents attached. Patient notified by SMS, email, and in-app notification.",
+          );
+        } catch (uploadErr) {
+          const msg =
+            uploadErr instanceof Error
+              ? `Booking saved, but documents were not attached: ${uploadErr.message}`
+              : "Booking saved, but documents were not attached.";
+          setError(msg);
+          toast.success(msg);
+        }
+      }
       const appointmentId = res.appointment?.id;
-      const fee = Number(form.consultationFee);
+      const fee = Number(form.consultationFee || res.appointment?.consultationFee);
       if (appointmentId && Number.isFinite(fee) && fee >= 1) {
         try {
           const payment = await api.createPayment({
@@ -850,16 +880,16 @@ export default function BookingsPage({
             patientId: res.appointment?.patientId || loggedInPatientId || undefined,
             amount: fee,
           });
-          if (payment.status !== "COMPLETED") {
-            setFormOpen(false);
-            setPayModal(payment);
-            return;
-          }
-          toast.success(
-            `Payment confirmed. Transaction ${payment.gatewayTransactionId || payment.paymentId}.`,
+          setFormOpen(false);
+          setPayModal(payment);
+          return;
+        } catch (payErr) {
+          setError(
+            payErr instanceof Error
+              ? payErr.message
+              : "Booking saved, but payment could not be started. Open this booking and pay the fee.",
           );
-        } catch {
-          toast.success("Appointment saved. You can pay the consultation fee from your booking.");
+          return;
         }
       }
       finishAfterBook();
@@ -1126,6 +1156,23 @@ export default function BookingsPage({
             onChange={(e) => setField("reason", e.target.value)}
           />
         </label>
+        <label>
+          <span>
+            {t("Attach documents")}{" "}
+            <span style={{ color: "var(--muted)", fontWeight: 500 }}>{t("(optional)")}</span>
+          </span>
+          <NativeFileInput
+            label={t("Choose files")}
+            multiple
+            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.tif,.tiff"
+            chosen={
+              attachFiles.length
+                ? attachFiles.map((f) => f.name).join(", ")
+                : ""
+            }
+            onPick={(list) => setAttachFiles(list.slice(0, 5))}
+          />
+        </label>
 
         {form.doctorId && form.consultationFee && (
           <p className="lead" style={{ margin: 0 }}>
@@ -1339,7 +1386,7 @@ export default function BookingsPage({
           }}
           onClose={() => {
             setPayModal(null);
-            void finishAfterBook();
+            void load();
           }}
         />
       ) : null}

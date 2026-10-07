@@ -1017,8 +1017,7 @@ SELECT svc.add_fk('fk_visit_events_visit',
   'ALTER TABLE svc.visit_events ADD CONSTRAINT fk_visit_events_visit FOREIGN KEY (visit_id) REFERENCES svc.visits(id)');
 SELECT svc.add_fk('fk_doctor_queue_visit',
   'ALTER TABLE svc.doctor_queue ADD CONSTRAINT fk_doctor_queue_visit FOREIGN KEY (visit_id) REFERENCES svc.visits(id)');
-SELECT svc.add_fk('fk_notifications_visit',
-  'ALTER TABLE svc.notifications ADD CONSTRAINT fk_notifications_visit FOREIGN KEY (visit_id) REFERENCES svc.visits(id)');
+-- notifications.visit_id is a correlation id (booking, order, document, HR) — not always a visit PK.
 
 -- 3.4 HRM (masters first, then children)
 SELECT svc.add_fk('fk_hrm_designations_department',

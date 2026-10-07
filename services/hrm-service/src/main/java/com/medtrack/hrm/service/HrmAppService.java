@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +38,7 @@ public class HrmAppService {
   private final AssetRepository assets;
   private final TrainingRepository trainings;
   private final ResignationRepository resignations;
+  private final HrmNotificationService mail;
 
   public HrmAppService(
       AuditContext audit,
@@ -59,7 +61,8 @@ public class HrmAppService {
       OnboardingRepository onboardings,
       AssetRepository assets,
       TrainingRepository trainings,
-      ResignationRepository resignations) {
+      ResignationRepository resignations,
+      @Lazy HrmNotificationService mail) {
     this.audit = audit;
     this.departments = departments;
     this.designations = designations;
@@ -81,6 +84,7 @@ public class HrmAppService {
     this.assets = assets;
     this.trainings = trainings;
     this.resignations = resignations;
+    this.mail = mail;
   }
 
   private void applyAudit(AuditableEntity e) {
@@ -852,6 +856,20 @@ public class HrmAppService {
       applyAudit(bal);
       leaveBalances.save(bal);
     }
+    mail.notify(
+        emp.getEmployeeId(),
+        emp.getFullName(),
+        autoApprove ? "Leave auto-approved" : "Leave requested",
+        (autoApprove ? "Leave was auto-approved" : "Leave request submitted for approver")
+            + ": "
+            + type.getName()
+            + " from "
+            + from
+            + " to "
+            + to
+            + " ("
+            + days
+            + " day(s)).");
     return app;
   }
 
@@ -865,10 +883,14 @@ public class HrmAppService {
     if (!"Pending".equalsIgnoreCase(app.getStatus())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Leave is already " + app.getStatus());
     }
-    if (!"Approved".equalsIgnoreCase(status) && !"Rejected".equalsIgnoreCase(status)) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status must be Approved or Rejected");
+    if (!"Approved".equalsIgnoreCase(status)
+        && !"Rejected".equalsIgnoreCase(status)
+        && !"Dismissed".equalsIgnoreCase(status)
+        && !"Dismiss".equalsIgnoreCase(status)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status must be Approved or Dismissed");
     }
-    app.setStatus("Approved".equalsIgnoreCase(status) ? "Approved" : "Rejected");
+    boolean approve = "Approved".equalsIgnoreCase(status);
+    app.setStatus(approve ? "Approved" : "Dismissed");
     app.setApproverRemarks(remarks);
     app.touchAudit(audit.hospitalId(), audit.doctorId(), audit.user());
     if ("Approved".equalsIgnoreCase(status)) {
@@ -887,7 +909,21 @@ public class HrmAppService {
                 leaveBalances.save(b);
               });
     }
-    return leaveApplications.save(app);
+    LeaveApplicationEntity saved = leaveApplications.save(app);
+    mail.notify(
+        saved.getEmployeeId(),
+        saved.getEmployeeName(),
+        "Leave " + saved.getStatus(),
+        "Your leave request ("
+            + (saved.getLeaveType() == null ? "leave" : saved.getLeaveType())
+            + " from "
+            + saved.getFromDate()
+            + " to "
+            + saved.getToDate()
+            + ") is "
+            + saved.getStatus()
+            + (remarks == null || remarks.isBlank() ? "." : ". Remarks: " + remarks.trim()));
+    return saved;
   }
 
   public List<LeaveApplicationEntity> listLeaveApplications(String status) {

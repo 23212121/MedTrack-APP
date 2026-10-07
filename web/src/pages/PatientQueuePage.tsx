@@ -138,10 +138,6 @@ export default function PatientQueuePage() {
           <div>
             <p className="patient-booking-brand">MedTrack Clinic</p>
             <h1>Doctor Consultation Queue</h1>
-            <p className="lead patient-booking-lead">
-              Live today&apos;s queue from the hospital database — waiting count
-              and who is with the doctor now.
-            </p>
           </div>
           <Link to={popupClosePath()} className="patient-booking-signin" aria-label="Close">
             ×

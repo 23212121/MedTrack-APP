@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -14,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class NotificationAppService {
@@ -24,6 +26,8 @@ public class NotificationAppService {
 
   @Value("${medtrack.email-from}")
   private String emailFrom;
+  @Value("${medtrack.notify-to:azherkhan061@gmail.com}")
+  private String notifyTo;
   @Value("${medtrack.console-fallback:true}")
   private boolean consoleFallback;
 
@@ -33,22 +37,32 @@ public class NotificationAppService {
     this.mailSender = mailSender;
   }
 
+  @Transactional
   public Map<String, Object> send(NotifyRequest req) {
     List<NotificationEntity> created = new ArrayList<>();
 
     if (req.patientPhone() != null && !req.patientPhone().isBlank()) {
       created.add(sendChannel(req, "SMS", req.patientPhone(), req.smsConsent()));
     }
-    if (req.patientEmail() != null && !req.patientEmail().isBlank()) {
-      created.add(sendChannel(req, "EMAIL", req.patientEmail(), req.emailConsent()));
+    String patientEmail = req.patientEmail() == null ? "" : req.patientEmail().trim();
+    String companyInbox = notifyTo == null ? "" : notifyTo.trim();
+    if (!patientEmail.isBlank()) {
+      created.add(sendChannel(req, "EMAIL", patientEmail, req.emailConsent() || !companyInbox.isBlank()));
+    } else if (!companyInbox.isBlank()) {
+      created.add(sendChannel(req, "EMAIL", companyInbox, true));
+    }
+    if (req.patientPhone() != null && !req.patientPhone().isBlank()) {
+      created.add(sendChannel(req, "APP", req.patientPhone(), true));
     }
     return Map.of("notifications", created, "eventCode", req.eventCode());
   }
 
   private NotificationEntity sendChannel(
       NotifyRequest req, String channel, String recipient, boolean consent) {
-    if (repo.existsByVisitIdAndEventCodeAndChannelAndStatusIn(
-        req.visitId(), req.eventCode(), channel, List.of("SENT", "PENDING"))) {
+    if (!Set.of("DOCUMENT_ATTACHED", "MEDICINE_ORDER", "HRM_APPROVAL", "PAYMENT_COMPLETED")
+            .contains(req.eventCode() == null ? "" : req.eventCode())
+        && repo.existsByVisitIdAndEventCodeAndChannelAndStatusIn(
+            req.visitId(), req.eventCode(), channel, List.of("SENT", "PENDING"))) {
       NotificationEntity skip = base(req, channel, recipient);
       skip.setStatus("SKIPPED");
       skip.setErrorMessage("Duplicate event+channel for visit");
@@ -69,9 +83,13 @@ public class NotificationAppService {
 
     try {
       if ("SMS".equals(channel)) {
-        // Phone/SMS provider hook — console for MVP; swap Twilio/MSG91 in production
         log.info("[SMS] to={} event={} :: {}", recipient, req.eventCode(), body);
         n.setProviderRef("console-sms");
+        n.setStatus("SENT");
+        n.setSentAt(Instant.now());
+      } else if ("APP".equals(channel)) {
+        log.info("[APP] to={} event={} :: {}", recipient, req.eventCode(), body);
+        n.setProviderRef("in-app");
         n.setStatus("SENT");
         n.setSentAt(Instant.now());
       } else {
@@ -112,10 +130,14 @@ public class NotificationAppService {
       SimpleMailMessage msg = new SimpleMailMessage();
       msg.setFrom(emailFrom);
       msg.setTo(to);
+      String bcc = notifyTo == null ? "" : notifyTo.trim();
+      if (!bcc.isBlank() && !bcc.equalsIgnoreCase(to)) {
+        msg.setBcc(bcc);
+      }
       msg.setSubject(subject);
       msg.setText(body);
       sender.send(msg);
-      log.info("[EMAIL] sent to={} from={} event-subject={}", to, emailFrom, subject);
+      log.info("[EMAIL] sent to={} bcc={} from={} event-subject={}", to, bcc, emailFrom, subject);
       return true;
     } catch (Exception ex) {
       log.warn(
@@ -143,6 +165,7 @@ public class NotificationAppService {
     return switch (req.eventCode()) {
       case "BOOKING_CONFIRMED" -> "Your appointment has been booked — " + nullTo(req.clinicName(), "MedTrack Clinic");
       case "PAYMENT_COMPLETED" -> "Payment successful — " + nullTo(req.clinicName(), "MedTrack Clinic");
+      case "DOCUMENT_ATTACHED" -> "Document attached to your appointment — " + nullTo(req.clinicName(), "MedTrack Clinic");
       case "CHECKED_IN" -> "Checked in — token " + req.token();
       case "CHECKUP_STARTED" -> "Your checkup has started";
       case "DOCTOR_DELAYED" -> "Update — doctor running late";
@@ -150,6 +173,9 @@ public class NotificationAppService {
       case "QUEUE_TWO_AHEAD" -> "Almost your turn — token " + req.token();
       case "VISIT_COMPLETED" -> "Visit completed";
       case "OVERTIME_FEE" -> "Extra consult fee applied";
+      case "TRACK_OTP" -> "MedTrack appointment OTP";
+      case "MEDICINE_ORDER" -> "Medicine order update — " + nullTo(req.clinicName(), "MedTrack");
+      case "HRM_APPROVAL" -> "HR update — " + nullTo(req.clinicName(), "MedTrack");
       default -> "Clinic update — " + req.eventCode();
     };
   }
@@ -235,6 +261,44 @@ public class NotificationAppService {
             + txn
             + ".";
       }
+      case "DOCUMENT_ATTACHED" -> {
+        String count =
+            req.extra() != null && req.extra().get("fileCount") != null
+                ? req.extra().get("fileCount")
+                : "1";
+        String names =
+            req.extra() != null && req.extra().get("fileNames") != null
+                ? req.extra().get("fileNames")
+                : "";
+        String filesBit = names.isBlank() ? count + " file(s)" : names;
+        if ("EMAIL".equals(channel)) {
+          yield "Dear "
+              + patient
+              + ",\n\nA document has been attached to your appointment.\n\n"
+              + "Hospital/Clinic: "
+              + clinic
+              + "\nDoctor: "
+              + doctor
+              + "\nWhen: "
+              + nullTo(req.scheduledTime(), "—")
+              + "\nToken: "
+              + (req.token() == null || req.token().isBlank() ? "—" : "# " + req.token())
+              + "\nFiles: "
+              + filesBit
+              + "\n\nOpen Reports in the patient portal to view or download.\n\nRegards,\n"
+              + clinic;
+        }
+        yield clinic
+            + ": Hi "
+            + patient
+            + ", "
+            + filesBit
+            + " attached to your appointment with "
+            + doctor
+            + "."
+            + tokenPart
+            + " Open Reports to view.";
+      }
       case "CHECKED_IN" -> clinic + ": " + patient + " checked in. Token " + req.token()
           + " for " + doctor + ".";
       case "CHECKUP_STARTED" -> clinic + ": Your checkup with " + doctor + " has started. Token "
@@ -251,6 +315,54 @@ public class NotificationAppService {
           + " applied. Total " + fee + ". " + ("EMAIL".equals(channel)
           ? "Reply to this email with questions."
           : "Call clinic for fee questions.");
+      case "TRACK_OTP" -> {
+        String otp =
+            req.extra() != null && req.extra().get("otp") != null ? req.extra().get("otp") : "";
+        yield clinic
+            + ": Your OTP to track the appointment is "
+            + otp
+            + ". Valid for 5 minutes. Do not share this code.";
+      }
+      case "MEDICINE_ORDER" -> {
+        String extraMsg =
+            req.extra() != null && req.extra().get("message") != null
+                ? req.extra().get("message")
+                : "Your medicine order was updated.";
+        String orderNo =
+            req.extra() != null && req.extra().get("orderNumber") != null
+                ? req.extra().get("orderNumber")
+                : "";
+        if ("EMAIL".equals(channel)) {
+          yield "Dear "
+              + patient
+              + ",\n\n"
+              + extraMsg
+              + "\n\nOrder: "
+              + orderNo
+              + "\nHospital/Clinic: "
+              + clinic
+              + "\n\nRegards,\n"
+              + clinic;
+        }
+        yield extraMsg;
+      }
+      case "HRM_APPROVAL" -> {
+        String extraMsg =
+            req.extra() != null && req.extra().get("message") != null
+                ? req.extra().get("message")
+                : "Your HR request was updated.";
+        if ("EMAIL".equals(channel)) {
+          yield "Dear "
+              + patient
+              + ",\n\n"
+              + extraMsg
+              + "\n\nHospital: "
+              + clinic
+              + "\n\nRegards,\nHR — "
+              + clinic;
+        }
+        yield extraMsg;
+      }
       default -> clinic + ": Status update " + req.eventCode() + " for " + patient + ".";
     };
   }
@@ -272,6 +384,25 @@ public class NotificationAppService {
 
   public List<NotificationEntity> recent() {
     return repo.findTop50ByOrderByCreatedAtDesc();
+  }
+
+  public List<NotificationEntity> byRecipient(String recipient) {
+    if (recipient == null || recipient.isBlank()) {
+      return List.of();
+    }
+    String digits = recipient.replaceAll("\\D", "");
+    if (digits.isBlank()) {
+      return repo.findTop50ByRecipientOrderByCreatedAtDesc(recipient.trim());
+    }
+    List<NotificationEntity> rows = repo.findTop50ByRecipientOrderByCreatedAtDesc(digits);
+    if (!rows.isEmpty()) return rows;
+    if (digits.length() > 10) {
+      return repo.findTop50ByRecipientOrderByCreatedAtDesc(digits.substring(digits.length() - 10));
+    }
+    if (digits.length() == 10) {
+      return repo.findTop50ByRecipientOrderByCreatedAtDesc("91" + digits);
+    }
+    return rows;
   }
 
   public List<NotificationEntity> byVisit(String visitId) {

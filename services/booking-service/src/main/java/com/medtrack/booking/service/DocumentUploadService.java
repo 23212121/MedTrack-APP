@@ -1,9 +1,12 @@
 package com.medtrack.booking.service;
 
+import com.medtrack.booking.event.DocumentUploadedEvent;
 import com.medtrack.booking.domain.DocumentEntity;
 import com.medtrack.booking.domain.HospitalEntity;
+import com.medtrack.booking.domain.LabTechnicianEntity;
 import com.medtrack.booking.repo.DocumentRepository;
 import com.medtrack.booking.repo.HospitalRepository;
+import com.medtrack.booking.repo.LabTechnicianRepository;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +21,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,17 +36,23 @@ public class DocumentUploadService {
 
   private final DocumentRepository repo;
   private final HospitalRepository hospitalRepo;
+  private final LabTechnicianRepository labRepo;
   private final S3DocumentStorageService s3;
+  private final ApplicationEventPublisher events;
   private final Path uploadRoot;
 
   public DocumentUploadService(
       DocumentRepository repo,
       HospitalRepository hospitalRepo,
+      LabTechnicianRepository labRepo,
       S3DocumentStorageService s3,
+      ApplicationEventPublisher events,
       @Value("${medtrack.upload-dir:uploads/patient-documents}") String uploadDir) {
     this.repo = repo;
     this.hospitalRepo = hospitalRepo;
+    this.labRepo = labRepo;
     this.s3 = s3;
+    this.events = events;
     this.uploadRoot = Path.of(uploadDir).toAbsolutePath().normalize();
   }
 
@@ -54,7 +64,7 @@ public class DocumentUploadService {
       String phoneNumber,
       MultipartFile[] files,
       String creationUser) {
-    return upload(hospitalId, patientName, aadhaarNumber, phoneNumber, files, creationUser, DEFAULT_DOC_TYPE);
+    return upload(hospitalId, patientName, aadhaarNumber, phoneNumber, files, creationUser, DEFAULT_DOC_TYPE, null);
   }
 
   @Transactional
@@ -66,12 +76,44 @@ public class DocumentUploadService {
       MultipartFile[] files,
       String creationUser,
       String documentType) {
+    return upload(
+        hospitalId, patientName, aadhaarNumber, phoneNumber, files, creationUser, documentType, null);
+  }
+
+  @Transactional
+  public DocumentEntity upload(
+      Long hospitalId,
+      String patientName,
+      String aadhaarNumber,
+      String phoneNumber,
+      MultipartFile[] files,
+      String creationUser,
+      String documentType,
+      String labId) {
+    String type =
+        documentType == null || documentType.isBlank()
+            ? DEFAULT_DOC_TYPE
+            : documentType.trim().toUpperCase(Locale.ROOT);
+    if (type.length() > 64) type = type.substring(0, 64);
+    boolean labUpload = isLabType(type) || (labId != null && !labId.isBlank());
+    boolean phoneOnlyOk = labUpload || isAppointmentType(type);
     if (hospitalId == null) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Hospital id is required");
+      hospitalId = 0L;
     }
     String name = trimRequired(patientName, "Patient name");
-    String phone = digitsOnly(trimRequired(phoneNumber, "Phone number"));
-    String aadhaar = normalizeAadhaar(aadhaarNumber);
+    String phone = digitsOnly(phoneNumber);
+    String aadhaar = optionalAadhaar(aadhaarNumber);
+    if (phone.isBlank() && aadhaar.isBlank()) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Enter a phone number or a 12-digit Aadhaar number");
+    }
+    if (phone.isBlank() && !phoneOnlyOk) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number is required");
+    }
+    if (aadhaar.isBlank() && !phoneOnlyOk) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aadhaar number is required");
+    }
+    String folderId = !aadhaar.isBlank() ? aadhaar : "phone-" + phone;
     List<MultipartFile> selected = nonEmptyFiles(files);
     if (selected.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Upload at least one document");
@@ -82,8 +124,11 @@ public class DocumentUploadService {
     }
 
     String docId = UUID.randomUUID().toString();
-    // Local mirror: uploads/.../aadhaar/{aadhaar}/{docId}/
-    Path destDir = uploadRoot.resolve("aadhaar").resolve(aadhaar).resolve(docId);
+    Path destDir =
+        uploadRoot
+            .resolve(aadhaar.isBlank() ? "phone" : "aadhaar")
+            .resolve(folderId)
+            .resolve(docId);
     try {
       Files.createDirectories(destDir);
     } catch (IOException ex) {
@@ -108,7 +153,7 @@ public class DocumentUploadService {
             HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save file: " + original);
       }
 
-      String s3Key = s3.objectKey(aadhaar, docId, stored);
+      String s3Key = s3.objectKey(folderId, docId, stored);
       if (s3.isEnabled()) {
         try {
           Optional<String> uploaded =
@@ -136,7 +181,7 @@ public class DocumentUploadService {
       originalNames.add(original);
     }
 
-    String folderKey = s3.objectKey(aadhaar, docId, "").replaceAll("/$", "");
+    String folderKey = s3.objectKey(folderId, docId, "").replaceAll("/$", "");
     String logicalBucket =
         s3.getBucketName() != null && !s3.getBucketName().isBlank()
             ? s3.getBucketName()
@@ -148,12 +193,10 @@ public class DocumentUploadService {
     DocumentEntity row = new DocumentEntity();
     row.setId(docId);
     row.setPatientName(name);
-    row.setAadhaarNumber(aadhaar);
+    row.setAadhaarNumber(aadhaar.isBlank() ? null : aadhaar);
     row.setHospitalId(hospitalId);
-    row.setPhoneNumber(phone);
-    String type =
-        documentType == null || documentType.isBlank() ? DEFAULT_DOC_TYPE : documentType.trim().toUpperCase(Locale.ROOT);
-    if (type.length() > 64) type = type.substring(0, 64);
+    row.setLabId(blankToNull(labId));
+    row.setPhoneNumber(phone.isBlank() ? "" : phone);
     row.setDocumentType(type);
     row.setDestinationPath(destination);
     row.setFilePath(filePath);
@@ -165,7 +208,18 @@ public class DocumentUploadService {
     row.setFileUpload5(slot(storedKeys, 4));
     row.setCreationDate(Instant.now());
     row.setCreationUser(blankToNull(creationUser));
-    return repo.save(row);
+    DocumentEntity saved = repo.save(row);
+    events.publishEvent(
+        new DocumentUploadedEvent(
+            hospitalId,
+            saved.getId(),
+            type,
+            name,
+            phone,
+            aadhaar,
+            originalNames.size(),
+            String.join(", ", originalNames)));
+    return saved;
   }
 
   @Transactional(readOnly = true)
@@ -176,7 +230,15 @@ public class DocumentUploadService {
     return repo.findByHospitalIdOrderByCreationDateDesc(hospitalId);
   }
 
-  /** Patient portal list: WHERE phone + patient_name, with hospital name + flattened file rows. */
+  @Transactional(readOnly = true)
+  public List<DocumentEntity> listForLab(String labId) {
+    if (labId == null || labId.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "lab id is required");
+    }
+    return repo.findByLabIdOrderByCreationDateDesc(labId);
+  }
+
+  /** Patient portal list: phone + optional name. Lab reports for the phone are always included. */
   @Transactional(readOnly = true)
   public List<Map<String, Object>> listForPatient(String phone, String patientName) {
     String normalized = digitsOnly(phone);
@@ -184,21 +246,17 @@ public class DocumentUploadService {
     if (normalized.isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "phone is required");
     }
-    if (name.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "patientName is required");
-    }
-    List<DocumentEntity> docs = repo.findForPatientPortal(normalized, name);
+    List<DocumentEntity> docs =
+        name.isBlank()
+            ? repo.findForPatientPortalByPhone(normalized)
+            : repo.findForPatientPortal(normalized, name);
     List<Map<String, Object>> rows = new ArrayList<>();
     for (DocumentEntity d : docs) {
-      String hospitalName =
-          hospitalRepo
-              .findById(d.getHospitalId())
-              .map(HospitalEntity::getHospitalName)
-              .orElse("Hospital #" + d.getHospitalId());
       String type =
           d.getDocumentType() == null || d.getDocumentType().isBlank()
               ? DEFAULT_DOC_TYPE
               : d.getDocumentType();
+      String hospitalName = sourceLabel(d, type);
       List<String[]> slots = fileSlots(d);
       for (String[] slot : slots) {
         Map<String, Object> row = new LinkedHashMap<>();
@@ -358,6 +416,7 @@ public class DocumentUploadService {
     m.put("patientName", d.getPatientName());
     m.put("aadhaarNumber", d.getAadhaarNumber());
     m.put("hospitalId", d.getHospitalId());
+    m.put("labId", d.getLabId());
     m.put("phoneNumber", d.getPhoneNumber());
     m.put("documentType", d.getDocumentType());
     m.put("filePath", d.getFilePath());
@@ -405,6 +464,10 @@ public class DocumentUploadService {
     String aadhaar = doc.getAadhaarNumber() == null ? "" : doc.getAadhaarNumber().replaceAll("\\D", "");
     if (!aadhaar.isBlank() && doc.getId() != null) {
       bases.add(uploadRoot.resolve("aadhaar").resolve(aadhaar).resolve(doc.getId()));
+    }
+    String phone = digitsOnly(doc.getPhoneNumber());
+    if (!phone.isBlank() && doc.getId() != null) {
+      bases.add(uploadRoot.resolve("phone").resolve("phone-" + phone).resolve(doc.getId()));
     }
     if (doc.getHospitalId() != null && doc.getId() != null) {
       bases.add(uploadRoot.resolve("hospital-" + doc.getHospitalId()).resolve(doc.getId()));
@@ -478,16 +541,48 @@ public class DocumentUploadService {
     return raw == null ? "" : raw.replaceAll("\\D", "");
   }
 
-  private static String normalizeAadhaar(String raw) {
+  private static String optionalAadhaar(String raw) {
     if (raw == null || raw.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aadhaar number is required");
+      return "";
     }
-    String digits = raw.replaceAll("\\s+", "").trim();
+    String digits = raw.replaceAll("\\D", "");
+    if (digits.isBlank()) {
+      return "";
+    }
     if (!digits.matches("\\d{12}")) {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "Aadhaar number must be 12 digits");
     }
     return digits;
+  }
+
+  private static boolean isLabType(String type) {
+    return "LAB".equalsIgnoreCase(type) || "LAB_REPORT".equalsIgnoreCase(type);
+  }
+
+  private static boolean isAppointmentType(String type) {
+    return "APPOINTMENT".equalsIgnoreCase(type)
+        || "RX".equalsIgnoreCase(type)
+        || "PRESCRIPTION".equalsIgnoreCase(type);
+  }
+
+  private String sourceLabel(DocumentEntity d, String type) {
+    if (isLabType(type) || (d.getLabId() != null && !d.getLabId().isBlank())) {
+      if (d.getLabId() != null && !d.getLabId().isBlank()) {
+        return labRepo
+            .findById(d.getLabId())
+            .map(LabTechnicianEntity::getLabName)
+            .orElse("Diagnostic lab");
+      }
+      return "Diagnostic lab";
+    }
+    if (d.getHospitalId() == null || d.getHospitalId() == 0L) {
+      return "Hospital";
+    }
+    return hospitalRepo
+        .findById(d.getHospitalId())
+        .map(HospitalEntity::getHospitalName)
+        .orElse("Hospital #" + d.getHospitalId());
   }
 
   private static String safeOriginalName(String name, int index) {

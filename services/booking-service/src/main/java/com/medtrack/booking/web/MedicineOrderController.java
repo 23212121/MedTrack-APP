@@ -171,6 +171,22 @@ public class MedicineOrderController {
     return service.payWithScreenshot(actor(headers), id, body, files);
   }
 
+  @PostMapping("/{id}/payment/verify-with-gateway")
+  public Map<String, Object> verifyWithGateway(
+      @PathVariable("id") String id,
+      @RequestBody(required = false) Map<String, Object> body,
+      @RequestHeader Map<String, String> headers) {
+    return service.verifyBankPayment(actor(headers), id, body == null ? Map.of() : body);
+  }
+
+  @PostMapping("/{id}/payment/confirm-local-upi")
+  public Map<String, Object> confirmLocalUpi(
+      @PathVariable("id") String id,
+      @RequestBody(required = false) Map<String, Object> body,
+      @RequestHeader Map<String, String> headers) {
+    return service.payWithLocalUpi(actor(headers), id, body == null ? Map.of() : body);
+  }
+
   @PostMapping("/{id}/amount/reject")
   public Map<String, Object> rejectAmount(
       @PathVariable("id") String id,

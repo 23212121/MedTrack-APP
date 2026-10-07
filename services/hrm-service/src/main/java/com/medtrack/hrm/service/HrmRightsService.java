@@ -62,8 +62,11 @@ public class HrmRightsService {
               .filter(r -> Boolean.TRUE.equals(r.getAllowed()))
               .map(CompanyApplicationSettingEntity::getRightCode)
               .distinct()
-              .toList();
+              .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
       fromSettings = true;
+    }
+    if ("HOSPITAL".equalsIgnoreCase(audit.loginType()) && !allowed.contains(HRM_APPROVER)) {
+      allowed.add(HRM_APPROVER);
     }
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("hospitalId", hospitalId);
@@ -110,6 +113,9 @@ public class HrmRightsService {
     Long hospitalId = audit.hospitalId();
     String user = currentUserId();
     String doctor = audit.doctorId();
+    if ("HOSPITAL".equalsIgnoreCase(audit.loginType())) {
+      return true;
+    }
     return settings.existsByHospitalIdAndUserIdAndRightCodeAndAllowedTrue(
             hospitalId, user, HRM_APPROVER)
         || (doctor != null
@@ -171,12 +177,14 @@ public class HrmRightsService {
   private void ensureHospitalAdminSeed() {
     Long hospitalId = audit.hospitalId();
     if (hospitalId == null) return;
-    seedUser(hospitalId, String.valueOf(hospitalId));
-    ensureRight(hospitalId, String.valueOf(hospitalId), HRM_HOLIDAY);
     if ("HOSPITAL".equalsIgnoreCase(audit.loginType())) {
       seedUser(hospitalId, currentUserId());
       ensureRight(hospitalId, currentUserId(), HRM_HOLIDAY);
+      ensureRight(hospitalId, currentUserId(), HRM_APPROVER);
     }
+    seedUser(hospitalId, String.valueOf(hospitalId));
+    ensureRight(hospitalId, String.valueOf(hospitalId), HRM_HOLIDAY);
+    ensureRight(hospitalId, String.valueOf(hospitalId), HRM_APPROVER);
   }
 
   private void ensureRight(Long hospitalId, String userId, String code) {

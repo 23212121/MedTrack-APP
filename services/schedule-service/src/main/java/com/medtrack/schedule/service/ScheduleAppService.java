@@ -338,13 +338,39 @@ public class ScheduleAppService implements DoctorBusyPort {
         .or(() -> feeRepo.findByClinicIdAndDoctorIdIsNull(clinicId));
   }
 
-  public FeeRuleEntity upsertFeeRule(String doctorId, FeeRuleRequest body) {
+  public FeeRuleEntity feeRuleOrDefault(String doctorId) {
+    Optional<FeeRuleEntity> existing = feeRepo.findByDoctorId(doctorId);
+    if (existing.isPresent()) {
+      return existing.get();
+    }
+    FeeRuleEntity template = feeRepo.findByClinicIdAndDoctorIdIsNull(clinicId).orElse(null);
+    FeeRuleEntity fee = new FeeRuleEntity();
+    fee.setId("fee-" + doctorId);
+    fee.setDoctorId(doctorId);
+    fee.setClinicId(clinicId);
+    fee.setHospitalId(parseClinicHospitalId());
+    if (template != null) {
+      fee.setBaseConsultFee(template.getBaseConsultFee());
+      fee.setFixedConsultMinutes(template.getFixedConsultMinutes());
+      fee.setOvertimeFeeAmount(template.getOvertimeFeeAmount());
+      fee.setOvertimeFeePerBlockMinutes(template.getOvertimeFeePerBlockMinutes());
+      fee.setCurrency(template.getCurrency());
+    }
+    return fee;
+  }
+
+  public FeeRuleEntity upsertFeeRule(String doctorId, FeeRuleRequest body, Long hospitalId) {
     FeeRuleEntity fee = feeRepo.findByDoctorId(doctorId).orElseGet(FeeRuleEntity::new);
     if (fee.getId() == null) {
       fee.setId("fee-" + doctorId);
       fee.setDoctorId(doctorId);
     }
     fee.setClinicId(body.clinicId() != null ? body.clinicId() : clinicId);
+    Long hid = hospitalId;
+    if (hid == null && body.hospitalId() != null) hid = body.hospitalId();
+    if (hid == null) hid = parseLongOrNull(fee.getClinicId());
+    if (hid == null) hid = parseClinicHospitalId();
+    fee.setHospitalId(hid);
     if (body.baseConsultFee() != null) fee.setBaseConsultFee(body.baseConsultFee());
     if (body.fixedConsultMinutes() != null) fee.setFixedConsultMinutes(body.fixedConsultMinutes());
     if (body.overtimeFeeAmount() != null) fee.setOvertimeFeeAmount(body.overtimeFeeAmount());
@@ -355,13 +381,26 @@ public class ScheduleAppService implements DoctorBusyPort {
     return feeRepo.save(fee);
   }
 
+  private Long parseClinicHospitalId() {
+    Long parsed = parseLongOrNull(clinicId);
+    return parsed != null ? parsed : 10001L;
+  }
+
+  private static Long parseLongOrNull(String raw) {
+    if (raw == null || raw.isBlank()) return null;
+    try {
+      return Long.parseLong(raw.trim());
+    } catch (NumberFormatException ex) {
+      return null;
+    }
+  }
+
   public Map<String, Object> calculateOvertime(String doctorId, int actualConsultMinutes) {
     return calculateOvertime(new FeeCalcRequest(doctorId, actualConsultMinutes));
   }
 
   public Map<String, Object> calculateOvertime(FeeCalcRequest body) {
-    FeeRuleEntity rule = feeRule(body.doctorId())
-        .orElseThrow(() -> new IllegalArgumentException("No fee rule"));
+    FeeRuleEntity rule = feeRuleOrDefault(body.doctorId());
     int fixed = rule.getFixedConsultMinutes();
     int over = Math.max(0, body.actualConsultMinutes() - fixed);
     int blocks = over == 0 ? 0 : (int) Math.ceil(over / (double) rule.getOvertimeFeePerBlockMinutes());

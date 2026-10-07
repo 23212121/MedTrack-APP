@@ -63,6 +63,11 @@ export const navGroups: NavGroup[] = [
         label: "Medical stores",
         hint: "Register pharmacies",
       },
+      {
+        to: "/labs",
+        label: "Diagnostic labs",
+        hint: "Register lab technicians",
+      },
     ],
   },
   {
@@ -184,4 +189,5 @@ export const pageTitles: Record<string, string> = {
   "/doctor-portal/medicine-orders": "Medicine orders",
   "/medicine-orders": "Medicine orders",
   "/medical-stores": "Medical stores",
+  "/labs": "Diagnostic labs",
 };

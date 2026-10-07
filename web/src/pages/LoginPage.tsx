@@ -5,7 +5,14 @@ import { api } from "../api";
 import { login as saveSession } from "../auth";
 import { useT } from "../i18n";
 
-type LoginMode = "HOSPITAL" | "USER" | "MEDICAL" | "PATIENT";
+type LoginMode = "HOSPITAL" | "USER" | "MEDICAL" | "LAB" | "PATIENT";
+
+const STAFF_TYPES: { id: Exclude<LoginMode, "PATIENT">; label: string; hint: string }[] = [
+  { id: "HOSPITAL", label: "Hospital", hint: "Hospital ID" },
+  { id: "USER", label: "Doctor", hint: "User ID (Doctor)" },
+  { id: "MEDICAL", label: "Medical type", hint: "Medical store" },
+  { id: "LAB", label: "Lab technician", hint: "Lab code" },
+];
 
 export default function LoginPage() {
   const t = useT();
@@ -32,7 +39,9 @@ export default function LoginPage() {
             ? "Enter hospital ID and password"
             : mode === "MEDICAL"
               ? "Enter medical store ID and password"
-              : "Enter user ID and password",
+              : mode === "LAB"
+                ? "Enter lab code and password"
+                : "Enter user ID and password",
         ),
       );
       return;
@@ -53,13 +62,16 @@ export default function LoginPage() {
         res.hospitalCode,
         {
           loginType: res.loginType,
-          userId: res.userId || res.doctorId || res.medicalStoreId,
+          userId: res.userId || res.doctorId || res.medicalStoreId || res.labTechnicianId,
           role: res.role,
           accessToken: res.token,
           medicalStoreId: res.medicalStoreId,
+          labTechnicianId: res.labTechnicianId,
         },
       );
-      if (res.loginType === "MEDICAL" || mode === "MEDICAL") {
+      if (res.loginType === "LAB" || mode === "LAB") {
+        navigate("/lab");
+      } else if (res.loginType === "MEDICAL" || mode === "MEDICAL") {
         navigate("/medical");
       } else if (
         res.loginType === "USER" ||
@@ -119,7 +131,39 @@ export default function LoginPage() {
   }
 
   return (
-    <>
+    <div className="login-stage">
+      <div className="login-stage-brand">
+        <span className="login-brand-mark" aria-hidden="true">
+          M
+        </span>
+        <span className="login-brand-text">
+          <span className="login-brand-name">MediMitra</span>
+          <span className="login-brand-tag">Healthier together</span>
+        </span>
+      </div>
+
+      <aside className="login-type-rail" aria-label={t("Login type")}>
+        <p className="login-type-rail-title">{t("Choose a login type")}</p>
+        {STAFF_TYPES.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={
+              mode === item.id ? "login-type-card is-active" : "login-type-card"
+            }
+            aria-pressed={mode === item.id}
+            onClick={() => {
+              setMode(item.id);
+              setError("");
+              setPatientError("");
+            }}
+          >
+            <span className="login-type-card-label">{t(item.label)}</span>
+            <span className="login-type-card-hint">{t(item.hint)}</span>
+          </button>
+        ))}
+      </aside>
+
       <section className="panel login-popup">
         <h1 style={{ color: "var(--brand-dark)" }}>{t("MedTrack Clinic")}</h1>
         <p className="lead" style={{ marginBottom: "0.45rem" }}>
@@ -140,61 +184,6 @@ export default function LoginPage() {
         {(error || (mode === "PATIENT" && patientError)) && (
           <div className="msg error">{mode === "PATIENT" ? patientError || error : error}</div>
         )}
-
-        <div className="login-mode" role="tablist" aria-label={t("Login type")}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "HOSPITAL"}
-            className={mode === "HOSPITAL" ? "login-mode-btn is-active" : "login-mode-btn"}
-            onClick={() => {
-              setMode("HOSPITAL");
-              setError("");
-              setPatientError("");
-            }}
-          >
-            {t("Hospital ID")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "USER"}
-            className={mode === "USER" ? "login-mode-btn is-active" : "login-mode-btn"}
-            onClick={() => {
-              setMode("USER");
-              setError("");
-              setPatientError("");
-            }}
-          >
-            {t("User ID (Doctor)")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "MEDICAL"}
-            className={mode === "MEDICAL" ? "login-mode-btn is-active" : "login-mode-btn"}
-            onClick={() => {
-              setMode("MEDICAL");
-              setError("");
-              setPatientError("");
-            }}
-          >
-            {t("Medical store")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "PATIENT"}
-            className={mode === "PATIENT" ? "login-mode-btn is-active" : "login-mode-btn"}
-            onClick={() => {
-              setMode("PATIENT");
-              setError("");
-              setPatientError("");
-            }}
-          >
-            {t("Patient")}
-          </button>
-        </div>
 
         {mode === "PATIENT" ? (
           <form className="stack" onSubmit={onPatientLogin}>
@@ -242,7 +231,9 @@ export default function LoginPage() {
                 ? "Hospital ID"
                 : mode === "MEDICAL"
                   ? "Medical store ID"
-                  : "User ID (Doctor)",
+                  : mode === "LAB"
+                    ? "Lab code"
+                    : "User ID (Doctor)",
             )}
             <input
               value={id}
@@ -252,7 +243,9 @@ export default function LoginPage() {
                   ? "e.g. 10001"
                   : mode === "MEDICAL"
                     ? "e.g. MED-10001-1"
-                    : "e.g. DOC-SEED-0001"
+                    : mode === "LAB"
+                      ? "e.g. LAB-10001-1"
+                      : "e.g. DOC-SEED-0001"
               }
               inputMode={mode === "HOSPITAL" ? "numeric" : "text"}
               autoComplete="username"
@@ -289,6 +282,10 @@ export default function LoginPage() {
         <p className="lead" style={{ marginTop: "0.85rem", marginBottom: 0 }}>
           <Link to="/forgot-password" style={{ textDecoration: "underline" }}>
             {t("Forgot password?")}
+          </Link>
+          {" · "}
+          <Link to="/patient/login" style={{ textDecoration: "underline" }}>
+            {t("Patient")}
           </Link>
         </p>
 
@@ -343,6 +340,6 @@ export default function LoginPage() {
           }
         }}
       />
-    </>
+    </div>
   );
 }

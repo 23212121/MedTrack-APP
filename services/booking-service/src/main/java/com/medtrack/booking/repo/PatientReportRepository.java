@@ -35,4 +35,7 @@ public interface PatientReportRepository extends JpaRepository<PatientReportEnti
       @Param("patientName") String patientName,
       @Param("from") LocalDate from,
       @Param("to") LocalDate to);
+
+  List<PatientReportEntity> findByPatientPhoneAndReportTypeIgnoreCaseOrderByReportDateDescCreatedAtDesc(
+      String phone, String reportType);
 }
