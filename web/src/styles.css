@@ -799,7 +799,8 @@ code {
 .badge.CHECKED_IN { background: #d1fae5; color: var(--ok); }
 .badge.IN_CONSULT { background: #fef3c7; color: var(--warn); }
 .badge.COMPLETED { background: #e5e7eb; color: #374151; }
-.badge.BUSY, .badge.LEAVE, .badge.BLOCKED { background: #ffe4e6; color: var(--busy); }
+.badge.BUSY, .badge.LEAVE, .badge.BLOCKED, .badge.UNAVAILABLE { background: #ffe4e6; color: var(--busy); }
+.badge.AVAILABLE, .badge.OPEN, .badge.EXTRA { background: #d1fae5; color: var(--ok); }
 
 .msg { padding: 0.6rem 0.8rem; border-radius: 10px; margin-bottom: 0.8rem; }
 .msg.error { background: #fee2e2; color: #991b1b; }
@@ -2057,6 +2058,15 @@ button.chip:hover {
   opacity: 0.55;
   cursor: not-allowed;
   background: #f3f4f6;
+}
+.doctor-avail-day.is-unavailable.is-enableable {
+  cursor: pointer;
+  opacity: 0.9;
+}
+.doctor-avail-day.is-unavailable.is-enableable:hover {
+  border-color: var(--brand);
+  outline: 2px dashed #9fd0d6;
+  opacity: 1;
 }
 .doctor-avail-suggest {
   margin-top: 0.55rem;

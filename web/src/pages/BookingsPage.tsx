@@ -65,6 +65,13 @@ function addDaysYmd(ymd: string, days: number) {
   return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 10);
 }
 
+function inclusiveRangeToInstants(fromYmd: string, toYmd: string) {
+  const start = new Date(`${fromYmd}T00:00:00`);
+  const endExclusive = new Date(`${toYmd}T00:00:00`);
+  endExclusive.setDate(endExclusive.getDate() + 1);
+  return { startsAt: start.toISOString(), endsAt: endExclusive.toISOString() };
+}
+
 function defaultTimeLocal() {
   const d = new Date();
   d.setMinutes(0, 0, 0);
@@ -194,6 +201,7 @@ export default function BookingsPage({
   const [payModal, setPayModal] = useState<AppointmentPayment | null>(null);
   const [attachFiles, setAttachFiles] = useState<File[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
+  const canEnableDates = !publicMode;
 
   const hospitalDoctors = useMemo(() => {
     if (!selectedHospitalId) return allDoctors;
@@ -742,6 +750,29 @@ export default function BookingsPage({
     };
   }
 
+  async function enableDoctorDate(doctorId: string, date: string) {
+    const hid = form.hospitalId || selectedHospitalId || session.getHospitalId();
+    if (!hid) {
+      throw new Error("Hospital is required to open this date.");
+    }
+    const { startsAt, endsAt } = inclusiveRangeToInstants(date, date);
+    const saved = await api.availability(doctorId, startsAt, endsAt);
+    const closed = (saved.availability || []).filter((a) =>
+      ["BUSY", "LEAVE", "BLOCKED", "UNAVAILABLE"].includes(
+        (a.availabilityType || "").toUpperCase(),
+      ),
+    );
+    await Promise.all(closed.map((b) => api.deleteAvailability(b.id)));
+    await api.addAvailability({
+      doctorId,
+      hospitalId: Number(hid),
+      startsAt,
+      endsAt,
+      availabilityType: "AVAILABLE",
+      reason: "Opened while booking",
+    });
+  }
+
   async function onAppointmentDateChange(date: string): Promise<{
     ok: boolean;
     message?: string;
@@ -755,12 +786,35 @@ export default function BookingsPage({
       form.doctorName,
       date,
     );
-    if (!result.ok) {
-      setDateWarning(result.message);
-      setField("appointmentDate", "");
-      return { ok: false, message: result.message };
+    if (result.ok) return { ok: true };
+    if (canEnableDates) {
+      try {
+        await enableDoctorDate(form.doctorId, date);
+        const from = date < availFrom ? date : availFrom;
+        const to = date > availTo ? addDaysYmd(date, 14) : availTo;
+        const data = await api.availableDays(form.doctorId, from, to);
+        const days = data.days || [];
+        setAvailDays(days);
+        const opened = days.find((d) => d.date === date);
+        if (opened?.available) {
+          setField("appointmentDate", date);
+          setDateWarning("");
+          if (opened.windows?.[0]?.start) {
+            setField("appointmentTime", opened.windows[0].start.slice(0, 5));
+          }
+          toast.success(t("This date is now open for booking."));
+          return { ok: true };
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : t("Could not open this date for booking.");
+        setDateWarning(message);
+        setField("appointmentDate", "");
+        return { ok: false, message };
+      }
     }
-    return { ok: true };
+    setDateWarning(result.message);
+    setField("appointmentDate", "");
+    return { ok: false, message: result.message };
   }
 
   async function finishAfterBook() {
@@ -1053,21 +1107,36 @@ export default function BookingsPage({
                         ? form.appointmentDate === d.date
                           ? "doctor-avail-day is-available is-selected"
                           : "doctor-avail-day is-available"
-                        : "doctor-avail-day is-unavailable"
+                        : canEnableDates
+                          ? "doctor-avail-day is-unavailable is-enableable"
+                          : "doctor-avail-day is-unavailable"
                     }
-                    disabled={!d.available}
+                    disabled={!d.available && !canEnableDates}
                     onClick={() => {
-                      if (!d.available) return;
-                      void onAppointmentDateChange(d.date);
-                      if (d.windows?.[0]?.start) {
-                        setField("appointmentTime", d.windows[0].start.slice(0, 5));
-                      }
+                      void onAppointmentDateChange(d.date).then((res) => {
+                        if (!res.ok) return;
+                        const windows = availDays.find((x) => x.date === d.date)?.windows;
+                        const start = windows?.[0]?.start;
+                        if (start) setField("appointmentTime", start.slice(0, 5));
+                      });
                     }}
-                    title={d.summary}
+                    title={
+                      d.available
+                        ? d.summary
+                        : canEnableDates
+                          ? t("Click to open this date for booking")
+                          : d.summary
+                    }
                   >
                     <strong>{d.date}</strong>
                     <span>{d.dayName.slice(0, 3)}</span>
-                    <em>{d.summary}</em>
+                    <em>
+                      {d.available
+                        ? d.summary
+                        : canEnableDates
+                          ? t("Closed — click to enable")
+                          : d.summary}
+                    </em>
                   </button>
                 ))}
               </div>
@@ -1197,7 +1266,9 @@ export default function BookingsPage({
             />
             {availDays.some((d) => !d.available) && (
               <span className="muted" style={{ display: "block", marginTop: "0.35rem" }}>
-                {t("Grey / disabled days above cannot be booked (doctor is busy).")}
+                {canEnableDates
+                  ? t("Grey days are closed. Click a grey day (or pick it here) to open it for booking.")
+                  : t("Grey / disabled days above cannot be booked (doctor is busy).")}
               </span>
             )}
           </label>

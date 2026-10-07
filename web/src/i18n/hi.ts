@@ -288,6 +288,12 @@ export const hi: Record<string, string> = {
   "Bookings ({count})": "बुकिंग ({count})",
   "Grey / disabled days above cannot be booked (doctor is busy).":
     "ऊपर धूसर / बंद दिन बुक नहीं हो सकते (डॉक्टर व्यस्त हैं)।",
+  "Grey days are closed. Click a grey day (or pick it here) to open it for booking.":
+    "धूसर दिन बंद हैं। बुकिंग के लिए खोलने हेतु धूसर दिन पर क्लिक करें (या यहाँ चुनें)।",
+  "Click to open this date for booking": "बुकिंग के लिए यह तारीख खोलने हेतु क्लिक करें",
+  "Closed — click to enable": "बंद — खोलने के लिए क्लिक करें",
+  "This date is now open for booking.": "यह तारीख अब बुकिंग के लिए खुली है।",
+  "Could not open this date for booking.": "यह तारीख बुकिंग के लिए नहीं खोली जा सकी।",
   "Suggested available dates:": "सुझाई गई उपलब्ध तारीखें:",
   "Consultation fee (from doctor profile): INR {fee}": "परामर्श शुल्क (डॉक्टर प्रोफ़ाइल से): ₹ {fee}",
 
@@ -383,6 +389,9 @@ export const hi: Record<string, string> = {
   "Previous records": "पिछले रिकॉर्ड",
   "Document file links": "दस्तावेज़ फ़ाइल लिंक",
   "Doctor schedules": "डॉक्टर समय-सारणी",
+  "Doctor dates": "डॉक्टर तिथियाँ",
+  "My dates": "मेरी तिथियाँ",
+  "Doctor booking dates": "डॉक्टर बुकिंग तिथियाँ",
   "Availability & busy blocks": "उपलब्धता और व्यस्त समय",
   "Add block": "ब्लॉक जोड़ें",
   "Saved blocks": "सहेजे ब्लॉक",

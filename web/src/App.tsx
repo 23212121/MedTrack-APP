@@ -13,6 +13,7 @@ import AboutPage from "./pages/AboutPage";
 import HomePage from "./pages/HomePage";
 import SchedulesPage from "./pages/SchedulesPage";
 import AvailabilityPage from "./pages/AvailabilityPage";
+import DoctorAvailabilityDatesPage from "./pages/DoctorAvailabilityDatesPage";
 import CheckInPage from "./pages/CheckInPage";
 import BusyChartPage from "./pages/BusyChartPage";
 import FeesPage from "./pages/FeesPage";
@@ -492,6 +493,7 @@ export default function App() {
             <Route path="/emergency" element={<EmergencyServicePage />} />
             <Route path="/schedules" element={<SchedulesPage />} />
             <Route path="/availability" element={<AvailabilityPage />} />
+            <Route path="/doctor-availability" element={<DoctorAvailabilityDatesPage />} />
             <Route path="/check-in" element={<CheckInPage />} />
             <Route path="/chart" element={<BusyChartPage />} />
             <Route path="/fees" element={<FeesPage />} />
@@ -504,6 +506,10 @@ export default function App() {
             <Route path="/doctor-portal/emergency" element={<EmergencyServicePage />} />
             <Route path="/doctor-portal/queue" element={<DoctorPatientQueuePage />} />
             <Route path="/doctor-portal/time-slots" element={<DoctorTimeSlotsPage />} />
+            <Route
+              path="/doctor-portal/availability"
+              element={<DoctorAvailabilityDatesPage lockedDoctorId={session.getUserId()} />}
+            />
             <Route
               path="/doctor-portal/medicine-orders"
               element={<MedicineOrdersPage title="Medicine orders" />}

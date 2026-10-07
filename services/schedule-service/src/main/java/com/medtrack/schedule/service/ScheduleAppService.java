@@ -155,7 +155,7 @@ public class ScheduleAppService implements DoctorBusyPort {
 
   /**
    * For booking UI: from/to date filter showing when the doctor is available
-   * (weekly working hours minus BUSY/LEAVE/BLOCKED blocks).
+   * (weekly working hours plus extra AVAILABLE dates, minus BUSY/LEAVE/BLOCKED).
    */
   public Map<String, Object> availableDays(String doctorId, String fromDate, String toDate) {
     LocalDate from = LocalDate.parse(fromDate);
@@ -194,11 +194,16 @@ public class ScheduleAppService implements DoctorBusyPort {
       Instant dayEnd = day.plusDays(1).atStartOfDay(zone).toInstant();
       List<Map<String, String>> blocked = new ArrayList<>();
       boolean fullDayLeave = false;
+      boolean extraOpen = false;
       for (DoctorAvailabilityEntity a : blocks) {
         if (!a.getStartsAt().isBefore(dayEnd) || !a.getEndsAt().isAfter(dayStart)) {
           continue;
         }
         String type = a.getAvailabilityType() == null ? "" : a.getAvailabilityType().toUpperCase();
+        if (List.of("AVAILABLE", "OPEN", "EXTRA").contains(type)) {
+          extraOpen = true;
+          continue;
+        }
         if (!List.of("BUSY", "LEAVE", "BLOCKED", "UNAVAILABLE").contains(type)) {
           continue;
         }
@@ -211,7 +216,11 @@ public class ScheduleAppService implements DoctorBusyPort {
         fullDayLeave = true;
       }
 
-      boolean available = !windows.isEmpty() && !fullDayLeave;
+      if (extraOpen && windows.isEmpty()) {
+        windows.add(Map.of("start", "09:00", "end", "17:00", "slotMinutes", "15"));
+      }
+
+      boolean available = (!windows.isEmpty() || extraOpen) && !fullDayLeave;
       Map<String, Object> row = new HashMap<>();
       row.put("date", day.toString());
       row.put("dayName", day.getDayOfWeek().name());
