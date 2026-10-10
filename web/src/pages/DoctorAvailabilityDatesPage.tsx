@@ -244,10 +244,6 @@ export default function DoctorAvailabilityDatesPage({ lockedDoctorId }: Props) {
   return (
     <section>
       <h1>Doctor booking dates</h1>
-      <p className="lead">
-        Select a doctor, then add or change the dates patients can book. Available days
-        appear on the appointment form when a patient picks that doctor.
-      </p>
       {error && <div className="msg error">{error}</div>}
 
       {!lockedDoctorId && (

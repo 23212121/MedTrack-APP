@@ -345,7 +345,33 @@ CREATE TABLE IF NOT EXISTS svc.appointments (
     created_date       timestamp(6) with time zone NOT NULL,
     updated_by         character varying(50),
     updated_date       timestamp(6) with time zone,
+    payment_status     character varying(30) DEFAULT 'UNPAID',
+    payment_id         character varying(40),
     CONSTRAINT appointments_pkey PRIMARY KEY (appointment_id)
+);
+
+CREATE TABLE IF NOT EXISTS svc.payments (
+    payment_id              character varying(40) NOT NULL,
+    appointment_id          character varying(36),
+    reference_type          character varying(30) DEFAULT 'APPOINTMENT',
+    reference_id            character varying(64),
+    patient_id              character varying(64) NOT NULL,
+    user_id                 character varying(64),
+    doctor_id               character varying(64),
+    name                    character varying(255),
+    payment_type            character varying(40),
+    amount                  double precision NOT NULL,
+    currency                character varying(10) NOT NULL DEFAULT 'INR',
+    status                  character varying(30) NOT NULL,
+    gateway_transaction_id  character varying(150),
+    gateway_name            character varying(50),
+    gateway_order_id        character varying(80),
+    gateway_qr_id           character varying(80),
+    qr_image_url            character varying(1000),
+    upi_uri                 character varying(500),
+    created_at              timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at              timestamp with time zone,
+    CONSTRAINT payments_pkey PRIMARY KEY (payment_id)
 );
 
 CREATE TABLE IF NOT EXISTS svc.visits (

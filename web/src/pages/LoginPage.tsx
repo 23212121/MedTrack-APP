@@ -1,17 +1,17 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import PatientUserRegistrationModal from "../components/PatientUserRegistrationModal";
 import { api } from "../api";
 import { login as saveSession } from "../auth";
 import { useT } from "../i18n";
 
 type LoginMode = "HOSPITAL" | "USER" | "MEDICAL" | "LAB" | "PATIENT";
 
-const STAFF_TYPES: { id: Exclude<LoginMode, "PATIENT">; label: string; hint: string }[] = [
+const LOGIN_TYPES: { id: LoginMode; label: string; hint: string }[] = [
   { id: "HOSPITAL", label: "Hospital", hint: "Hospital ID" },
   { id: "USER", label: "Doctor", hint: "User ID (Doctor)" },
   { id: "MEDICAL", label: "Medical type", hint: "Medical store" },
   { id: "LAB", label: "Lab technician", hint: "Lab code" },
+  { id: "PATIENT", label: "Patient", hint: "Username or phone" },
 ];
 
 export default function LoginPage() {
@@ -23,7 +23,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [showPatientReg, setShowPatientReg] = useState(false);
   const [patientUserId, setPatientUserId] = useState("");
   const [patientPassword, setPatientPassword] = useState("");
   const [patientError, setPatientError] = useState("");
@@ -144,7 +143,7 @@ export default function LoginPage() {
 
       <aside className="login-type-rail" aria-label={t("Login type")}>
         <p className="login-type-rail-title">{t("Choose a login type")}</p>
-        {STAFF_TYPES.map((item) => (
+        {LOGIN_TYPES.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -222,6 +221,12 @@ export default function LoginPage() {
             <button type="submit" disabled={patientSaving}>
               {patientSaving ? t("Signing in…") : t("Sign in")}
             </button>
+            <p className="lead" style={{ marginTop: "0.75rem", marginBottom: 0 }}>
+              {t("New patient?")}{" "}
+              <Link to="/patient/register" style={{ textDecoration: "underline" }}>
+                {t("Patient sign up")}
+              </Link>
+            </p>
           </form>
         ) : (
         <form className="stack" onSubmit={onSubmit}>
@@ -285,7 +290,11 @@ export default function LoginPage() {
           </Link>
           {" · "}
           <Link to="/patient/login" style={{ textDecoration: "underline" }}>
-            {t("Patient")}
+            {t("Patient sign in")}
+          </Link>
+          {" · "}
+          <Link to="/patient/register" style={{ textDecoration: "underline" }}>
+            {t("Patient sign up")}
           </Link>
         </p>
 
@@ -299,47 +308,6 @@ export default function LoginPage() {
           </Link>
         </div>
       </section>
-
-      <PatientUserRegistrationModal
-        open={showPatientReg}
-        onClose={() => setShowPatientReg(false)}
-        onRegistered={async ({ userId, userName, phone, password }) => {
-          // user_id is backend-generated; sign into patient portal with username/phone.
-          setShowPatientReg(false);
-          setPatientUserId(userName || phone || userId);
-          setPatientPassword(password);
-          try {
-            const res = await api.login({
-              loginType: "PATIENT",
-              id: userName || phone || userId,
-              password,
-            });
-            saveSession(
-              res.patientName || res.username || userName,
-              password,
-              0,
-              undefined,
-              undefined,
-              {
-                loginType: "PATIENT",
-                userId: res.userId || res.patientUserId || res.patientId || userId,
-                patientId: res.userId || res.patientId || res.patientUserId || userId,
-                role: "PATIENT",
-                patientPhone: res.patientPhone || phone || "",
-                patientName: res.patientName || res.username || userName,
-              },
-            );
-            navigate("/patient");
-          } catch (err) {
-            setMode("PATIENT");
-            setPatientError(
-              err instanceof Error
-                ? err.message
-                : "Registered, but sign-in failed. Please sign in.",
-            );
-          }
-        }}
-      />
     </div>
   );
 }

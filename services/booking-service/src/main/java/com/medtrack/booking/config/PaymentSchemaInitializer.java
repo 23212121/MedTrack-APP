@@ -23,6 +23,10 @@ public class PaymentSchemaInitializer {
           reference_type          VARCHAR(30) DEFAULT 'APPOINTMENT',
           reference_id            VARCHAR(64),
           patient_id              VARCHAR(64) NOT NULL,
+          user_id                 VARCHAR(64),
+          doctor_id               VARCHAR(64),
+          name                    VARCHAR(255),
+          payment_type            VARCHAR(40),
           amount                  DOUBLE PRECISION NOT NULL,
           currency                VARCHAR(10) NOT NULL DEFAULT 'INR',
           status                  VARCHAR(30) NOT NULL,
@@ -45,8 +49,14 @@ public class PaymentSchemaInitializer {
     jdbc.execute(
         "ALTER TABLE svc.payments ADD COLUMN IF NOT EXISTS reference_type VARCHAR(30) DEFAULT 'APPOINTMENT'");
     jdbc.execute("ALTER TABLE svc.payments ADD COLUMN IF NOT EXISTS reference_id VARCHAR(64)");
+    jdbc.execute("ALTER TABLE svc.payments ADD COLUMN IF NOT EXISTS user_id VARCHAR(64)");
+    jdbc.execute("ALTER TABLE svc.payments ADD COLUMN IF NOT EXISTS doctor_id VARCHAR(64)");
+    jdbc.execute("ALTER TABLE svc.payments ADD COLUMN IF NOT EXISTS name VARCHAR(255)");
+    jdbc.execute("ALTER TABLE svc.payments ADD COLUMN IF NOT EXISTS payment_type VARCHAR(40)");
     jdbc.execute(
         "CREATE INDEX IF NOT EXISTS idx_payments_reference ON svc.payments (reference_type, reference_id)");
+    jdbc.execute(
+        "CREATE INDEX IF NOT EXISTS idx_payments_user_doctor ON svc.payments (user_id, doctor_id)");
     jdbc.execute(
         "ALTER TABLE svc.appointments ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) DEFAULT 'UNPAID'");
     jdbc.execute(

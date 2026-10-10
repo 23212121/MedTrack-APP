@@ -75,7 +75,12 @@ export default function App() {
   const hospitalLabel =
     session.getHospitalName() ||
     (session.getHospitalId() ? `Hospital #${session.getHospitalId()}` : "");
-  const isPublic = isPublicPath(location.pathname);
+  /** Logged-in hospital/doctor use workspace shell for /queue (full page, not public popup). */
+  const queueInWorkspace =
+    loggedIn &&
+    !patientLoggedIn &&
+    location.pathname === "/queue";
+  const isPublic = isPublicPath(location.pathname) && !queueInWorkspace;
   const isMedicalUser = session.isMedical();
   const isMedicalRoute =
     location.pathname === "/medical" || location.pathname.startsWith("/medical/");
@@ -116,18 +121,23 @@ export default function App() {
     const isTrack = location.pathname === "/track";
     const isInfo = location.pathname === "/about";
     const widePublic =
-      location.pathname === "/hospital-register" || location.pathname === "/lab-register";
-    const fullBleed = isBook || isQueue || isTrack;
-    const isLogin = location.pathname === "/login";
+      location.pathname === "/hospital-register" ||
+      location.pathname === "/lab-register" ||
+      isQueue;
+    const fullBleed = isBook || isTrack;
+    const isLogin =
+      location.pathname === "/login" ||
+      location.pathname === "/patient/login" ||
+      location.pathname === "/patient/register";
     const isPopupPage =
-      isBook || isQueue || isTrack || widePublic || (loggedIn && isLogin);
+      isBook || isTrack || widePublic || (loggedIn && isLogin);
     return (
       <div
         className={`app-shell app-shell--auth${fullBleed ? " app-shell--book" : ""}${
           isLogin ? " app-shell--login" : ""
         }${isInfo ? " app-shell--info" : ""}`}
       >
-        <AppHeader closeTo={isPopupPage ? popupClosePath() : undefined} />
+        <AppHeader closeTo={isPopupPage && !isQueue ? popupClosePath() : undefined} />
         <main
           className={`content content--auth${
             isInfo
@@ -491,6 +501,7 @@ export default function App() {
             <Route path="/doctor-register" element={<DoctorRegistrationPage />} />
             <Route path="/bookings" element={<BookingsPage />} />
             <Route path="/emergency" element={<EmergencyServicePage />} />
+            <Route path="/queue" element={<PatientQueuePage />} />
             <Route path="/schedules" element={<SchedulesPage />} />
             <Route path="/availability" element={<AvailabilityPage />} />
             <Route path="/doctor-availability" element={<DoctorAvailabilityDatesPage />} />

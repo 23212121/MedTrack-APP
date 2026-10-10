@@ -318,15 +318,27 @@ export default function EmergencyServicePage() {
             <p className="muted">No doctors listed for this hospital yet.</p>
           ) : (
             <ul className="emergency-doctor-list">
-              {doctors.map((d) => (
-                <li key={d.doctorId}>
-                  <strong>{d.doctorName}</strong>
-                  <span>
-                    {[d.department, d.specialization].filter(Boolean).join(" · ") || "On call"}
-                    {d.availableNow === false ? " · not rostered today" : " · available"}
-                  </span>
-                </li>
-              ))}
+              {doctors.map((d) => {
+                const available = d.availableNow !== false;
+                return (
+                  <li
+                    key={d.doctorId}
+                    className={available ? "is-available" : "is-unavailable"}
+                  >
+                    <span
+                      className={`emergency-doctor-status ${available ? "is-ok" : "is-no"}`}
+                      aria-label={available ? "Available" : "Not available"}
+                      title={available ? "Available" : "Not available"}
+                    >
+                      {available ? "✓" : "✕"}
+                    </span>
+                    <strong>{d.doctorName}</strong>
+                    <span>
+                      {[d.department, d.specialization].filter(Boolean).join(" · ") || "On call"}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
 
@@ -494,12 +506,25 @@ function EmergencyBedModal({
           <p className="muted">No emergency doctors listed.</p>
         ) : (
           <ul className="emergency-doctor-list">
-            {doctors.map((d) => (
-              <li key={d.doctorId}>
-                <strong>{d.doctorName}</strong>
-                <span>{[d.department, d.mobileNumber].filter(Boolean).join(" · ")}</span>
-              </li>
-            ))}
+            {doctors.map((d) => {
+              const available = d.availableNow !== false;
+              return (
+                <li
+                  key={d.doctorId}
+                  className={available ? "is-available" : "is-unavailable"}
+                >
+                  <span
+                    className={`emergency-doctor-status ${available ? "is-ok" : "is-no"}`}
+                    aria-label={available ? "Available" : "Not available"}
+                    title={available ? "Available" : "Not available"}
+                  >
+                    {available ? "✓" : "✕"}
+                  </span>
+                  <strong>{d.doctorName}</strong>
+                  <span>{[d.department, d.mobileNumber].filter(Boolean).join(" · ")}</span>
+                </li>
+              );
+            })}
           </ul>
         )}
         <p className="muted">{bed.notes || "Emergency admission. Fee is charged per bed."}</p>

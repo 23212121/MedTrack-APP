@@ -30,17 +30,15 @@ function NavMaterialIcon({ path }: { path: string }) {
   );
 }
 
-function SidebarIconLinkInner({ to, label, hint, end, onNavigate }: LinkProps) {
+function SidebarIconLinkInner({ to, label, end, onNavigate }: LinkProps) {
   const t = useT();
   const name = t(label);
-  const detail = hint ? t(hint) : "";
 
   return (
-    <NavLink to={to} end={end === true} onClick={onNavigate}>
+    <NavLink to={to} end={end === true} onClick={onNavigate} title={name}>
       <NavMaterialIcon path={to} />
       <span className="nav-copy">
         <span className="nav-label">{name}</span>
-        {detail ? <span className="nav-hint">{detail}</span> : null}
       </span>
     </NavLink>
   );
@@ -57,19 +55,16 @@ export default function SidebarNav({
   groups: SidebarNavGroup[];
   onNavigate?: () => void;
 }) {
-  const t = useT();
   return (
     <nav className="sidebar-nav">
       {groups.map((group) => (
         <div key={group.title} className="sidebar-group">
-          <p className="sidebar-group-title">{t(group.title)}</p>
           <ul>
             {group.items.map((item) => (
               <li key={item.to}>
                 <SidebarIconLinkInner
                   to={item.to}
                   label={item.label}
-                  hint={item.hint}
                   end={item.end}
                   onNavigate={onNavigate}
                 />

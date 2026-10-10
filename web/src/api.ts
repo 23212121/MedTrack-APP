@@ -388,6 +388,11 @@ export type AppointmentPayment = {
   referenceType?: string;
   referenceId?: string;
   patientId: string;
+  userId?: string;
+  doctorId?: string;
+  name?: string;
+  paymentType?: string;
+  paymentStatus?: string;
   amount: number;
   currency?: string;
   status: string;

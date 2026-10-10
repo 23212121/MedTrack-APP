@@ -123,12 +123,14 @@ public class PaymentAppService {
             .findFirst()
             .orElse(null);
     if (reusable != null && !expired(reusable)) {
+      applyPartyDetails(reusable, appt, body);
       attachGatewayInstruments(
           reusable,
           enrichment.hospitalName(appt.getHospitalId()),
           appointmentId,
           appt.getDoctorId());
       reusable.setStatus(PAYMENT_PENDING);
+      reusable.setPaymentType(firstNonBlank(reusable.getPaymentType(), reusable.getGatewayName(), "UPI"));
       reusable.setUpdatedAt(Instant.now());
       reusable = paymentRepo.save(reusable);
       markAppointmentPending(appt, reusable.getPaymentId());
@@ -158,11 +160,13 @@ public class PaymentAppService {
     row.setStatus(CREATED);
     row.setGatewayName("UPI");
     row.setCreatedAt(Instant.now());
+    applyPartyDetails(row, appt, body);
     row = paymentRepo.save(row);
 
     attachGatewayInstruments(
         row, enrichment.hospitalName(appt.getHospitalId()), appointmentId, appt.getDoctorId());
     row.setStatus(PAYMENT_PENDING);
+    row.setPaymentType(firstNonBlank(row.getGatewayName(), "UPI"));
     row.setUpdatedAt(Instant.now());
     row = paymentRepo.save(row);
     markAppointmentPending(appt, row.getPaymentId());
@@ -226,11 +230,16 @@ public class PaymentAppService {
     row.setStatus(CREATED);
     row.setGatewayName("UPI");
     row.setCreatedAt(Instant.now());
+    applyPartyDetails(row, null, body);
     row = paymentRepo.save(row);
 
     attachGatewayInstruments(
-        row, firstNonBlank(str(body, "hospitalName"), "MedTrack Emergency"), bookingId, null);
+        row,
+        firstNonBlank(str(body, "hospitalName"), "MedTrack Emergency"),
+        bookingId,
+        row.getDoctorId());
     row.setStatus(PAYMENT_PENDING);
+    row.setPaymentType(firstNonBlank(row.getGatewayName(), "UPI"));
     row.setUpdatedAt(Instant.now());
     row = paymentRepo.save(row);
     return toMap(row, "Scan with Google Pay or PhonePe. Amount is this booking fee.");
@@ -445,6 +454,13 @@ public class PaymentAppService {
     PaymentEntity row = require(paymentId);
     expireIfNeeded(row);
     if (COMPLETED.equalsIgnoreCase(row.getStatus())) {
+      boolean missingParty =
+          blank(row.getDoctorId()) || blank(row.getName()) || blank(row.getUserId());
+      if (missingParty) {
+        fillPartyDetailsFromAppointment(row);
+        row.setUpdatedAt(Instant.now());
+        row = paymentRepo.saveAndFlush(row);
+      }
       return toMap(row, "Payment successful");
     }
     if (!PAYMENT_PENDING.equalsIgnoreCase(row.getStatus())
@@ -461,6 +477,8 @@ public class PaymentAppService {
     row.setGatewayName("UPI");
     row.setGatewayTransactionId(txn);
     row.setStatus(COMPLETED);
+    row.setPaymentType(firstNonBlank(row.getPaymentType(), "UPI"));
+    fillPartyDetailsFromAppointment(row);
     row.setUpdatedAt(Instant.now());
     row = paymentRepo.saveAndFlush(row);
     expireSiblingPendings(row);
@@ -475,9 +493,13 @@ public class PaymentAppService {
             firstNonBlank(row.getReferenceType(), "APPOINTMENT"),
             firstNonBlank(row.getReferenceId(), row.getAppointmentId())));
     log.info(
-        "[payment] LOCAL UPI COMPLETED paymentId={} appointmentId={}",
+        "[payment] LOCAL UPI COMPLETED paymentId={} appointmentId={} userId={} doctorId={} amount={} type={}",
         row.getPaymentId(),
-        row.getAppointmentId());
+        row.getAppointmentId(),
+        row.getUserId(),
+        row.getDoctorId(),
+        row.getAmount(),
+        row.getPaymentType());
     return toMap(row, "Payment successful");
   }
 
@@ -524,6 +546,9 @@ public class PaymentAppService {
     if (!orderId.isBlank()) locked.setGatewayOrderId(orderId);
     if (!qrId.isBlank()) locked.setGatewayQrId(qrId);
     locked.setStatus(COMPLETED);
+    locked.setGatewayName(firstNonBlank(locked.getGatewayName(), "RAZORPAY"));
+    locked.setPaymentType(firstNonBlank(locked.getPaymentType(), locked.getGatewayName(), "RAZORPAY"));
+    fillPartyDetailsFromAppointment(locked);
     locked.setUpdatedAt(Instant.now());
     try {
       locked = paymentRepo.saveAndFlush(locked);
@@ -544,10 +569,14 @@ public class PaymentAppService {
             firstNonBlank(locked.getReferenceType(), "APPOINTMENT"),
             firstNonBlank(locked.getReferenceId(), locked.getAppointmentId())));
     log.info(
-        "[payment] COMPLETED paymentId={} appointmentId={} txn={}",
+        "[payment] COMPLETED paymentId={} appointmentId={} txn={} userId={} doctorId={} amount={} type={}",
         locked.getPaymentId(),
         locked.getAppointmentId(),
-        txnId);
+        txnId,
+        locked.getUserId(),
+        locked.getDoctorId(),
+        locked.getAmount(),
+        locked.getPaymentType());
     return toMap(locked, "Payment completed");
   }
 
@@ -726,6 +755,58 @@ public class PaymentAppService {
         .orElse(null);
   }
 
+  /** Fill user/doctor/name/type from appointment when confirming payment. */
+  private void fillPartyDetailsFromAppointment(PaymentEntity row) {
+    if (row == null) return;
+    AppointmentEntity appt = null;
+    if (row.getAppointmentId() != null && !row.getAppointmentId().isBlank()) {
+      appt = appointmentRepo.findById(row.getAppointmentId()).orElse(null);
+    }
+    applyPartyDetails(row, appt, Map.of());
+    if (row.getPaymentType() == null || row.getPaymentType().isBlank()) {
+      row.setPaymentType(firstNonBlank(row.getGatewayName(), "UPI"));
+    }
+  }
+
+  private void applyPartyDetails(
+      PaymentEntity row, AppointmentEntity appt, Map<String, Object> body) {
+    if (row == null) return;
+    String userId =
+        firstNonBlank(
+            str(body, "userId"),
+            row.getUserId(),
+            appt == null ? "" : appt.getPatientId(),
+            row.getPatientId());
+    String doctorId =
+        firstNonBlank(
+            str(body, "doctorId"),
+            row.getDoctorId(),
+            appt == null ? "" : appt.getDoctorId());
+    String name =
+        firstNonBlank(
+            str(body, "name"),
+            str(body, "patientName"),
+            row.getName(),
+            appt == null ? "" : appt.getPatientName());
+    if (!userId.isBlank()) {
+      row.setUserId(userId);
+      if (row.getPatientId() == null || row.getPatientId().isBlank()) {
+        row.setPatientId(userId);
+      }
+    }
+    if (!doctorId.isBlank()) {
+      row.setDoctorId(doctorId);
+    }
+    if (!name.isBlank()) {
+      row.setName(name);
+    }
+    String paymentType =
+        firstNonBlank(str(body, "paymentType"), row.getPaymentType(), row.getGatewayName(), "UPI");
+    if (!paymentType.isBlank()) {
+      row.setPaymentType(paymentType);
+    }
+  }
+
   private Map<String, Object> toMap(PaymentEntity row, String message) {
     if (row == null) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found");
@@ -736,6 +817,11 @@ public class PaymentAppService {
     m.put("referenceType", firstNonBlank(row.getReferenceType(), "APPOINTMENT"));
     m.put("referenceId", firstNonBlank(row.getReferenceId(), row.getAppointmentId()));
     m.put("patientId", row.getPatientId());
+    m.put("userId", firstNonBlank(row.getUserId(), row.getPatientId()));
+    m.put("doctorId", row.getDoctorId());
+    m.put("name", row.getName());
+    m.put("paymentType", firstNonBlank(row.getPaymentType(), row.getGatewayName(), "UPI"));
+    m.put("paymentStatus", row.getStatus());
     m.put("amount", row.getAmount());
     m.put("currency", row.getCurrency());
     m.put("status", row.getStatus());

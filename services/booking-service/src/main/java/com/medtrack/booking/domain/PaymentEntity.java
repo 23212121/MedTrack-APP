@@ -26,6 +26,21 @@ public class PaymentEntity {
   @Column(name = "patient_id", nullable = false, length = 64)
   private String patientId;
 
+  /** Patient / portal user id (often same as patient_id / USR…). */
+  @Column(name = "user_id", length = 64)
+  private String userId;
+
+  @Column(name = "doctor_id", length = 64)
+  private String doctorId;
+
+  /** Patient display name at payment time. */
+  @Column(name = "name", length = 255)
+  private String name;
+
+  /** UPI | RAZORPAY | CARD | CASH … */
+  @Column(name = "payment_type", length = 40)
+  private String paymentType;
+
   @Column(nullable = false)
   private Double amount;
 
@@ -69,6 +84,14 @@ public class PaymentEntity {
   public void setReferenceId(String referenceId) { this.referenceId = referenceId; }
   public String getPatientId() { return patientId; }
   public void setPatientId(String patientId) { this.patientId = patientId; }
+  public String getUserId() { return userId; }
+  public void setUserId(String userId) { this.userId = userId; }
+  public String getDoctorId() { return doctorId; }
+  public void setDoctorId(String doctorId) { this.doctorId = doctorId; }
+  public String getName() { return name; }
+  public void setName(String name) { this.name = name; }
+  public String getPaymentType() { return paymentType; }
+  public void setPaymentType(String paymentType) { this.paymentType = paymentType; }
   public Double getAmount() { return amount; }
   public void setAmount(Double amount) { this.amount = amount; }
   public String getCurrency() { return currency; }
