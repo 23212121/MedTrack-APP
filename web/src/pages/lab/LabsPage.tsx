@@ -15,6 +15,7 @@ export default function LabsPage() {
   const [state, setState] = useState("");
   const [password, setPassword] = useState("123456");
   const [saving, setSaving] = useState(false);
+  const [lastCreated, setLastCreated] = useState<{ code: string; password: string } | null>(null);
 
   async function load() {
     try {
@@ -42,7 +43,12 @@ export default function LabsPage() {
         state,
         password,
       });
-      toast.success(created.message || `Registered ${created.labCode}`);
+      const code = created.labCode || created.loginId || "";
+      setLastCreated({ code, password });
+      toast.success(
+        created.message ||
+          `Lab registered. Login as Lab technician with code ${code}`,
+      );
       setLabName("");
       setPhone("");
       setAddress("");
@@ -60,22 +66,30 @@ export default function LabsPage() {
     <section className="stack">
       <h1>Diagnostic labs</h1>
       <p className="lead">
-        Register lab technicians. They sign in with the lab code and upload test reports for
-        patients.
+        Create a lab technician account for this hospital. Lab ID is generated automatically. They
+        sign in on Login → Lab technician with that code and upload patient test reports.
       </p>
       {error && <div className="msg error">{error}</div>}
+      {lastCreated?.code ? (
+        <div className="msg ok">
+          Lab technician ready. On Login choose <strong>Lab technician</strong>, then use code{" "}
+          <strong>{lastCreated.code}</strong> and password <strong>{lastCreated.password}</strong>.
+        </div>
+      ) : null}
 
       <form className="panel stack" onSubmit={onSubmit}>
-        <h2>Register lab</h2>
+        <h2>Register lab technician</h2>
         <label>
-          Lab ID
+          Lab tech ID (auto)
           <input
             value={hospitalId ? `LAB-${hospitalId}-${labs.length + 1}` : "Assigned after save"}
             readOnly
             aria-readonly="true"
           />
         </label>
-        <p className="muted">Linked to this hospital. Lab ID is assigned automatically.</p>
+        <p className="muted">
+          Linked to this hospital. Final ID is assigned on save (e.g. LAB-{hospitalId || "…"}-1).
+        </p>
         <label>
           Lab name
           <input value={labName} onChange={(e) => setLabName(e.target.value)} required />
@@ -99,7 +113,7 @@ export default function LabsPage() {
           <input value={password} onChange={(e) => setPassword(e.target.value)} required />
         </label>
         <button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Register lab"}
+          {saving ? "Saving…" : "Create lab technician account"}
         </button>
       </form>
 

@@ -3,7 +3,7 @@ export const labNavGroups = [
     title: "Lab technician",
     items: [
       { to: "/lab", label: "Dashboard", hint: "Upload overview", end: true },
-      { to: "/lab/patients", label: "Patient reports", hint: "Enter phone or Aadhaar, upload files" },
+      { to: "/lab/patients", label: "Patient reports", hint: "Choose patient or phone/Aadhaar, upload to S3" },
       { to: "/lab/uploads", label: "Uploaded reports", hint: "Files sent to patients" },
     ],
   },

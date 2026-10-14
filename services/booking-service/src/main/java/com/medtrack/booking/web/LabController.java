@@ -97,8 +97,8 @@ public class LabController {
       @RequestParam(value = "name", required = false) String name,
       @RequestHeader(value = "X-Lab-Id", required = false) String labHeader,
       @RequestHeader(value = "X-User", required = false) String userHeader) {
-    service.requireByHeader(labHeader, userHeader);
-    return service.searchPatients(phone, aadhaar, name);
+    LabTechnicianEntity lab = service.requireByHeader(labHeader, userHeader);
+    return service.searchPatients(phone, aadhaar, name, lab.getHospitalId());
   }
 
   @GetMapping("/api/lab/reports")

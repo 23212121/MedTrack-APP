@@ -330,11 +330,12 @@ public class LabAppService {
   }
 
   /**
-   * Merge patients, appointments, and documents. Filter by phone and/or Aadhaar (digits only).
-   * Empty filters return a sample of all known patients.
+   * Merge patients, appointments, and documents. Filter by phone, Aadhaar, and/or name.
+   * Empty filters return hospital-linked patients for the lab dropdown (or a global sample).
    */
   @Transactional(readOnly = true)
-  public Map<String, Object> searchPatients(String phone, String aadhaar, String name) {
+  public Map<String, Object> searchPatients(
+      String phone, String aadhaar, String name, Long hospitalId) {
     String phoneQ = digits(phone);
     String aadhaarQ = digits(aadhaar);
     String nameQ = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
@@ -342,9 +343,6 @@ public class LabAppService {
     Map<String, Map<String, Object>> byKey = new LinkedHashMap<>();
 
     boolean filtered = !phoneQ.isBlank() || !aadhaarQ.isBlank() || !nameQ.isBlank();
-    if (!filtered) {
-      return Map.of("count", 0, "patients", List.of());
-    }
     if (!phoneQ.isBlank() || !aadhaarQ.isBlank()) {
       if (!phoneQ.isBlank()) {
         patientRepo.findByPhone(phoneQ).ifPresent(p ->
@@ -416,6 +414,32 @@ public class LabAppService {
               "DOCUMENT");
         }
       }
+    } else if (hospitalId != null) {
+      int added = 0;
+      for (AppointmentEntity a : appointmentRepo.findByHospitalIdOrderByCreatedDateDesc(hospitalId)) {
+        mergePatient(
+            byKey,
+            a.getPatientId(),
+            a.getPatientName(),
+            digits(a.getPhoneNumber()),
+            "",
+            a.getPatientAge(),
+            a.getGender(),
+            "APPOINTMENT");
+        if (++added >= 400) break;
+      }
+      for (DocumentEntity d : documentRepo.findByHospitalIdOrderByCreationDateDesc(hospitalId)) {
+        mergePatient(
+            byKey,
+            null,
+            d.getPatientName(),
+            digits(d.getPhoneNumber()),
+            digits(d.getAadhaarNumber()),
+            null,
+            null,
+            "DOCUMENT");
+        if (byKey.size() >= 250) break;
+      }
     } else {
       for (PatientEntity p : patientRepo.findTop200ByOrderByCreatedAtDesc()) {
         mergePatient(
@@ -449,6 +473,24 @@ public class LabAppService {
             null,
             null,
             "DOCUMENT");
+      }
+    }
+
+    if (filtered && !nameQ.isBlank() && phoneQ.isBlank() && aadhaarQ.isBlank()) {
+      // Name-only search: include registered patients matching name.
+      for (PatientEntity p : patientRepo.findTop200ByOrderByCreatedAtDesc()) {
+        String n = p.getName() == null ? "" : p.getName().toLowerCase(Locale.ROOT);
+        if (n.contains(nameQ)) {
+          mergePatient(
+              byKey,
+              p.getId(),
+              p.getName(),
+              digits(p.getPhone()),
+              digits(p.getAadhaarNumber()),
+              p.getAge(),
+              p.getGender(),
+              "REGISTERED");
+        }
       }
     }
 
