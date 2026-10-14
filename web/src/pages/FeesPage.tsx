@@ -55,7 +55,7 @@ export default function FeesPage() {
     setLoadingDoctors(true);
     setError("");
     try {
-      const docData = await api.doctors();
+      const docData = await api.doctorsByHospital(hospitalId).catch(() => api.doctors());
       const rows = ((docData.doctors ?? []) as unknown as HospitalDoctor[]).filter(
         (d) => d.doctorId && String(d.hospitalId) === String(hospitalId),
       );

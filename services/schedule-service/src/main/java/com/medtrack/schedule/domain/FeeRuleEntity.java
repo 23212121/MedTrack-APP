@@ -8,6 +8,7 @@ public class FeeRuleEntity {
   @Id
   private String id;
   private String clinicId;
+  private Long hospitalId;
   private String doctorId;
   @Column(name = "hospital_id", nullable = false)
   private Long hospitalId = 10001L;
@@ -21,6 +22,10 @@ public class FeeRuleEntity {
   public void setId(String id) { this.id = id; }
   public String getClinicId() { return clinicId; }
   public void setClinicId(String clinicId) { this.clinicId = clinicId; }
+  public Long getHospitalId() { return hospitalId; }
+
+  public void setHospitalId(Long hospitalId) { this.hospitalId = hospitalId; }
+
   public String getDoctorId() { return doctorId; }
   public void setDoctorId(String doctorId) { this.doctorId = doctorId; }
   public Long getHospitalId() { return hospitalId; }

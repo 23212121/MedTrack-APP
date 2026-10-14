@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, HospitalDoctor, Visit } from "../api";
+import { session } from "../dl/MedTrackSession";
 import { toast } from "../toast";
 
 function doctorLabel(d: HospitalDoctor) {
@@ -8,9 +9,12 @@ function doctorLabel(d: HospitalDoctor) {
 }
 
 export default function CheckInPage() {
+  const sessionHospitalId = session.getHospitalId() || "";
+  const sessionDoctorId = session.isDoctor() ? session.getUserId() || "" : "";
+  const doctorLocked = Boolean(sessionDoctorId);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [doctors, setDoctors] = useState<HospitalDoctor[]>([]);
-  const [selectedDoctorId, setSelectedDoctorId] = useState("");
+  const [selectedDoctorId, setSelectedDoctorId] = useState(sessionDoctorId);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
   const [loadingBoard, setLoadingBoard] = useState(false);
   const [error, setError] = useState("");
@@ -25,26 +29,34 @@ export default function CheckInPage() {
     setLoadingDoctors(true);
     setError("");
     try {
-      // /api/doctors returns doctorName, department, hospitalId for dropdown + backend filter
-      const data = await api.doctors();
+      const data = sessionHospitalId
+        ? await api.doctorsByHospital(sessionHospitalId)
+        : await api.doctors();
       const rows = (data.doctors ?? []) as unknown as HospitalDoctor[];
+      const mapped = rows
+        .filter((d) => d.doctorId && d.hospitalId != null)
+        .filter((d) =>
+          sessionHospitalId ? String(d.hospitalId) === String(sessionHospitalId) : true,
+        )
+        .map((d) => ({
+          doctorId: d.doctorId,
+          doctorName: d.doctorName,
+          firstName: d.firstName,
+          middleName: d.middleName,
+          lastName: d.lastName,
+          specialization: d.specialization,
+          department: d.department,
+          hospitalId: d.hospitalId,
+          hospitalName: d.hospitalName,
+          clinicName: d.clinicName,
+          consultationFee: d.consultationFee,
+        }));
       setDoctors(
-        rows
-          .filter((d) => d.doctorId && d.hospitalId != null)
-          .map((d) => ({
-            doctorId: d.doctorId,
-            doctorName: d.doctorName,
-            firstName: d.firstName,
-            middleName: d.middleName,
-            lastName: d.lastName,
-            specialization: d.specialization,
-            department: d.department,
-            hospitalId: d.hospitalId,
-            hospitalName: d.hospitalName,
-            clinicName: d.clinicName,
-            consultationFee: d.consultationFee,
-          }))
+        doctorLocked
+          ? mapped.filter((d) => d.doctorId === sessionDoctorId)
+          : mapped,
       );
+      if (sessionDoctorId) setSelectedDoctorId(sessionDoctorId);
     } catch (e) {
       setDoctors([]);
       setError(e instanceof Error ? e.message : "Failed to load doctors");
@@ -118,15 +130,17 @@ export default function CheckInPage() {
           <select
             value={selectedDoctorId}
             onChange={(e) => setSelectedDoctorId(e.target.value)}
-            disabled={loadingDoctors || doctors.length === 0}
+            disabled={loadingDoctors || doctors.length === 0 || doctorLocked}
           >
-            <option value="">
-              {loadingDoctors
-                ? "Loading doctors…"
-                : doctors.length === 0
-                  ? "No doctors available"
-                  : "Select doctor"}
-            </option>
+            {!doctorLocked && (
+              <option value="">
+                {loadingDoctors
+                  ? "Loading doctors…"
+                  : doctors.length === 0
+                    ? "No doctors available"
+                    : "Select doctor"}
+              </option>
+            )}
             {doctors.map((d) => (
               <option key={d.doctorId} value={d.doctorId}>
                 {doctorLabel(d)}

@@ -179,9 +179,17 @@ export default function BookingsPage({
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [hospitals, setHospitals] = useState<HospitalRegistrationSummary[]>([]);
   const [allDoctors, setAllDoctors] = useState<HospitalDoctor[]>([]);
-  /** Optional hospital filter — empty means show all doctors */
+  /** Logged-in hospital/doctor: default to their hospital so menu data matches the session. */
+  const sessionHospitalId =
+    !publicMode && !hospitalIdFilter ? session.getHospitalId() || "" : "";
+  const hospitalLocked = Boolean(
+    hospitalIdFilter || (!publicMode && sessionHospitalId),
+  );
+  /** Optional hospital filter — empty means show all doctors (public only). */
   const [selectedHospitalId, setSelectedHospitalId] = useState(
-    hospitalIdFilter ? String(hospitalIdFilter) : "",
+    hospitalIdFilter
+      ? String(hospitalIdFilter)
+      : sessionHospitalId || "",
   );
   const [selectedDepartment, setSelectedDepartment] = useState("");
   const [form, setForm] = useState(publicMode ? blankPublicForm : emptyForm);
@@ -378,7 +386,9 @@ export default function BookingsPage({
     setVoiceList(null);
     setVoiceListNote("");
     try {
-      const data = await api.bookings();
+      const data = await api.bookings(
+        sessionHospitalId ? { hospitalId: sessionHospitalId } : undefined,
+      );
       setBookings(data.bookings);
     } catch (e) {
       setError(
@@ -422,9 +432,14 @@ export default function BookingsPage({
     setLoadingHospitals(true);
     try {
       const data = await api.hospitals();
-      const rows = (data.hospitals ?? []).slice().sort((a, b) =>
+      let rows = (data.hospitals ?? []).slice().sort((a, b) =>
         String(a.hospitalName).localeCompare(String(b.hospitalName)),
       );
+      if (!publicMode && sessionHospitalId) {
+        rows = rows.filter(
+          (h) => String(h.id ?? h.hospitalId) === String(sessionHospitalId),
+        );
+      }
       setHospitals(rows);
     } catch {
       setHospitals([]);
@@ -437,10 +452,16 @@ export default function BookingsPage({
     setLoadingDoctors(true);
     setError("");
     try {
-      const data = await api.doctors();
+      const scopeHospital = selectedHospitalId || sessionHospitalId;
+      const data = scopeHospital
+        ? await api.doctorsByHospital(scopeHospital)
+        : await api.doctors();
       const rows = (data.doctors ?? []) as unknown as HospitalDoctor[];
       const hospitalDoctors = rows
         .filter((d) => d.doctorId && d.hospitalId != null)
+        .filter((d) =>
+          scopeHospital ? String(d.hospitalId) === String(scopeHospital) : true,
+        )
         .map(mapDoctor);
       setAllDoctors(hospitalDoctors);
       setForm((prev) => {
@@ -472,8 +493,36 @@ export default function BookingsPage({
   useEffect(() => {
     if (hospitalIdFilter) {
       setSelectedHospitalId(String(hospitalIdFilter));
+      return;
     }
-  }, [hospitalIdFilter]);
+    if (!publicMode && sessionHospitalId) {
+      setSelectedHospitalId(sessionHospitalId);
+    }
+  }, [hospitalIdFilter, publicMode, sessionHospitalId]);
+
+  useEffect(() => {
+    if (publicMode || !loggedInDoctorId) return;
+    if (!hospitalDoctors.some((d) => d.doctorId === loggedInDoctorId)) return;
+    setForm((prev) => {
+      if (prev.doctorId === loggedInDoctorId) return prev;
+      const selected = hospitalDoctors.find((d) => d.doctorId === loggedInDoctorId);
+      return {
+        ...prev,
+        doctorId: loggedInDoctorId,
+        doctorName: selected?.doctorName || loggedInDoctorName,
+        hospitalId: selectedHospitalId || selected?.hospitalId || prev.hospitalId,
+        hospitalName: selected?.hospitalName || prev.hospitalName,
+        consultationFee:
+          selected?.consultationFee != null ? String(selected.consultationFee) : prev.consultationFee,
+      };
+    });
+  }, [
+    publicMode,
+    loggedInDoctorId,
+    loggedInDoctorName,
+    hospitalDoctors,
+    selectedHospitalId,
+  ]);
 
   useEffect(() => {
     // Hospital booking desk may prefill patient; patient portal stays blank.
@@ -506,7 +555,13 @@ export default function BookingsPage({
     void loadHospitals();
     void loadDoctors();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [publicMode]);
+  }, [publicMode, sessionHospitalId]);
+
+  useEffect(() => {
+    if (publicMode) return;
+    void loadDoctors();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedHospitalId]);
 
   useEffect(() => {
     // When hospital filter changes, clear doctor if it no longer belongs
@@ -981,24 +1036,43 @@ export default function BookingsPage({
           <label className="booking-doctor-field">
             <span>
               {t("Hospital")}{" "}
-              <span style={{ color: "var(--muted)", fontWeight: 500 }}>{t("(optional)")}</span>
+              {!hospitalLocked && (
+                <span style={{ color: "var(--muted)", fontWeight: 500 }}>{t("(optional)")}</span>
+              )}
             </span>
             <select
               value={selectedHospitalId}
               onChange={(e) => onHospitalChange(e.target.value)}
-              disabled={loadingHospitals}
+              disabled={loadingHospitals || hospitalLocked}
             >
-              <option value="">
-                {loadingHospitals
-                  ? t("Loading hospitals…")
-                  : t("All hospitals — or pick one to filter doctors")}
-              </option>
-              {hospitals.map((h) => (
-                <option key={h.id ?? h.hospitalId} value={String(h.id ?? h.hospitalId)}>
-                  {h.hospitalName}
-                  {h.city ? ` — ${h.city}` : ""} (ID {h.id ?? h.hospitalId})
+              {!hospitalLocked && (
+                <option value="">
+                  {loadingHospitals
+                    ? t("Loading hospitals…")
+                    : t("All hospitals — or pick one to filter doctors")}
                 </option>
-              ))}
+              )}
+              {(() => {
+                const scoped =
+                  hospitalLocked && selectedHospitalId
+                    ? hospitals.filter(
+                        (h) => String(h.id ?? h.hospitalId) === String(selectedHospitalId),
+                      )
+                    : hospitals;
+                if (hospitalLocked && selectedHospitalId && scoped.length === 0) {
+                  return (
+                    <option value={selectedHospitalId}>
+                      {session.getHospitalName() || `Hospital #${selectedHospitalId}`}
+                    </option>
+                  );
+                }
+                return scoped.map((h) => (
+                  <option key={h.id ?? h.hospitalId} value={String(h.id ?? h.hospitalId)}>
+                    {h.hospitalName}
+                    {h.city ? ` — ${h.city}` : ""} (ID {h.id ?? h.hospitalId})
+                  </option>
+                ));
+              })()}
             </select>
           </label>
 
@@ -1036,7 +1110,11 @@ export default function BookingsPage({
               value={form.doctorId}
               onChange={(e) => onDoctorChange(e.target.value)}
               required
-              disabled={loadingDoctors || doctors.length === 0}
+              disabled={
+                loadingDoctors ||
+                doctors.length === 0 ||
+                Boolean(loggedInDoctorId)
+              }
             >
               <option value="">
                 {loadingDoctors

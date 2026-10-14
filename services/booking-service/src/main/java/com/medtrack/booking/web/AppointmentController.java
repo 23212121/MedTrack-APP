@@ -27,18 +27,37 @@ public class AppointmentController {
       @RequestParam(value = "patientId", required = false) String patientId,
       @RequestParam(value = "hospitalId", required = false) Long hospitalId,
       @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-          LocalDate date) {
+          LocalDate date,
+      @RequestHeader(value = "X-Hospital-Id", required = false) String hospitalHeader,
+      @RequestHeader(value = "X-Doctor-Id", required = false) String doctorHeader,
+      @RequestHeader(value = "X-Login-Type", required = false) String loginType) {
     List<AppointmentEntity> rows;
-    if (doctorId != null && !doctorId.isBlank()) {
-      rows = service.findByDoctor(doctorId, date);
+    Long resolvedHospital = hospitalId != null ? hospitalId : parseLong(hospitalHeader);
+    String resolvedDoctor =
+        doctorId != null && !doctorId.isBlank()
+            ? doctorId.trim()
+            : ("USER".equalsIgnoreCase(loginType) && doctorHeader != null && !doctorHeader.isBlank()
+                ? doctorHeader.trim()
+                : null);
+    if (resolvedDoctor != null && !resolvedDoctor.isBlank()) {
+      rows = service.findByDoctor(resolvedDoctor, date);
     } else if (patientId != null && !patientId.isBlank()) {
       rows = service.findByPatientId(patientId);
-    } else if (hospitalId != null) {
-      rows = service.findByHospital(hospitalId);
+    } else if (resolvedHospital != null) {
+      rows = service.findByHospital(resolvedHospital);
     } else {
       rows = service.findAll();
     }
     List<Map<String, Object>> enriched = rows.stream().map(enrichment::enrichAppointment).toList();
     return Map.of("count", enriched.size(), "appointments", enriched);
+  }
+
+  private static Long parseLong(String raw) {
+    if (raw == null || raw.isBlank()) return null;
+    try {
+      return Long.parseLong(raw.trim());
+    } catch (NumberFormatException ex) {
+      return null;
+    }
   }
 }

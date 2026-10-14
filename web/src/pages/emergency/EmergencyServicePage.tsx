@@ -71,21 +71,33 @@ export default function EmergencyServicePage() {
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .emergencyContext()
-      .then((ctx) => {
+    const sessionHospitalId = session.getHospitalIdNumber();
+    const preferOwnHospital =
+      Boolean(sessionHospitalId) &&
+      (session.getLoginType() === "HOSPITAL" || session.isDoctor());
+
+    async function boot() {
+      try {
+        const ctx = await api.emergencyContext();
         if (cancelled) return;
-        const nextState = ctx.state || "";
-        const nextCity = ctx.city || "";
+        const nextState = preferOwnHospital ? "" : ctx.state || "";
+        const nextCity = preferOwnHospital ? "" : ctx.city || "";
         setState(nextState);
         setCity(nextCity);
         if (ctx.patientName) setPatientName(ctx.patientName);
         if (ctx.patientPhone) setPatientPhone(ctx.patientPhone);
-        void loadHospitals(nextState, nextCity, "");
-      })
-      .catch(() => {
-        void loadHospitals("", "", "");
-      });
+        await loadHospitals(nextState, nextCity, "");
+      } catch {
+        if (cancelled) return;
+        await loadHospitals("", "", "");
+      }
+      if (cancelled) return;
+      if (preferOwnHospital && sessionHospitalId != null) {
+        await openHospital(sessionHospitalId);
+      }
+    }
+
+    void boot();
     return () => {
       cancelled = true;
     };

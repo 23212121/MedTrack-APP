@@ -28,6 +28,9 @@ public class ScheduleAppService implements DoctorBusyPort {
 
   @Value("${medtrack.clinic-id}")
   private String clinicId;
+
+  @Value("${medtrack.hospital-id}")
+  private Long seedHospitalId;
   @Value("${medtrack.doctor-name}")
   private String seedDoctorName;
 

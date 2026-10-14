@@ -45,13 +45,19 @@ function formatApptDate(value?: string | number[] | null): string {
 export default function PatientQueuePage() {
   const t = useT();
   const [params] = useSearchParams();
-  const sessionHospital = isLoggedIn() ? getHospitalId() : "";
+  const sessionHospital =
+    isLoggedIn() && !session.isPatient() ? getHospitalId() : "";
+  const sessionDoctor = session.isDoctor() ? session.getUserId() || "" : "";
+  const hospitalLocked = Boolean(sessionHospital);
+  const doctorLocked = Boolean(sessionDoctor);
   const [hospitals, setHospitals] = useState<HospitalRegistrationSummary[]>([]);
   const [doctors, setDoctors] = useState<HospitalDoctor[]>([]);
   const [hospitalId, setHospitalId] = useState(
     params.get("hospitalId") || sessionHospital || "",
   );
-  const [doctorId, setDoctorId] = useState(params.get("doctorId") || "");
+  const [doctorId, setDoctorId] = useState(
+    params.get("doctorId") || sessionDoctor || "",
+  );
   const [tokenInput, setTokenInput] = useState(params.get("tokenNo") || "");
   const [tokenNo, setTokenNo] = useState<number | undefined>(
     params.get("tokenNo") ? Number(params.get("tokenNo")) : undefined,
@@ -74,11 +80,23 @@ export default function PatientQueuePage() {
     (patientLoggedIn ? "Patient" : session.isDoctor() ? "Doctor" : "Hospital");
 
   useEffect(() => {
+    if (sessionHospital) setHospitalId(sessionHospital);
+    if (sessionDoctor) setDoctorId(sessionDoctor);
+  }, [sessionHospital, sessionDoctor]);
+
+  useEffect(() => {
     api
       .hospitals()
-      .then((d) => setHospitals(d.hospitals || []))
+      .then((d) => {
+        const all = d.hospitals || [];
+        setHospitals(
+          hospitalLocked && sessionHospital
+            ? all.filter((h) => String(h.id ?? h.hospitalId) === String(sessionHospital))
+            : all,
+        );
+      })
       .catch(() => setHospitals([]));
-  }, []);
+  }, [hospitalLocked, sessionHospital]);
 
   useEffect(() => {
     if (!hospitalId) {
@@ -87,9 +105,17 @@ export default function PatientQueuePage() {
     }
     api
       .doctorsByHospital(hospitalId)
-      .then((d) => setDoctors(d.doctors || []))
+      .then((d) => {
+        const list = d.doctors || [];
+        setDoctors(
+          doctorLocked && sessionDoctor
+            ? list.filter((doc) => doc.doctorId === sessionDoctor)
+            : list,
+        );
+        if (doctorLocked && sessionDoctor) setDoctorId(sessionDoctor);
+      })
       .catch(() => setDoctors([]));
-  }, [hospitalId]);
+  }, [hospitalId, doctorLocked, sessionDoctor]);
 
   const load = useCallback(async () => {
     if (!hospitalId || !doctorId) {
@@ -196,17 +222,24 @@ export default function PatientQueuePage() {
             value={hospitalId}
             onChange={(e) => {
               setHospitalId(e.target.value);
-              setDoctorId("");
+              setDoctorId(doctorLocked ? sessionDoctor : "");
               setStatus(null);
               setRows([]);
             }}
+            disabled={hospitalLocked}
           >
-            <option value="">{t("Select hospital")}</option>
-            {hospitals.map((h) => (
-              <option key={h.id ?? h.hospitalId} value={String(h.id ?? h.hospitalId)}>
-                {h.hospitalName} (ID {h.id ?? h.hospitalId})
+            {!hospitalLocked && <option value="">{t("Select hospital")}</option>}
+            {hospitals.length === 0 && hospitalId ? (
+              <option value={hospitalId}>
+                {session.getHospitalName() || `Hospital #${hospitalId}`}
               </option>
-            ))}
+            ) : (
+              hospitals.map((h) => (
+                <option key={h.id ?? h.hospitalId} value={String(h.id ?? h.hospitalId)}>
+                  {h.hospitalName} (ID {h.id ?? h.hospitalId})
+                </option>
+              ))
+            )}
           </select>
         </label>
         <label>
@@ -218,9 +251,9 @@ export default function PatientQueuePage() {
               setStatus(null);
               setRows([]);
             }}
-            disabled={!hospitalId}
+            disabled={!hospitalId || doctorLocked}
           >
-            <option value="">{t("Select doctor")}</option>
+            {!doctorLocked && <option value="">{t("Select doctor")}</option>}
             {doctors.map((d) => (
               <option key={d.doctorId} value={d.doctorId}>
                 {d.doctorName}

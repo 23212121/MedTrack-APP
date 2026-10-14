@@ -39,12 +39,22 @@ public class BookingController {
       @RequestParam(value = "clinicId", required = false) String clinicId,
       @RequestParam(value = "phone", required = false) String phone,
       @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-          LocalDate date) {
+          LocalDate date,
+      @RequestHeader(value = "X-Hospital-Id", required = false) String hospitalHeader,
+      @RequestHeader(value = "X-Doctor-Id", required = false) String doctorHeader,
+      @RequestHeader(value = "X-Login-Type", required = false) String loginType) {
     List<BookingEntity> bookings;
-    if (doctorId != null && !doctorId.isBlank()) {
-      bookings = service.findByDoctor(doctorId, date);
-    } else if (hospitalId != null) {
-      bookings = service.findByHospital(hospitalId);
+    Long resolvedHospital = hospitalId != null ? hospitalId : parseLong(hospitalHeader);
+    String resolvedDoctor =
+        doctorId != null && !doctorId.isBlank()
+            ? doctorId.trim()
+            : ("USER".equalsIgnoreCase(loginType) && doctorHeader != null && !doctorHeader.isBlank()
+                ? doctorHeader.trim()
+                : null);
+    if (resolvedDoctor != null && !resolvedDoctor.isBlank()) {
+      bookings = service.findByDoctor(resolvedDoctor, date);
+    } else if (resolvedHospital != null) {
+      bookings = service.findByHospital(resolvedHospital);
     } else if (clinicId != null && !clinicId.isBlank()) {
       try {
         bookings = service.findByHospital(Long.parseLong(clinicId.trim()));
@@ -105,5 +115,14 @@ public class BookingController {
   @GetMapping("/health")
   public Map<String, String> health() {
     return Map.of("status", "UP", "service", "booking-service");
+  }
+
+  private static Long parseLong(String raw) {
+    if (raw == null || raw.isBlank()) return null;
+    try {
+      return Long.parseLong(raw.trim());
+    } catch (NumberFormatException ex) {
+      return null;
+    }
   }
 }

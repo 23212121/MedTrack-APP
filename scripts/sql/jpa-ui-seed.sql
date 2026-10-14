@@ -12,9 +12,9 @@ RESTART IDENTITY CASCADE;
 
 INSERT INTO svc.fee_rules (
   id, clinic_id, doctor_id, base_consult_fee, fixed_consult_minutes,
-  overtime_fee_amount, overtime_fee_per_block_minutes, currency
+  overtime_fee_amount, overtime_fee_per_block_minutes, currency, hospital_id
 ) VALUES
-  ('fee-seed-doctor-1', 'seed-clinic-1', 'seed-doctor-1', 500, 15, 200, 15, 'INR');
+  ('fee-seed-doctor-1', 'seed-clinic-1', 'seed-doctor-1', 500, 15, 200, 15, 'INR', 10001);
 
 INSERT INTO svc.doctor_schedules (id, doctor_id, day_of_week, start_time, end_time, slot_minutes) VALUES
   ('sch-1', 'seed-doctor-1', 1, '09:00', '13:00', 15),

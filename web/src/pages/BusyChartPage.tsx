@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, DayChart, DOCTOR_ID } from "../api";
+import { api, DayChart, DOCTOR_ID, HospitalDoctor } from "../api";
+import { session } from "../dl/MedTrackSession";
 
 function todayLocal() {
   const d = new Date();
@@ -12,22 +13,61 @@ function timeLabel(iso: string) {
 }
 
 export default function BusyChartPage() {
+  const sessionHospitalId = session.getHospitalId() || "";
+  const sessionDoctorId = session.isDoctor() ? session.getUserId() || "" : "";
   const [date, setDate] = useState(todayLocal());
+  const [doctors, setDoctors] = useState<HospitalDoctor[]>([]);
+  const [doctorId, setDoctorId] = useState(sessionDoctorId || DOCTOR_ID);
   const [chart, setChart] = useState<DayChart | null>(null);
   const [error, setError] = useState("");
 
-  async function load(d = date) {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = sessionHospitalId
+          ? await api.doctorsByHospital(sessionHospitalId)
+          : await api.doctors();
+        if (cancelled) return;
+        let rows = ((data.doctors || []) as unknown as HospitalDoctor[]).filter(
+          (d) => d.doctorId,
+        );
+        if (sessionHospitalId) {
+          rows = rows.filter((d) => String(d.hospitalId) === String(sessionHospitalId));
+        }
+        setDoctors(rows);
+        if (sessionDoctorId) {
+          setDoctorId(sessionDoctorId);
+        } else if (!rows.some((d) => d.doctorId === doctorId) && rows[0]?.doctorId) {
+          setDoctorId(rows[0].doctorId);
+        }
+      } catch {
+        if (!cancelled) setDoctors([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionHospitalId, sessionDoctorId]);
+
+  async function load(d = date, id = doctorId) {
     setError("");
+    if (!id) {
+      setChart(null);
+      return;
+    }
     try {
-      setChart(await api.chart(DOCTOR_ID, d));
+      setChart(await api.chart(id, d));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load chart");
     }
   }
 
   useEffect(() => {
-    load();
-  }, [date]);
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, doctorId]);
 
   return (
     <section>
@@ -38,6 +78,25 @@ export default function BusyChartPage() {
       {error && <div className="msg error">{error}</div>}
       <div className="panel">
         <div className="row">
+          <label>
+            Doctor
+            <select
+              value={doctorId}
+              onChange={(e) => setDoctorId(e.target.value)}
+              disabled={Boolean(sessionDoctorId) || doctors.length === 0}
+            >
+              {doctors.length === 0 ? (
+                <option value={doctorId}>{doctorId || "No doctors"}</option>
+              ) : (
+                doctors.map((d) => (
+                  <option key={d.doctorId} value={d.doctorId}>
+                    {d.doctorName}
+                    {d.department ? ` — ${d.department}` : ""}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
           <label>
             Date
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />

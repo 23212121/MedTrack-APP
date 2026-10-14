@@ -43,8 +43,11 @@ export async function loadHospitalPeople(): Promise<SchedulePerson[]> {
       : api.doctors(),
     api.employees().catch(() => ({ employees: [] as StaffMember[] })),
   ]);
-  const doctors = ((doctorData as { doctors?: HospitalDoctor[] }).doctors ?? []).filter(
+  let doctors = ((doctorData as { doctors?: HospitalDoctor[] }).doctors ?? []).filter(
     (d) => d.doctorId,
   ) as HospitalDoctor[];
+  if (hospitalId) {
+    doctors = doctors.filter((d) => String(d.hospitalId) === String(hospitalId));
+  }
   return buildPeople(doctors, staffData.employees ?? []);
 }

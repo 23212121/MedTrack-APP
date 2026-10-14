@@ -141,15 +141,27 @@ export default function DoctorRegistrationPage() {
 
   async function load() {
     try {
+      const hid = session.getHospitalId();
       const data = await api.doctors();
-      setDoctors(data.doctors);
+      const rows = data.doctors ?? [];
+      setDoctors(
+        hid
+          ? rows.filter((d) => String(d.hospitalId) === String(hid))
+          : rows,
+      );
     } catch { /* ignore until service is up */ }
   }
 
   async function loadHospitals() {
     try {
       const data = await api.hospitals();
-      setHospitals(data.hospitals ?? []);
+      const hid = session.getHospitalId();
+      const rows = data.hospitals ?? [];
+      setHospitals(
+        hid
+          ? rows.filter((h) => String(h.id ?? h.hospitalId) === String(hid))
+          : rows,
+      );
     } catch {
       setHospitals([]);
     }

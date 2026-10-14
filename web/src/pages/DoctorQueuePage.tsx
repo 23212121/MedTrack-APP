@@ -35,16 +35,24 @@ export default function DoctorQueuePage() {
   async function load() {
     try {
       const hospitalId = session.getHospitalId();
+      const doctorId =
+        (session.isDoctor() ? session.getUserId() : "") || DOCTOR_ID;
       const [visitData, doctorData, staffData] = await Promise.all([
-        api.visits(DOCTOR_ID, today()).catch(() => ({ visits: [] as Visit[] })),
+        api.visits(doctorId, today()).catch(() => ({ visits: [] as Visit[] })),
         hospitalId
           ? api.doctorsByHospital(hospitalId).catch(() => api.doctors())
           : api.doctors(),
         api.employees().catch(() => ({ employees: [] as StaffMember[] })),
       ]);
-      const doctors = ((doctorData as { doctors?: HospitalDoctor[] }).doctors ?? []).filter(
+      let doctors = ((doctorData as { doctors?: HospitalDoctor[] }).doctors ?? []).filter(
         (d) => d.doctorId,
       ) as HospitalDoctor[];
+      if (hospitalId) {
+        doctors = doctors.filter((d) => String(d.hospitalId) === String(hospitalId));
+      }
+      if (session.isDoctor() && session.getUserId()) {
+        doctors = doctors.filter((d) => d.doctorId === session.getUserId());
+      }
       const roster = buildPeople(doctors, staffData.employees ?? []);
       setPeople(roster);
       setVisits(visitData.visits ?? []);

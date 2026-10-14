@@ -757,7 +757,25 @@ export const api = {
     URL.revokeObjectURL(url);
   },
 
-  bookings: () => request<{ count: number; bookings: Booking[] }>("/api/bookings"),
+  bookings: (opts?: { hospitalId?: string | number; doctorId?: string }) => {
+    const q = new URLSearchParams();
+    const doctorId =
+      opts?.doctorId != null && String(opts.doctorId).trim()
+        ? String(opts.doctorId).trim()
+        : session.isDoctor()
+          ? session.getUserId()
+          : "";
+    const hospitalId =
+      opts?.hospitalId != null && String(opts.hospitalId).trim()
+        ? String(opts.hospitalId).trim()
+        : session.getHospitalId();
+    if (doctorId) q.set("doctorId", doctorId);
+    else if (hospitalId) q.set("hospitalId", hospitalId);
+    const qs = q.toString();
+    return request<{ count: number; bookings: Booking[] }>(
+      `/api/bookings${qs ? `?${qs}` : ""}`,
+    );
+  },
   searchPatients: (name: string) =>
     request<{
       count: number;
@@ -818,13 +836,21 @@ export const api = {
   appointments: (opts?: {
     doctorId?: string;
     patientId?: string;
-    hospitalId?: number;
+    hospitalId?: number | string;
     date?: string;
   }) => {
     const q = new URLSearchParams();
-    if (opts?.doctorId) q.set("doctorId", opts.doctorId);
+    const doctorId =
+      opts?.doctorId?.trim() ||
+      (session.isDoctor() ? session.getUserId() : "") ||
+      "";
+    const hospitalId =
+      opts?.hospitalId != null && String(opts.hospitalId).trim()
+        ? String(opts.hospitalId).trim()
+        : session.getHospitalId();
+    if (doctorId) q.set("doctorId", doctorId);
     if (opts?.patientId) q.set("patientId", opts.patientId);
-    if (opts?.hospitalId != null) q.set("hospitalId", String(opts.hospitalId));
+    if (!doctorId && !opts?.patientId && hospitalId) q.set("hospitalId", hospitalId);
     if (opts?.date) q.set("date", opts.date);
     const qs = q.toString();
     return request<{ count: number; appointments: Appointment[] }>(
