@@ -9,6 +9,11 @@ export const patientNavGroups = [
       { to: "/patient/chat", label: "Chat", hint: "Message hospital or doctor" },
       { to: "/patient/reports", label: "Reports", hint: "Lab & prescriptions" },
       { to: "/patient/medicine-orders", label: "Medicine orders", hint: "Upload RX & track" },
+      {
+        to: "/patient/lab-booking",
+        label: "Lab booking",
+        hint: "Home collection or visit lab",
+      },
       { to: "/patient/notifications", label: "Notifications", hint: "Appointments, documents & quotes" },
       { to: "/patient/profile", label: "Profile", hint: "Personal & history" },
     ],
@@ -23,6 +28,7 @@ export const patientPageTitles: Record<string, string> = {
   "/patient/chat": "Chat",
   "/patient/reports": "Reports",
   "/patient/medicine-orders": "Medicine orders",
+  "/patient/lab-booking": "Lab booking",
   "/patient/notifications": "Notifications",
   "/patient/profile": "Profile",
 };
@@ -35,6 +41,7 @@ export const patientKnownPaths = new Set([
   "/patient/chat",
   "/patient/reports",
   "/patient/medicine-orders",
+  "/patient/lab-booking",
   "/patient/notifications",
   "/patient/profile",
   "/patient/logout",

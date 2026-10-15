@@ -10,6 +10,11 @@ export default function LabDashboardPage() {
       </p>
       <div className="dashboard-fill">
         <div className="home-cards">
+          <Link to="/lab/bookings" className="home-card">
+            <span className="home-card-group">Bookings</span>
+            <h3>Lab bookings</h3>
+            <p>Accept home collection or in-lab visits, set time, and chat with patients</p>
+          </Link>
           <Link to="/lab/patients" className="home-card">
             <span className="home-card-group">Work</span>
             <h3>Patient reports</h3>

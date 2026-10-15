@@ -38,6 +38,12 @@ const PORTAL_TILES = [
     text: "Upload a prescription and track the pharmacy quote",
   },
   {
+    to: "/patient/lab-booking",
+    group: "Lab",
+    title: "Lab booking",
+    text: "Book home sample collection or visit the lab with token time",
+  },
+  {
     to: "/patient/notifications",
     group: "Alerts",
     title: "Notifications",

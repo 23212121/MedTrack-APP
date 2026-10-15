@@ -3,6 +3,11 @@ export const labNavGroups = [
     title: "Lab technician",
     items: [
       { to: "/lab", label: "Dashboard", hint: "Upload overview", end: true },
+      {
+        to: "/lab/bookings",
+        label: "Lab bookings",
+        hint: "Accept home / in-lab requests",
+      },
       { to: "/lab/patients", label: "Patient reports", hint: "Choose patient or phone/Aadhaar, upload to S3" },
       { to: "/lab/uploads", label: "Uploaded reports", hint: "Files sent to patients" },
     ],
@@ -15,8 +20,15 @@ export const labNavGroups = [
 
 export const labPageTitles: Record<string, string> = {
   "/lab": "Lab dashboard",
+  "/lab/bookings": "Lab bookings",
   "/lab/patients": "Patient reports",
   "/lab/uploads": "Uploaded reports",
 };
 
-export const labKnownPaths = new Set(["/lab", "/lab/patients", "/lab/uploads", "/logout"]);
+export const labKnownPaths = new Set([
+  "/lab",
+  "/lab/bookings",
+  "/lab/patients",
+  "/lab/uploads",
+  "/logout",
+]);

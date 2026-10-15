@@ -1614,6 +1614,136 @@ export const api = {
       files?: { slot: number; fileName: string; downloadUrl: string }[];
     }>("/api/lab/reports", form);
   },
+
+  labBookings: (status?: string) => {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+    return request<{ count: number; bookings: LabBooking[] }>(`/api/lab-bookings${qs}`);
+  },
+
+  labBooking: (id: string) =>
+    request<{ booking: LabBooking }>(`/api/lab-bookings/${encodeURIComponent(id)}`),
+
+  createLabBooking: (body: {
+    hospitalId?: number | string;
+    mode: "HOME_COLLECTION" | "IN_LAB";
+    patientName?: string;
+    patientPhone?: string;
+    patientId?: string;
+    collectionAddress?: string;
+    address?: string;
+    preferredAt?: string;
+    notes?: string;
+  }) =>
+    request<{ message: string; booking: LabBooking }>("/api/lab-bookings", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  acceptLabBooking: (id: string, body?: { visitTime?: string }) =>
+    request<{ message: string; booking: LabBooking }>(
+      `/api/lab-bookings/${encodeURIComponent(id)}/accept`,
+      { method: "POST", body: JSON.stringify(body || {}) },
+    ),
+
+  labBookingReachedHome: (id: string) =>
+    request<{ message: string; booking: LabBooking }>(
+      `/api/lab-bookings/${encodeURIComponent(id)}/reached-home`,
+      { method: "POST", body: "{}" },
+    ),
+
+  completeLabBooking: (id: string) =>
+    request<{ message: string; booking: LabBooking }>(
+      `/api/lab-bookings/${encodeURIComponent(id)}/complete`,
+      { method: "POST", body: "{}" },
+    ),
+
+  cancelLabBooking: (
+    id: string,
+    body?: { reason?: string; distanceKm?: number | string },
+  ) =>
+    request<{ message: string; booking: LabBooking }>(
+      `/api/lab-bookings/${encodeURIComponent(id)}/cancel`,
+      { method: "POST", body: JSON.stringify(body || {}) },
+    ),
+
+  labBookingChats: (id: string) =>
+    request<{ bookingId: string; count: number; messages: LabBookingChatMessage[] }>(
+      `/api/lab-bookings/${encodeURIComponent(id)}/chats`,
+    ),
+
+  postLabBookingChat: (id: string, message: string, senderName?: string) =>
+    request<{ message: string; chat: LabBookingChatMessage; bookingId: string }>(
+      `/api/lab-bookings/${encodeURIComponent(id)}/chats`,
+      {
+        method: "POST",
+        body: JSON.stringify({ message, senderName }),
+      },
+    ),
+
+  labBookingNotifications: () =>
+    request<{ count: number; notifications: LabBookingNotification[] }>(
+      "/api/lab-bookings/notifications",
+    ),
+
+  markLabBookingNotificationRead: (id: string) =>
+    request<{ notification: LabBookingNotification }>(
+      `/api/lab-bookings/notifications/${encodeURIComponent(id)}/read`,
+      { method: "POST", body: "{}" },
+    ),
+};
+
+export type LabBooking = {
+  id: string;
+  bookingNumber?: string;
+  hospitalId?: number;
+  patientId?: string;
+  patientName?: string;
+  patientPhone?: string;
+  mode?: "HOME_COLLECTION" | "IN_LAB" | string;
+  modeLabel?: string;
+  collectionAddress?: string;
+  notes?: string;
+  preferredAt?: string;
+  status?: string;
+  assignedLabId?: string;
+  assignedLabName?: string;
+  confirmedAt?: string;
+  visitTime?: string;
+  tokenNumber?: number;
+  expectedVisitAt?: string;
+  queueDate?: string;
+  techReachedAt?: string;
+  cancelReason?: string;
+  cancelCharge?: number;
+  distanceKm?: number;
+  cancelledAt?: string;
+  completedAt?: string;
+  createdAt?: string;
+  freeCancelUntil?: string;
+  freeCancelRemainingSeconds?: number;
+  distanceRatePerKm?: number;
+  canChat?: boolean;
+  canCancel?: boolean;
+  slotMinutes?: number;
+};
+
+export type LabBookingChatMessage = {
+  id: string;
+  bookingId?: string;
+  senderType?: string;
+  senderName?: string;
+  message?: string;
+  createdAt?: string;
+};
+
+export type LabBookingNotification = {
+  id: string;
+  bookingId?: string;
+  audience?: string;
+  title?: string;
+  message?: string;
+  read?: boolean;
+  createdAt?: string;
 };
 
 export type MedicineOrderDocument = {

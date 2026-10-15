@@ -60,10 +60,12 @@ import MedicalStoresPage from "./pages/medicine/MedicalStoresPage";
 import MedicalNotificationsPage from "./pages/medicine/MedicalNotificationsPage";
 import EmergencyServicePage from "./pages/emergency/EmergencyServicePage";
 import LabDashboardPage from "./pages/lab/LabDashboardPage";
+import LabBookingsPage from "./pages/lab/LabBookingsPage";
 import LabPatientsPage from "./pages/lab/LabPatientsPage";
 import LabReportsPage from "./pages/lab/LabReportsPage";
 import LabsPage from "./pages/lab/LabsPage";
 import LabRegisterPage from "./pages/lab/LabRegisterPage";
+import PatientLabBookingPage from "./pages/patient/PatientLabBookingPage";
 
 export default function App() {
   const t = useT();
@@ -246,6 +248,7 @@ export default function App() {
               <Route path="/patient/chat" element={<PatientChatPage />} />
               <Route path="/patient/reports" element={<PatientReportsPage />} />
               <Route path="/patient/medicine-orders" element={<MedicineOrdersPage title="Medicine orders" />} />
+              <Route path="/patient/lab-booking" element={<PatientLabBookingPage />} />
               <Route path="/patient/notifications" element={<MedicalNotificationsPage />} />
               <Route path="/patient/profile" element={<PatientProfilePage />} />
               <Route path="/patient/logout" element={<LogoutPage />} />
@@ -320,6 +323,7 @@ export default function App() {
           >
             <Routes>
               <Route path="/lab" element={<LabDashboardPage />} />
+              <Route path="/lab/bookings" element={<LabBookingsPage />} />
               <Route path="/lab/patients" element={<LabPatientsPage />} />
               <Route path="/lab/uploads" element={<LabReportsPage />} />
               <Route path="/logout" element={<LogoutPage />} />
