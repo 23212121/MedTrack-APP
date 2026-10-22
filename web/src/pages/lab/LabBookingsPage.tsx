@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import LabBookingChat from "../../components/LabBookingChat";
-import { api, type LabBooking, type LabBookingNotification } from "../../api";
+import LabRouteMap from "../../components/LabRouteMap";
+import { api, type LabBooking, type LabBookingNotification, type LabTechnician } from "../../api";
 import { session } from "../../dl/MedTrackSession";
+import {
+  distanceKm,
+  forwardGeocode,
+  LAB_DISTANCE_RATE_PER_KM,
+  parseGpsFromAddress,
+} from "../../geocode";
 import { toast } from "../../toast";
 
 function fmt(iso?: string) {
@@ -25,6 +32,9 @@ export default function LabBookingsPage() {
   const [visitTimes, setVisitTimes] = useState<Record<string, string>>({});
   const [chatId, setChatId] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [lab, setLab] = useState<LabTechnician | null>(null);
+  const [labPoint, setLabPoint] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [routeId, setRouteId] = useState("");
 
   async function load() {
     try {
@@ -41,9 +51,46 @@ export default function LabBookingsPage() {
 
   useEffect(() => {
     void load();
+    api
+      .labMe()
+      .then((res) => setLab(res.lab))
+      .catch(() => setLab(null));
     const timer = window.setInterval(() => void load(), 8000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!lab) return;
+    const query = [lab.address, lab.city, lab.state].filter(Boolean).join(", ");
+    if (!query) {
+      setLabPoint(null);
+      return;
+    }
+    let cancelled = false;
+    void forwardGeocode(query).then((point) => {
+      if (!cancelled) setLabPoint(point);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lab]);
+
+  function patientPoint(b: LabBooking) {
+    if (b.patientLatitude != null && b.patientLongitude != null) {
+      return { latitude: Number(b.patientLatitude), longitude: Number(b.patientLongitude) };
+    }
+    return parseGpsFromAddress(b.collectionAddress);
+  }
+
+  function tripFor(b: LabBooking) {
+    if (b.tripDistanceKm != null && b.tripCharge != null) {
+      return { km: b.tripDistanceKm, charge: b.tripCharge };
+    }
+    const patient = patientPoint(b);
+    if (!labPoint || !patient) return null;
+    const km = distanceKm(labPoint, patient);
+    return { km, charge: Math.round(km * LAB_DISTANCE_RATE_PER_KM * 100) / 100 };
+  }
 
   const pending = useMemo(
     () => bookings.filter((b) => b.status === "PENDING"),
@@ -59,11 +106,16 @@ export default function LabBookingsPage() {
     setBusyId(b.id);
     try {
       let visitTime: string | undefined;
+      let distance: number | undefined;
       if (b.mode === "HOME_COLLECTION") {
         const local = visitTimes[b.id] || toLocalInputValue();
         visitTime = new Date(local).toISOString();
+        distance = tripFor(b)?.km;
       }
-      const res = await api.acceptLabBooking(b.id, visitTime ? { visitTime } : undefined);
+      const res = await api.acceptLabBooking(b.id, {
+        visitTime,
+        distanceKm: distance,
+      });
       toast.success(res.message || "Accepted");
       await load();
     } catch (e) {
@@ -100,6 +152,9 @@ export default function LabBookingsPage() {
   }
 
   const chatBooking = mine.find((b) => b.id === chatId) || pending.find((b) => b.id === chatId);
+  const routeBooking = bookings.find((b) => b.id === routeId) || null;
+  const routePatient = routeBooking ? patientPoint(routeBooking) : null;
+  const routeTrip = routeBooking ? tripFor(routeBooking) : null;
 
   return (
     <section className="stack">
@@ -123,6 +178,20 @@ export default function LabBookingsPage() {
         </div>
       ) : null}
 
+      {routeBooking && labPoint && routePatient && routeTrip ? (
+        <div className="panel stack">
+          <h2>Route · {routeBooking.bookingNumber}</h2>
+          <p style={{ whiteSpace: "pre-line", margin: 0 }}>{routeBooking.collectionAddress}</p>
+          <LabRouteMap
+            lab={labPoint}
+            patient={routePatient}
+            labLabel={lab?.labName || lab?.address || "Lab"}
+            patientLabel={routeBooking.patientName || "Patient"}
+            km={routeTrip.km}
+          />
+        </div>
+      ) : null}
+
       {chatBooking?.canChat || (chatBooking && chatBooking.status !== "PENDING") ? (
         <LabBookingChat
           bookingId={chatBooking.id}
@@ -140,6 +209,8 @@ export default function LabBookingsPage() {
               <tr>
                 <th>Booking</th>
                 <th>Patient</th>
+                <th>Map address</th>
+                <th>Distance / amount</th>
                 <th>Mode</th>
                 <th>Preferred</th>
                 <th>Accept</th>
@@ -148,7 +219,7 @@ export default function LabBookingsPage() {
             <tbody>
               {pending.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>No open requests.</td>
+                  <td colSpan={7}>No open requests.</td>
                 </tr>
               ) : (
                 pending.map((b) => (
@@ -157,9 +228,28 @@ export default function LabBookingsPage() {
                     <td>
                       <div>{b.patientName}</div>
                       <div className="muted">{b.patientPhone}</div>
-                      {b.collectionAddress ? (
-                        <div className="muted">{b.collectionAddress}</div>
-                      ) : null}
+                    </td>
+                    <td style={{ whiteSpace: "pre-line", maxWidth: 280 }}>
+                      {b.collectionAddress || "—"}
+                    </td>
+                    <td>
+                      {(() => {
+                        const trip = tripFor(b);
+                        if (!trip) return "—";
+                        return (
+                          <>
+                            <div>{trip.km} km</div>
+                            <div>₹{trip.charge}</div>
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() => setRouteId(b.id)}
+                            >
+                              Show route
+                            </button>
+                          </>
+                        );
+                      })()}
                     </td>
                     <td>{b.modeLabel || b.mode}</td>
                     <td>{fmt(b.preferredAt)}</td>

@@ -61,6 +61,10 @@ public class HospitalEntity {
   @Column(name = "registration_json", columnDefinition = "TEXT")
   private String registrationJson;
 
+  /** Ambulance trip charge = distance (km) × this rate. */
+  @Column(name = "ambulance_rate_per_km")
+  private Double ambulanceRatePerKm;
+
   @Column(name = "created_at")
   private Instant createdAt = Instant.now();
 
@@ -115,6 +119,10 @@ public class HospitalEntity {
   public String getRegistrationJson() { return registrationJson; }
   public void setRegistrationJson(String registrationJson) {
     this.registrationJson = registrationJson;
+  }
+  public Double getAmbulanceRatePerKm() { return ambulanceRatePerKm; }
+  public void setAmbulanceRatePerKm(Double ambulanceRatePerKm) {
+    this.ambulanceRatePerKm = ambulanceRatePerKm;
   }
   public Instant getCreatedAt() { return createdAt; }
   public Instant getUpdatedAt() { return updatedAt; }

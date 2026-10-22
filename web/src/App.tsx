@@ -66,6 +66,8 @@ import LabReportsPage from "./pages/lab/LabReportsPage";
 import LabsPage from "./pages/lab/LabsPage";
 import LabRegisterPage from "./pages/lab/LabRegisterPage";
 import PatientLabBookingPage from "./pages/patient/PatientLabBookingPage";
+import PatientAmbulancePage from "./pages/patient/PatientAmbulancePage";
+import AmbulancesPage from "./pages/AmbulancesPage";
 
 export default function App() {
   const t = useT();
@@ -243,6 +245,7 @@ export default function App() {
             <Routes>
               <Route path="/patient" element={<PatientDashboardPage />} />
               <Route path="/patient/emergency" element={<EmergencyServicePage />} />
+              <Route path="/patient/ambulance" element={<PatientAmbulancePage />} />
               <Route path="/patient/booking" element={<PatientBookingPortalPage />} />
               <Route path="/patient/status" element={<PatientStatusPage />} />
               <Route path="/patient/chat" element={<PatientChatPage />} />
@@ -532,6 +535,7 @@ export default function App() {
             <Route path="/medicine-orders" element={<MedicineOrdersPage title="Medicine orders" />} />
             <Route path="/medical-stores" element={<MedicalStoresPage />} />
             <Route path="/labs" element={<LabsPage />} />
+            <Route path="/ambulances" element={<AmbulancesPage />} />
             <Route path="/hrm" element={<HrmShell />}>
               <Route index element={<HrmHomePage />} />
               <Route path="attendance" element={<HrmAttendancePage />} />

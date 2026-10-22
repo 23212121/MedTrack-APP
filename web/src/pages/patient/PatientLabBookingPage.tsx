@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import AddressMapPickerModal from "../../components/AddressMapPickerModal";
 import LabBookingChat from "../../components/LabBookingChat";
 import { api, type LabBooking, type HospitalRegistrationSummary } from "../../api";
+import { buildCollectionAddress } from "../../geocode";
 import { session } from "../../dl/MedTrackSession";
 import { toast } from "../../toast";
 
@@ -25,7 +27,14 @@ export default function PatientLabBookingPage() {
   const [hospitals, setHospitals] = useState<HospitalRegistrationSummary[]>([]);
   const [hospitalId, setHospitalId] = useState(session.getHospitalId() || "");
   const [mode, setMode] = useState<"HOME_COLLECTION" | "IN_LAB">("HOME_COLLECTION");
-  const [address, setAddress] = useState("");
+  const [streetLine, setStreetLine] = useState("");
+  const [city, setCity] = useState("");
+  const [stateName, setStateName] = useState("");
+  const [pinCode, setPinCode] = useState("");
+  const [country, setCountry] = useState("India");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [mapOpen, setMapOpen] = useState(false);
   const [preferredAt, setPreferredAt] = useState(toLocalInputValue());
   const [notes, setNotes] = useState("");
   const [bookings, setBookings] = useState<LabBooking[]>([]);
@@ -63,6 +72,20 @@ export default function PatientLabBookingPage() {
   const patientName = session.getPatientName() || session.getUsername() || "";
   const patientPhone = session.getPatientPhone() || "";
 
+  const collectionAddress = useMemo(
+    () =>
+      buildCollectionAddress({
+        streetLine,
+        city,
+        state: stateName,
+        pinCode,
+        country,
+        latitude,
+        longitude,
+      }),
+    [streetLine, city, stateName, pinCode, country, latitude, longitude],
+  );
+
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -70,8 +93,8 @@ export default function PatientLabBookingPage() {
       setError("Select a hospital.");
       return;
     }
-    if (mode === "HOME_COLLECTION" && !address.trim()) {
-      setError("Home address is required for sample collection.");
+    if (mode === "HOME_COLLECTION" && !collectionAddress.trim()) {
+      setError("Home address is required for sample collection. Pick a location on the map.");
       return;
     }
     setSaving(true);
@@ -82,7 +105,7 @@ export default function PatientLabBookingPage() {
         patientName,
         patientPhone,
         patientId: session.getPatientId() || undefined,
-        collectionAddress: mode === "HOME_COLLECTION" ? address.trim() : undefined,
+        collectionAddress: mode === "HOME_COLLECTION" ? collectionAddress.trim() : undefined,
         preferredAt: preferredAt ? new Date(preferredAt).toISOString() : undefined,
         notes: notes.trim() || undefined,
       });
@@ -133,11 +156,6 @@ export default function PatientLabBookingPage() {
   return (
     <section className="stack">
       <h1>Lab test booking</h1>
-      <p className="lead">
-        Book home sample collection or visit the lab. After a technician accepts, you see the visit
-        time (or token ETA for in-lab). Chat is available once accepted. Free cancel within 10
-        minutes of confirmation; if the technician has reached home, cancel charge is km × ₹10.
-      </p>
       {error ? <div className="msg error">{error}</div> : null}
 
       <form className="panel stack" onSubmit={(e) => void onCreate(e)}>
@@ -171,15 +189,79 @@ export default function PatientLabBookingPage() {
           </select>
         </label>
         {mode === "HOME_COLLECTION" ? (
-          <label>
-            Home address
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              required
-              placeholder="Full address for sample pickup"
-            />
-          </label>
+          <div className="stack">
+            <div className="row patient-lab-address-actions">
+              <button type="button" className="secondary" onClick={() => setMapOpen(true)}>
+                Pick address on map
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  if (!navigator.geolocation) {
+                    setError("Location is not available in this browser.");
+                    return;
+                  }
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                      setLatitude(String(pos.coords.latitude));
+                      setLongitude(String(pos.coords.longitude));
+                      setMapOpen(true);
+                    },
+                    (err) =>
+                      setError(err.message || "Allow location to open the map at your position."),
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+                  );
+                }}
+              >
+                Use current location
+              </button>
+            </div>
+            <label>
+              Street / area
+              <input
+                value={streetLine}
+                onChange={(e) => setStreetLine(e.target.value)}
+                required
+                placeholder="House no., road, landmark"
+              />
+            </label>
+            <div className="grid-2">
+              <label>
+                City
+                <input value={city} onChange={(e) => setCity(e.target.value)} required />
+              </label>
+              <label>
+                State
+                <input value={stateName} onChange={(e) => setStateName(e.target.value)} required />
+              </label>
+              <label>
+                PIN code
+                <input value={pinCode} onChange={(e) => setPinCode(e.target.value)} />
+              </label>
+              <label>
+                Country
+                <input value={country} onChange={(e) => setCountry(e.target.value)} />
+              </label>
+              <label>
+                Latitude
+                <input value={latitude} onChange={(e) => setLatitude(e.target.value)} readOnly />
+              </label>
+              <label>
+                Longitude
+                <input value={longitude} onChange={(e) => setLongitude(e.target.value)} readOnly />
+              </label>
+            </div>
+            <label>
+              Full address (for lab technician)
+              <textarea
+                rows={3}
+                readOnly
+                value={collectionAddress}
+                placeholder="Pick a point on the map to fill this address"
+              />
+            </label>
+          </div>
         ) : (
           <p className="muted">
             In-lab visits get a token. Each patient ahead adds 10 minutes (e.g. 5 ahead from 11:00 →
@@ -206,6 +288,24 @@ export default function PatientLabBookingPage() {
           {saving ? "Booking…" : "Book lab test"}
         </button>
       </form>
+
+      <AddressMapPickerModal
+        open={mapOpen}
+        initialLat={latitude ? Number(latitude) : undefined}
+        initialLng={longitude ? Number(longitude) : undefined}
+        onClose={() => setMapOpen(false)}
+        onConfirm={(picked) => {
+          setStreetLine(picked.streetLine || picked.formattedAddress.split(",")[0] || "");
+          setCity(picked.city);
+          setStateName(picked.state);
+          setPinCode(picked.pinCode);
+          setCountry(picked.country || "India");
+          setLatitude(String(picked.latitude));
+          setLongitude(String(picked.longitude));
+          setMapOpen(false);
+          toast.success("Address updated from map.");
+        }}
+      />
 
       {chatBooking ? (
         <LabBookingChat

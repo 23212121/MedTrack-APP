@@ -8,6 +8,12 @@ const PORTAL_TILES = [
     text: "Search hospitals, beds, and book an emergency bed",
   },
   {
+    to: "/patient/ambulance",
+    group: "Emergency",
+    title: "Request ambulance",
+    text: "Share your live location and alert the nearest available ambulance",
+  },
+  {
     to: "/patient/booking",
     group: "Appointments",
     title: "Booking",

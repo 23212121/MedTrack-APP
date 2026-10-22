@@ -99,5 +99,14 @@ public class LabBookingSchemaInitializer {
         """);
     jdbc.execute(
         "CREATE INDEX IF NOT EXISTS idx_lab_booking_chat ON svc.lab_booking_chats (booking_id, created_at)");
+
+    jdbc.execute(
+        "ALTER TABLE svc.lab_bookings ADD COLUMN IF NOT EXISTS patient_latitude DOUBLE PRECISION");
+    jdbc.execute(
+        "ALTER TABLE svc.lab_bookings ADD COLUMN IF NOT EXISTS patient_longitude DOUBLE PRECISION");
+    jdbc.execute(
+        "ALTER TABLE svc.lab_bookings ADD COLUMN IF NOT EXISTS trip_distance_km DOUBLE PRECISION");
+    jdbc.execute(
+        "ALTER TABLE svc.lab_bookings ADD COLUMN IF NOT EXISTS trip_charge DOUBLE PRECISION");
   }
 }

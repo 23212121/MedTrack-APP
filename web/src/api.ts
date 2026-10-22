@@ -1631,6 +1631,8 @@ export const api = {
     patientId?: string;
     collectionAddress?: string;
     address?: string;
+    latitude?: number | string;
+    longitude?: number | string;
     preferredAt?: string;
     notes?: string;
   }) =>
@@ -1639,7 +1641,7 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  acceptLabBooking: (id: string, body?: { visitTime?: string }) =>
+  acceptLabBooking: (id: string, body?: { visitTime?: string; distanceKm?: number }) =>
     request<{ message: string; booking: LabBooking }>(
       `/api/lab-bookings/${encodeURIComponent(id)}/accept`,
       { method: "POST", body: JSON.stringify(body || {}) },
@@ -1690,6 +1692,132 @@ export const api = {
       `/api/lab-bookings/notifications/${encodeURIComponent(id)}/read`,
       { method: "POST", body: "{}" },
     ),
+
+  ambulancePricing: (hospitalId?: string | number) => {
+    const qs =
+      hospitalId != null && String(hospitalId)
+        ? `?hospitalId=${encodeURIComponent(String(hospitalId))}`
+        : "";
+    return request<{
+      hospitalId?: number | string;
+      ratePerKm: number;
+      avgSpeedKmh?: number;
+      currency?: string;
+    }>(`/api/ambulances/pricing${qs}`);
+  },
+
+  saveAmbulancePricing: (body: { ratePerKm: number; hospitalId?: string | number }) =>
+    request<{ message: string; ratePerKm: number; hospitalId?: number }>("/api/ambulances/pricing", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  ambulanceQuote: (body: {
+    latitude: number;
+    longitude: number;
+    hospitalId?: string | number;
+  }) => {
+    const q = new URLSearchParams({
+      latitude: String(body.latitude),
+      longitude: String(body.longitude),
+    });
+    if (body.hospitalId != null && String(body.hospitalId)) {
+      q.set("hospitalId", String(body.hospitalId));
+    }
+    return request<AmbulanceQuote>(`/api/ambulance-requests/quote?${q}`);
+  },
+
+  ambulances: (hospitalId?: string | number) => {
+    const qs =
+      hospitalId != null && String(hospitalId)
+        ? `?hospitalId=${encodeURIComponent(String(hospitalId))}`
+        : "";
+    return request<{ count: number; ambulances: Ambulance[] }>(`/api/ambulances${qs}`);
+  },
+
+  registerAmbulance: (body: {
+    driverName: string;
+    mobileNumber: string;
+    latitude?: number;
+    longitude?: number;
+  }) =>
+    request<{ message: string; ambulance: Ambulance }>("/api/ambulances", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  requestAmbulance: (body: { latitude: number; longitude: number; hospitalId?: string | number }) =>
+    request<{ message: string; request: AmbulanceRequest }>("/api/ambulance-requests", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  myAmbulanceRequests: () =>
+    request<{ count: number; requests: AmbulanceRequest[] }>("/api/ambulance-requests/mine"),
+
+  updateAmbulancePatientLocation: (id: string, latitude: number, longitude: number) =>
+    request<{ request: AmbulanceRequest }>(
+      `/api/ambulance-requests/${encodeURIComponent(id)}/location`,
+      { method: "POST", body: JSON.stringify({ latitude, longitude }) },
+    ),
+
+  cancelAmbulanceRequest: (id: string) =>
+    request<{ request: AmbulanceRequest }>(
+      `/api/ambulance-requests/${encodeURIComponent(id)}/cancel`,
+      { method: "POST", body: "{}" },
+    ),
+};
+
+export type AmbulanceQuote = {
+  patientLatitude?: number;
+  patientLongitude?: number;
+  ambulanceAvailable?: boolean;
+  distanceKm?: number;
+  ratePerKm?: number;
+  estimatedPrice?: number;
+  estimatedMinutes?: number;
+  avgSpeedKmh?: number;
+  currency?: string;
+  ambulanceLatitude?: number;
+  ambulanceLongitude?: number;
+  driverName?: string;
+  message?: string;
+};
+
+export type Ambulance = {
+  id: string;
+  hospitalId?: number;
+  driverName?: string;
+  mobileNumber?: string;
+  latitude?: number;
+  longitude?: number;
+  availabilityStatus?: string;
+  fcmRegistered?: boolean;
+  lastLocationUpdate?: string;
+};
+
+export type AmbulanceRequest = {
+  id: string;
+  requestNumber?: string;
+  patientName?: string;
+  patientPhone?: string;
+  patientLatitude?: number;
+  patientLongitude?: number;
+  ambulanceId?: string;
+  status?: string;
+  mapsUrl?: string;
+  createdAt?: string;
+  acceptedAt?: string;
+  driverName?: string;
+  driverMobile?: string;
+  ambulanceLatitude?: number;
+  ambulanceLongitude?: number;
+  offeredDistanceKm?: number;
+  offerDeadlineAt?: string;
+  distanceKm?: number;
+  ratePerKm?: number;
+  estimatedPrice?: number;
+  estimatedMinutes?: number;
 };
 
 export type LabBooking = {
@@ -1702,6 +1830,10 @@ export type LabBooking = {
   mode?: "HOME_COLLECTION" | "IN_LAB" | string;
   modeLabel?: string;
   collectionAddress?: string;
+  patientLatitude?: number;
+  patientLongitude?: number;
+  tripDistanceKm?: number;
+  tripCharge?: number;
   notes?: string;
   preferredAt?: string;
   status?: string;
@@ -2033,6 +2165,8 @@ export type BookingSummary = {
   createdAt?: string;
   updatedAt?: string;
   bookedAt?: string;
+  paymentStatus?: string;
+  paymentId?: string;
 };
 
 export type PatientProfile = {

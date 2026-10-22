@@ -114,6 +114,16 @@ function buildDetails(appt: BookingSummary): DetailItem[] {
     label: "Consultation fee",
     value: formatFee(appt.consultationFee, appt.currency),
   });
+  if (appt.paymentStatus) {
+    const ps = appt.paymentStatus.toUpperCase();
+    const label =
+      ps === "PAID" || ps === "COMPLETED"
+        ? "Paid"
+        : ps === "PAYMENT_PENDING"
+          ? "Payment pending"
+          : "Unpaid — pay from My appointments";
+    items.push({ label: "Payment", value: label });
+  }
 
   if (appt.patientName) {
     items.push({ label: "Patient name", value: appt.patientName });

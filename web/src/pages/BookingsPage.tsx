@@ -207,6 +207,8 @@ export default function BookingsPage({
   const [voiceList, setVoiceList] = useState<Booking[] | null>(null);
   const [voiceListNote, setVoiceListNote] = useState("");
   const [payModal, setPayModal] = useState<AppointmentPayment | null>(null);
+  /** Patient portal: pay at booking time or defer to My appointments. */
+  const [payWhenBook, setPayWhenBook] = useState<"now" | "later">("later");
   const [attachFiles, setAttachFiles] = useState<File[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const canEnableDates = !publicMode;
@@ -982,7 +984,12 @@ export default function BookingsPage({
       }
       const appointmentId = res.appointment?.id;
       const fee = Number(form.consultationFee || res.appointment?.consultationFee);
-      if (appointmentId && Number.isFinite(fee) && fee >= 1) {
+      const openPayNow =
+        appointmentId &&
+        Number.isFinite(fee) &&
+        fee >= 1 &&
+        (!publicMode || payWhenBook === "now");
+      if (openPayNow) {
         try {
           const payment = await api.createPayment({
             appointmentId,
@@ -1000,6 +1007,11 @@ export default function BookingsPage({
           );
           return;
         }
+      }
+      if (publicMode && appointmentId && Number.isFinite(fee) && fee >= 1 && payWhenBook === "later") {
+        toast.success(
+          "Appointment booked. You can pay the consultation fee anytime under My appointments or Queue status.",
+        );
       }
       finishAfterBook();
     } catch (err) {
@@ -1328,6 +1340,33 @@ export default function BookingsPage({
           </p>
         )}
 
+        {publicMode &&
+        form.doctorId &&
+        form.consultationFee &&
+        Number(form.consultationFee) >= 1 ? (
+          <fieldset className="stack" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "0.75rem 1rem" }}>
+            <legend style={{ padding: "0 0.35rem" }}>{t("Consultation fee payment")}</legend>
+            <label className="row" style={{ gap: "0.5rem", alignItems: "center" }}>
+              <input
+                type="radio"
+                name="payWhenBook"
+                checked={payWhenBook === "later"}
+                onChange={() => setPayWhenBook("later")}
+              />
+              {t("Pay later")} — {t("book now and pay from My appointments")}
+            </label>
+            <label className="row" style={{ gap: "0.5rem", alignItems: "center" }}>
+              <input
+                type="radio"
+                name="payWhenBook"
+                checked={payWhenBook === "now"}
+                onChange={() => setPayWhenBook("now")}
+              />
+              {t("Pay now")} — {t("open UPI / card payment after booking")}
+            </label>
+          </fieldset>
+        ) : null}
+
         <div className="grid-2">
           <label>
             <span>
@@ -1535,7 +1574,14 @@ export default function BookingsPage({
           }}
           onClose={() => {
             setPayModal(null);
-            void load();
+            if (publicMode) {
+              toast.success(
+                "Payment skipped. You can pay later from My appointments or Queue status.",
+              );
+              void finishAfterBook();
+            } else {
+              void load();
+            }
           }}
         />
       ) : null}

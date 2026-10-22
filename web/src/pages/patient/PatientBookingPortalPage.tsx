@@ -1,11 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, Booking } from "../../api";
+import { api, Booking, BookingSummary } from "../../api";
 import { useCareChatUnread } from "../../careChatUnread";
 import CareChatWindow from "../../components/CareChatWindow";
 import ChatLink from "../../components/ChatLink";
 import { getPatientId, getPatientPhone } from "../../auth";
 import { session } from "../../dl/MedTrackSession";
 import BookingsPage from "../BookingsPage";
+import PatientPayConsultationButton from "../../components/PatientPayConsultationButton";
 import { toast } from "../../toast";
 
 function formatInstant(iso: string) {
@@ -18,7 +19,7 @@ function formatInstant(iso: string) {
 
 export default function PatientBookingPortalPage() {
   const phone = getPatientPhone();
-  const [upcoming, setUpcoming] = useState<Booking[]>([]);
+  const [upcoming, setUpcoming] = useState<BookingSummary[]>([]);
   const [error, setError] = useState("");
   const [chatBooking, setChatBooking] = useState<Booking | null>(null);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
@@ -152,6 +153,7 @@ export default function PatientBookingPortalPage() {
                   <th>Date</th>
                   <th>Status</th>
                   <th>Chat</th>
+                  <th>Payment</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -166,6 +168,9 @@ export default function PatientBookingPortalPage() {
                     <td>{b.status}</td>
                     <td>
                       <ChatLink unread={unread[b.id] ?? 0} onClick={() => setChatBooking(b)} />
+                    </td>
+                    <td>
+                      <PatientPayConsultationButton appt={b} compact onUpdated={() => void load()} />
                     </td>
                     <td className="row">
                       <button

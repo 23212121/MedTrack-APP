@@ -9,6 +9,7 @@ import { useCareChatUnread } from "../../careChatUnread";
 import CareChatWindow from "../../components/CareChatWindow";
 import ChatLink from "../../components/ChatLink";
 import PatientBookingDetails from "../../components/PatientBookingDetails";
+import PatientPayConsultationButton from "../../components/PatientPayConsultationButton";
 import PatientQueueStatusView from "../../components/PatientQueueStatusView";
 import { getPatientId, getPatientPhone } from "../../auth";
 import { session } from "../../dl/MedTrackSession";
@@ -172,6 +173,7 @@ export default function PatientStatusPage() {
                   <th>Date</th>
                   <th>Status</th>
                   <th>Chat</th>
+                  <th>Payment</th>
                 </tr>
               </thead>
               <tbody>
@@ -188,6 +190,9 @@ export default function PatientStatusPage() {
                     </td>
                     <td>
                       <ChatLink unread={unread[appt.id] ?? 0} onClick={() => setChatAppt(appt)} />
+                    </td>
+                    <td>
+                      <PatientPayConsultationButton appt={appt} compact onUpdated={() => void load()} />
                     </td>
                   </tr>
                 ))}

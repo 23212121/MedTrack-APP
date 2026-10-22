@@ -228,11 +228,6 @@ export default function LabPatientsPage() {
   return (
     <section className="stack lab-patients">
       <h1>Patient reports</h1>
-      <p className="lead">
-        Choose a hospital patient or look up by phone / Aadhaar. Fill name, age, and gender, then
-        upload one or more lab test files (max 5). Files are stored on S3 and shown on the patient
-        Reports page.
-      </p>
       {error && <div className="msg error">{error}</div>}
 
       <div className="panel row patient-report-filters">

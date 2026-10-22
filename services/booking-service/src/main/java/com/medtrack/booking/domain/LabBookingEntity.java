@@ -35,6 +35,18 @@ public class LabBookingEntity {
   @Column(name = "collection_address", length = 500)
   private String collectionAddress;
 
+  @Column(name = "patient_latitude")
+  private Double patientLatitude;
+
+  @Column(name = "patient_longitude")
+  private Double patientLongitude;
+
+  @Column(name = "trip_distance_km")
+  private Double tripDistanceKm;
+
+  @Column(name = "trip_charge")
+  private Double tripCharge;
+
   @Column(length = 1000)
   private String notes;
 
@@ -117,6 +129,14 @@ public class LabBookingEntity {
   public void setMode(String mode) { this.mode = mode; }
   public String getCollectionAddress() { return collectionAddress; }
   public void setCollectionAddress(String collectionAddress) { this.collectionAddress = collectionAddress; }
+  public Double getPatientLatitude() { return patientLatitude; }
+  public void setPatientLatitude(Double patientLatitude) { this.patientLatitude = patientLatitude; }
+  public Double getPatientLongitude() { return patientLongitude; }
+  public void setPatientLongitude(Double patientLongitude) { this.patientLongitude = patientLongitude; }
+  public Double getTripDistanceKm() { return tripDistanceKm; }
+  public void setTripDistanceKm(Double tripDistanceKm) { this.tripDistanceKm = tripDistanceKm; }
+  public Double getTripCharge() { return tripCharge; }
+  public void setTripCharge(Double tripCharge) { this.tripCharge = tripCharge; }
   public String getNotes() { return notes; }
   public void setNotes(String notes) { this.notes = notes; }
   public Instant getPreferredAt() { return preferredAt; }

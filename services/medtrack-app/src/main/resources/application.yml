@@ -51,6 +51,9 @@ medtrack:
   default-clinic-id: seed-clinic-1
   default-clinic-name: Sunrise Care Clinic
   avg-consultation-minutes: 10
+  ambulance:
+    rate-per-km: ${MEDTRACK_AMBULANCE_RATE_PER_KM:25}
+    avg-speed-kmh: ${MEDTRACK_AMBULANCE_AVG_SPEED_KMH:35}
   sms-provider: console
   email-from: ${MAIL_FROM:${MAIL_USER:medimitrahealth@gmail.com}}
   # Inbox that receives Send-message form details (defaults to the app mailbox)

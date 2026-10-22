@@ -4,6 +4,7 @@ export const patientNavGroups = [
     items: [
       { to: "/patient", label: "Dashboard", hint: "Overview & next visit", end: true },
       { to: "/patient/emergency", label: "Check Emergency Service", hint: "Beds, doctors, book a bed" },
+      { to: "/patient/ambulance", label: "Ambulance", hint: "Request the nearest ambulance" },
       { to: "/patient/booking", label: "Booking", hint: "Book & manage appointments" },
       { to: "/patient/status", label: "Check Status", hint: "Live queue & wait time" },
       { to: "/patient/chat", label: "Chat", hint: "Message hospital or doctor" },
@@ -23,6 +24,7 @@ export const patientNavGroups = [
 export const patientPageTitles: Record<string, string> = {
   "/patient": "Dashboard",
   "/patient/emergency": "Check Emergency Service",
+  "/patient/ambulance": "Ambulance",
   "/patient/booking": "Booking",
   "/patient/status": "Queue Status",
   "/patient/chat": "Chat",
@@ -36,6 +38,7 @@ export const patientPageTitles: Record<string, string> = {
 export const patientKnownPaths = new Set([
   "/patient",
   "/patient/emergency",
+  "/patient/ambulance",
   "/patient/booking",
   "/patient/status",
   "/patient/chat",

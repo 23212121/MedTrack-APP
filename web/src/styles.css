@@ -4251,6 +4251,34 @@ main.content.content--hrm,
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+.address-map-modal {
+  width: min(100%, 720px);
+  max-height: min(92vh, 900px);
+  overflow: auto;
+}
+.address-map-canvas {
+  height: min(52vh, 420px);
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  z-index: 0;
+}
+.address-map-toolbar {
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.address-map-preview {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: var(--surface-muted, #f4f8f9);
+  font-size: 0.92rem;
+}
+.patient-lab-address-actions {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
 .appointment-pay-modal {
   width: min(100%, 420px);
   text-align: center;

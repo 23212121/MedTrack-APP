@@ -127,6 +127,11 @@ public class LabBookingAppService {
     b.setPatientPhone(patientPhone);
     b.setMode(mode);
     b.setCollectionAddress(address == null || address.isBlank() ? null : address.trim());
+    double[] gps = patientGps(body, b.getCollectionAddress());
+    if (gps != null) {
+      b.setPatientLatitude(gps[0]);
+      b.setPatientLongitude(gps[1]);
+    }
     b.setNotes(text(body, "notes"));
     Instant preferred = parseInstant(firstNonBlank(text(body, "preferredAt"), text(body, "preferredTime")));
     b.setPreferredAt(preferred);
@@ -223,6 +228,7 @@ public class LabBookingAppService {
       b.setExpectedVisitAt(visitTime);
       b.setQueueDate(LocalDate.ofInstant(visitTime, ZONE));
       b.setStatus("VISIT_SCHEDULED");
+      applyTripCharge(b, body);
     } else {
       assignInLabToken(b, lab);
       b.setStatus("IN_QUEUE");
@@ -600,6 +606,11 @@ public class LabBookingAppService {
     m.put("mode", b.getMode());
     m.put("modeLabel", modeLabel(b.getMode()));
     m.put("collectionAddress", b.getCollectionAddress());
+    m.put("patientLatitude", b.getPatientLatitude());
+    m.put("patientLongitude", b.getPatientLongitude());
+    m.put("tripDistanceKm", b.getTripDistanceKm());
+    m.put("tripCharge", b.getTripCharge());
+    m.put("distanceRatePerKm", DISTANCE_RATE_PER_KM);
     m.put("notes", b.getNotes());
     m.put("preferredAt", iso(b.getPreferredAt()));
     m.put("status", b.getStatus());
@@ -619,7 +630,6 @@ public class LabBookingAppService {
     m.put("createdAt", iso(b.getCreatedAt()));
     m.put("freeCancelUntil", freeCancelUntil(b));
     m.put("freeCancelRemainingSeconds", freeCancelRemainingSeconds(b));
-    m.put("distanceRatePerKm", DISTANCE_RATE_PER_KM);
     m.put("canChat", b.getAssignedLabId() != null && !Set.of("PENDING", "CANCELED").contains(b.getStatus()));
     m.put("slotMinutes", SLOT_MINUTES);
     if (actor != null && actor.isPatient()) {
@@ -662,6 +672,31 @@ public class LabBookingAppService {
     m.put("read", n.isReadFlag());
     m.put("createdAt", iso(n.getCreatedAt()));
     return m;
+  }
+
+  private void applyTripCharge(LabBookingEntity b, Map<String, Object> body) {
+    Double km = toDouble(body.get("distanceKm"), body.get("tripDistanceKm"));
+    if (km == null || km < 0) return;
+    double rounded = Math.round(km * 100.0) / 100.0;
+    b.setTripDistanceKm(rounded);
+    b.setTripCharge(Math.round(rounded * DISTANCE_RATE_PER_KM * 100.0) / 100.0);
+  }
+
+  private static double[] patientGps(Map<String, Object> body, String address) {
+    Double lat = toDouble(body.get("latitude"), body.get("patientLatitude"));
+    Double lng = toDouble(body.get("longitude"), body.get("patientLongitude"));
+    if (lat != null && lng != null) return new double[] {lat, lng};
+    if (address == null) return null;
+    int idx = address.toUpperCase(Locale.ROOT).lastIndexOf("GPS:");
+    if (idx < 0) return null;
+    String rest = address.substring(idx + 4).trim();
+    String[] parts = rest.split(",");
+    if (parts.length < 2) return null;
+    try {
+      return new double[] {Double.parseDouble(parts[0].trim()), Double.parseDouble(parts[1].trim())};
+    } catch (NumberFormatException ex) {
+      return null;
+    }
   }
 
   private static String modeLabel(String mode) {

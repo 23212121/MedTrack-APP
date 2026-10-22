@@ -73,6 +73,11 @@ export const navGroups: NavGroup[] = [
         label: "Diagnostic labs",
         hint: "Register lab technicians",
       },
+      {
+        to: "/ambulances",
+        label: "Ambulances",
+        hint: "Register driver mobiles",
+      },
     ],
   },
   {
@@ -198,6 +203,7 @@ export const pageTitles: Record<string, string> = {
   "/medicine-orders": "Medicine orders",
   "/medical-stores": "Medical stores",
   "/labs": "Diagnostic labs",
+  "/ambulances": "Ambulances",
   "/patient/login": "Patient sign in",
   "/patient/register": "Patient sign up",
   "/queue": "Patient queue",
