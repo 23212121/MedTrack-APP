@@ -50,7 +50,15 @@ export default function PatientLoginPage() {
           patientName: res.patientName || res.username,
         },
       );
-      navigate("/patient");
+      const from = (location.state as { from?: string } | null)?.from;
+      const next =
+        from &&
+        from.startsWith("/patient") &&
+        from !== "/patient/login" &&
+        from !== "/patient/register"
+          ? from
+          : "/patient";
+      navigate(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("Sign-in failed"));
     } finally {
@@ -62,10 +70,10 @@ export default function PatientLoginPage() {
     <div className="login-stage">
       <div className="login-stage-brand">
         <span className="login-brand-mark" aria-hidden="true">
-          M
+          S
         </span>
         <span className="login-brand-text">
-          <span className="login-brand-name">MediMitra</span>
+          <span className="login-brand-name">Swasnira</span>
           <span className="login-brand-tag">Healthier together</span>
         </span>
       </div>

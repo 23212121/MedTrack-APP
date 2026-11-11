@@ -502,7 +502,7 @@ export default function MedicineOrdersPage({
         key: created.keyId,
         amount: created.amount,
         currency: created.currency || "INR",
-        name: "MedTrack",
+        name: "Swasnira",
         description: detail!.orderNumber,
         order_id: created.razorpayOrderId,
         prefill: {

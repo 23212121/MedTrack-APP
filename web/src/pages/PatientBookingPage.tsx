@@ -27,7 +27,7 @@ export default function PatientBookingPage() {
       <section className="patient-booking-modal panel">
         <header className="patient-booking-head">
           <div>
-            <p className="patient-booking-brand">{t("MedTrack Clinic")}</p>
+            <p className="patient-booking-brand">{t("Swasnira Clinic")}</p>
             <h1 id="patient-booking-title">{t("Book an appointment")}</h1>
             <p className="lead patient-booking-lead">
               {t(

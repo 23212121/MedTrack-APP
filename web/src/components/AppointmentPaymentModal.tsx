@@ -111,7 +111,7 @@ export default function AppointmentPaymentModal({
   const checkingBank = pending && payment.bankStatus !== "GATEWAY_NOT_CONFIGURED";
   const upiIntent = buildUpiPay({
     vpa: payment.upiId || "",
-    payeeName: doctorName || "MedTrack",
+    payeeName: doctorName || "Swasnira",
     amount,
     note: payment.paymentId,
   });
@@ -149,7 +149,7 @@ export default function AppointmentPaymentModal({
         key: payment.keyId,
         amount: paise,
         currency: payment.currency || "INR",
-        name: "MedTrack",
+        name: "Swasnira",
         description: title,
         order_id: payment.gatewayOrderId,
         theme: { color: "#0e7c86" },
@@ -217,7 +217,7 @@ export default function AppointmentPaymentModal({
           <>
             <div className="modal-header">
               <div>
-                <p className="modal-eyebrow">MedTrack payment</p>
+                <p className="modal-eyebrow">Swasnira payment</p>
                 <h2 id="appointment-pay-title">{title}</h2>
               </div>
             </div>

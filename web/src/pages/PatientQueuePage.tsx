@@ -207,7 +207,7 @@ export default function PatientQueuePage() {
     <section className="panel patient-queue-page" aria-label={t("Doctor Consultation Queue")}>
       <header className="patient-queue-head">
         <div>
-          <p className="patient-booking-brand">MedTrack Clinic</p>
+          <p className="patient-booking-brand">Swasnira Clinic</p>
           <h1>{t("Doctor Consultation Queue")}</h1>
           <p className="lead" style={{ marginBottom: 0 }}>
             {t("Select a hospital and doctor to view today’s patient queue.")}

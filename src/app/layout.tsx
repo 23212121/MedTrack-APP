@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MedTrack Clinic — Visit Tracker",
+  title: "Swasnira Clinic — Visit Tracker",
   description:
     "Hospital appointment and visit journey tracker with delay alerts",
 };

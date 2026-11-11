@@ -92,10 +92,10 @@ export default function PatientRegisterPage() {
     <div className="login-stage">
       <div className="login-stage-brand">
         <span className="login-brand-mark" aria-hidden="true">
-          M
+          S
         </span>
         <span className="login-brand-text">
-          <span className="login-brand-name">MediMitra</span>
+          <span className="login-brand-name">Swasnira</span>
           <span className="login-brand-tag">Healthier together</span>
         </span>
       </div>

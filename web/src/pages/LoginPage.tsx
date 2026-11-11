@@ -133,10 +133,10 @@ export default function LoginPage() {
     <div className="login-stage">
       <div className="login-stage-brand">
         <span className="login-brand-mark" aria-hidden="true">
-          M
+          S
         </span>
         <span className="login-brand-text">
-          <span className="login-brand-name">MediMitra</span>
+          <span className="login-brand-name">Swasnira</span>
           <span className="login-brand-tag">Healthier together</span>
         </span>
       </div>
@@ -164,7 +164,7 @@ export default function LoginPage() {
       </aside>
 
       <section className="panel login-popup">
-        <h1 style={{ color: "var(--brand-dark)" }}>{t("MedTrack Clinic")}</h1>
+        <h1 style={{ color: "var(--brand-dark)" }}>{t("Swasnira Clinic")}</h1>
         <p className="lead" style={{ marginBottom: "0.45rem" }}>
           <Link to="/book" style={{ textDecoration: "underline" }}>
             {t("Book an appointment without login")}

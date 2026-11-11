@@ -16,7 +16,7 @@ function friendlyHttpError(status: number, text: string): string {
     );
   }
   if (looksLikeHtml) {
-    return `Request failed (${status}). Is the MedTrack gateway running on :8090?`;
+    return `Request failed (${status}). Is the Swasnira gateway running on :8090?`;
   }
   if (text?.trim()) {
     try {
@@ -125,7 +125,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (err) {
     if (controller && err instanceof DOMException && err.name === "AbortError") {
       throw new Error(
-        "Sign-in timed out. Check that the MedTrack API is running on :8090.",
+        "Sign-in timed out. Check that the Swasnira API is running on :8090.",
       );
     }
     throw err;

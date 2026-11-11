@@ -43,16 +43,19 @@ public class LabBookingAppService {
   private final LabBookingNotificationRepository notifRepo;
   private final LabBookingChatRepository chatRepo;
   private final LabTechnicianRepository labRepo;
+  private final BookingNotificationService bookingNotify;
 
   public LabBookingAppService(
       LabBookingRepository bookingRepo,
       LabBookingNotificationRepository notifRepo,
       LabBookingChatRepository chatRepo,
-      LabTechnicianRepository labRepo) {
+      LabTechnicianRepository labRepo,
+      BookingNotificationService bookingNotify) {
     this.bookingRepo = bookingRepo;
     this.notifRepo = notifRepo;
     this.chatRepo = chatRepo;
     this.labRepo = labRepo;
+    this.bookingNotify = bookingNotify;
   }
 
   public record Actor(
@@ -136,9 +139,11 @@ public class LabBookingAppService {
     Instant preferred = parseInstant(firstNonBlank(text(body, "preferredAt"), text(body, "preferredTime")));
     b.setPreferredAt(preferred);
     b.setStatus("PENDING");
+    assignBookingQueue(b, mode, preferred);
     b.setCreatedAt(Instant.now());
     b.setCreatedBy(actor.label());
     bookingRepo.save(b);
+    bookingNotify.notifyLabBooked(b);
 
     notifyLabs(
         b,
@@ -433,7 +438,42 @@ public class LabBookingAppService {
     return Map.of("notification", notifMap(n));
   }
 
+  /** Queue place at booking time so the confirmation SMS can quote token and expected time. */
+  private void assignBookingQueue(LabBookingEntity b, String mode, Instant preferred) {
+    LocalDate queueDate =
+        preferred != null ? LocalDate.ofInstant(preferred, ZONE) : LocalDate.now(ZONE);
+    b.setQueueDate(queueDate);
+    long ahead =
+        bookingRepo.findByHospitalIdOrderByCreatedAtDesc(b.getHospitalId()).stream()
+            .filter(row -> mode.equalsIgnoreCase(row.getMode()))
+            .filter(row -> row.getStatus() == null || !isClosed(row.getStatus()))
+            .filter(row -> sameQueueDay(row, queueDate))
+            .count();
+    int token = (int) ahead + 1;
+    Instant anchor =
+        preferred != null
+            ? preferred
+            : LocalDateTime.of(queueDate, LocalTime.of(9, 0)).atZone(ZONE).toInstant();
+    b.setTokenNumber(token);
+    b.setExpectedVisitAt(anchor.plus(Duration.ofMinutes((long) (token - 1) * SLOT_MINUTES)));
+  }
+
+  private static boolean isClosed(String status) {
+    String st = status.trim().toUpperCase(Locale.ROOT);
+    return st.equals("CANCELED") || st.equals("CANCELLED") || st.equals("COMPLETED");
+  }
+
+  private boolean sameQueueDay(LabBookingEntity row, LocalDate day) {
+    if (row.getQueueDate() != null) return day.equals(row.getQueueDate());
+    if (row.getPreferredAt() != null) return day.equals(LocalDate.ofInstant(row.getPreferredAt(), ZONE));
+    if (row.getCreatedAt() != null) return day.equals(LocalDate.ofInstant(row.getCreatedAt(), ZONE));
+    return false;
+  }
+
   private void assignInLabToken(LabBookingEntity b, LabTechnicianEntity lab) {
+    if (b.getTokenNumber() != null && b.getExpectedVisitAt() != null) {
+      return;
+    }
     LocalDate queueDate =
         b.getPreferredAt() != null
             ? LocalDate.ofInstant(b.getPreferredAt(), ZONE)

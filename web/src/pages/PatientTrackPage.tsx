@@ -159,7 +159,7 @@ export default function PatientTrackPage() {
       <section className="patient-queue-modal panel">
         <header className="patient-queue-head">
           <div>
-            <p className="patient-booking-brand">MedTrack Clinic</p>
+            <p className="patient-booking-brand">Swasnira Clinic</p>
             <h1>Track your appointment</h1>
             <p className="lead patient-booking-lead">
               Enter the mobile number used when the hospital booked your visit

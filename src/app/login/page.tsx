@@ -36,7 +36,7 @@ export default function LoginPage() {
         <p className="muted" style={{ marginTop: 0 }}>
           Visit journey tracker
         </p>
-        <h1 className="hero-brand">MedTrack Clinic</h1>
+        <h1 className="hero-brand">Swasnira Clinic</h1>
         <p className="muted">
           Sign in as employee, doctor, patient, or admin.
         </p>

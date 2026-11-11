@@ -51,6 +51,9 @@ medtrack:
   default-clinic-id: seed-clinic-1
   default-clinic-name: Sunrise Care Clinic
   avg-consultation-minutes: 10
+  avg-medicine-minutes: ${MEDTRACK_AVG_MEDICINE_MINUTES:15}
+  # Links inside booking / lab / medicine SMS. Override in production.
+  public-web-url: ${MEDTRACK_PUBLIC_WEB_URL:http://localhost:5173}
   ambulance:
     rate-per-km: ${MEDTRACK_AMBULANCE_RATE_PER_KM:25}
     avg-speed-kmh: ${MEDTRACK_AMBULANCE_AVG_SPEED_KMH:35}

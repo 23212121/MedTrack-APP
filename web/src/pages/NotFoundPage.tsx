@@ -24,7 +24,7 @@ export default function NotFoundPage() {
 
         <div className="error-actions">
           <Link to="/about" className="error-btn error-btn--primary">
-            {t("About MedTrack")}
+            {t("About Swasnira")}
           </Link>
           <Link to="/" className="error-btn error-btn--ghost">
             {t("Go to dashboard")}
@@ -34,7 +34,7 @@ export default function NotFoundPage() {
           </Link>
         </div>
 
-        <p className="error-foot">{t("Error code: HTTP_404 · MedTrack Clinic")}</p>
+        <p className="error-foot">{t("Error code: HTTP_404 · Swasnira Clinic")}</p>
       </div>
     </section>
   );

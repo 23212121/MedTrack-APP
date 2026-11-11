@@ -25,7 +25,7 @@ export default async function DoctorLayout({
   return (
     <DoctorPortalShell
       doctorName={session.fullName || "Doctor"}
-      clinicName={clinic?.name || "MedTrack Clinic"}
+      clinicName={clinic?.name || "Swasnira Clinic"}
     >
       {children}
     </DoctorPortalShell>

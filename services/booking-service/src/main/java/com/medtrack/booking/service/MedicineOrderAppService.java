@@ -30,11 +30,14 @@ import com.medtrack.notify.service.NotificationAppService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Year;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -53,6 +56,9 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class MedicineOrderAppService {
   private static final Logger log = LoggerFactory.getLogger(MedicineOrderAppService.class);
+  private static final ZoneId ZONE = ZoneId.of("Asia/Kolkata");
+  private static final DateTimeFormatter WHEN =
+      DateTimeFormatter.ofPattern("dd MMM yyyy, h:mm a").withZone(ZONE);
   public static final Set<String> OPEN_STATUSES = Set.of("ORDERED", "PENDING");
   public static final Set<String> ALLOWED_TYPES =
       Set.of("application/pdf", "image/jpeg", "image/jpg", "image/png");
@@ -75,6 +81,8 @@ public class MedicineOrderAppService {
   private final UserDetailsRepository userDetailsRepo;
   private final Path uploadRoot;
   private final String defaultUpiId;
+  private final String publicWebUrl;
+  private final int avgMedicineMinutes;
 
   public MedicineOrderAppService(
       MedicineOrderRepository orderRepo,
@@ -93,7 +101,9 @@ public class MedicineOrderAppService {
       PatientRepository patientRepo,
       UserDetailsRepository userDetailsRepo,
       @Value("${medtrack.upload-dir:uploads/patient-documents}") String uploadDir,
-      @Value("${medtrack.payment.upi-id:medtrackpharmacy@upi}") String defaultUpiId) {
+      @Value("${medtrack.payment.upi-id:medtrackpharmacy@upi}") String defaultUpiId,
+      @Value("${medtrack.public-web-url:http://localhost:5173}") String publicWebUrl,
+      @Value("${medtrack.avg-medicine-minutes:15}") int avgMedicineMinutes) {
     this.orderRepo = orderRepo;
     this.itemRepo = itemRepo;
     this.chargesRepo = chargesRepo;
@@ -110,6 +120,8 @@ public class MedicineOrderAppService {
     this.patientRepo = patientRepo;
     this.userDetailsRepo = userDetailsRepo;
     this.defaultUpiId = defaultUpiId == null || defaultUpiId.isBlank() ? "medtrackpharmacy@upi" : defaultUpiId.trim();
+    this.publicWebUrl = publicWebUrl;
+    this.avgMedicineMinutes = Math.max(1, avgMedicineMinutes);
     this.uploadRoot = Path.of(uploadDir).toAbsolutePath().normalize().getParent()
         .resolve("medicine-orders");
   }
@@ -240,6 +252,7 @@ public class MedicineOrderAppService {
           "New medicine order",
           "A new medicine order " + order.getOrderNumber() + " is open for any store. Please review the prescription.");
     }
+    sendOrderBookedSms(order);
 
     return detail(order, actor, false);
   }
@@ -1618,6 +1631,75 @@ public class MedicineOrderAppService {
     }
   }
 
+  private void sendOrderBookedSms(MedicineOrderEntity order) {
+    try {
+      List<MedicineOrderEntity> queue = todayQueue(order);
+      int total = Math.max(1, queue.size());
+      int token = 1;
+      for (int i = 0; i < queue.size(); i++) {
+        if (order.getId().equals(queue.get(i).getId())) {
+          token = i + 1;
+          break;
+        }
+      }
+      Instant created = order.getCreatedAt() == null ? Instant.now() : order.getCreatedAt();
+      Instant expected = created.plus(Duration.ofMinutes((long) (token - 1) * avgMedicineMinutes));
+      String store = order.getAssignedStoreName() == null ? "" : order.getAssignedStoreName().trim();
+      String link = trackUrl("/patient/medicine-orders");
+      String message =
+          "Swasnira: Medicine order "
+              + (order.getOrderNumber() == null ? "" : order.getOrderNumber())
+              + " placed"
+              + (store.isBlank() ? "" : " at " + store)
+              + ". Orders in this queue: "
+              + total
+              + ". Your token #"
+              + token
+              + ". Expected ready: "
+              + WHEN.format(expected)
+              + ". Track: "
+              + link;
+      notifyPatient(order, "Medicine order placed", message);
+    } catch (Exception ex) {
+      log.warn("[medicine-sms] booking sms failed for {}: {}", order.getId(), ex.getMessage());
+    }
+  }
+
+  private List<MedicineOrderEntity> todayQueue(MedicineOrderEntity order) {
+    LocalDate today = order.getCreatedAt() == null
+        ? LocalDate.now(ZONE)
+        : LocalDate.ofInstant(order.getCreatedAt(), ZONE);
+    List<MedicineOrderEntity> rows;
+    if (order.getAssignedStoreId() != null && !order.getAssignedStoreId().isBlank()) {
+      rows = orderRepo.findByAssignedStoreIdOrderByCreatedAtDesc(order.getAssignedStoreId());
+    } else if (order.getHospitalId() != null) {
+      rows = orderRepo.findByHospitalIdOrderByCreatedAtDesc(order.getHospitalId());
+    } else {
+      return List.of(order);
+    }
+    return rows.stream()
+        .filter(row -> row.getCreatedAt() != null)
+        .filter(row -> today.equals(LocalDate.ofInstant(row.getCreatedAt(), ZONE)))
+        .filter(row -> row.getStatus() == null || !row.getStatus().toUpperCase(Locale.ROOT).contains("CANCEL"))
+        .filter(row -> sameMedicineQueue(order, row))
+        .sorted(Comparator.comparing(MedicineOrderEntity::getCreatedAt))
+        .toList();
+  }
+
+  private static boolean sameMedicineQueue(MedicineOrderEntity order, MedicineOrderEntity row) {
+    if (order.getAssignedStoreId() != null && !order.getAssignedStoreId().isBlank()) {
+      return order.getAssignedStoreId().equals(row.getAssignedStoreId());
+    }
+    return row.getAssignedStoreId() == null || row.getAssignedStoreId().isBlank();
+  }
+
+  private String trackUrl(String path) {
+    String base = publicWebUrl == null ? "" : publicWebUrl.trim();
+    while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+    if (base.isBlank()) base = "http://localhost:5173";
+    return base + path;
+  }
+
   private void notifyPatient(MedicineOrderEntity order, String title, String message) {
     saveNotif(order.getHospitalId(), null, order.getPatientPhone(), "PATIENT", order.getId(), title, message);
     emailMedicine(order, title, message);
@@ -1643,7 +1725,7 @@ public class MedicineOrderAppService {
               !phone.isBlank(),
               true,
               order.getAssignedStoreName(),
-              "MedTrack Pharmacy",
+              "Swasnira",
               null,
               null,
               null,

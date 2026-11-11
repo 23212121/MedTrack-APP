@@ -57,7 +57,7 @@ export default function HrmShell() {
   return (
     <div className="hrm-shell">
       <header className="hrm-topbar hrm-topbar--no-search">
-        <div className="hrm-brand">{t("MedTrack Clinic")}</div>
+        <div className="hrm-brand">{t("Swasnira Clinic")}</div>
         <div className="hrm-top-actions">
           <button type="button" className="hrm-bell" aria-label={t("Notifications")}>
             <span aria-hidden="true">🔔</span>

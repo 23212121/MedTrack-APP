@@ -26,7 +26,7 @@ export default function LogoutPage() {
         </h1>
         <p className="error-copy">
           {t(
-            "You have left MedTrack Clinic. Your session is gone — like a page that never existed — so charts, queues, and bookings stay protected until you sign in again.",
+            "You have left Swasnira Clinic. Your session is gone — like a page that never existed — so charts, queues, and bookings stay protected until you sign in again.",
           )}
         </p>
 
@@ -36,7 +36,7 @@ export default function LogoutPage() {
           </Link>
         </div>
 
-        <p className="error-foot">{t("Error code: LOGOUT_404 · MedTrack Clinic")}</p>
+        <p className="error-foot">{t("Error code: LOGOUT_404 · Swasnira Clinic")}</p>
       </div>
     </section>
   );

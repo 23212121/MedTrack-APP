@@ -2,11 +2,13 @@ package com.medtrack.booking.service;
 
 import com.medtrack.booking.domain.AppointmentEntity;
 import com.medtrack.booking.domain.BookingEntity;
+import com.medtrack.booking.domain.LabBookingEntity;
 import com.medtrack.booking.domain.PatientEntity;
 import com.medtrack.booking.domain.UserDetailsEntity;
 import com.medtrack.booking.event.DocumentUploadedEvent;
 import com.medtrack.booking.event.PaymentCompletedEvent;
 import com.medtrack.booking.repo.AppointmentRepository;
+import com.medtrack.booking.repo.BookingRepository;
 import com.medtrack.booking.repo.PatientRepository;
 import com.medtrack.booking.repo.UserDetailsRepository;
 import com.medtrack.common.dto.NotifyRequest;
@@ -14,12 +16,17 @@ import com.medtrack.notify.service.NotificationAppService;
 import com.medtrack.visit.domain.VisitEntity;
 import com.medtrack.visit.repo.VisitRepository;
 import com.medtrack.visit.service.VisitAppService;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /** Sends SMS (and email when available) after an appointment is booked. */
@@ -38,6 +45,9 @@ public class BookingNotificationService {
   private final AppointmentRepository appointmentRepo;
   private final VisitRepository visitRepo;
   private final VisitAppService visitAppService;
+  private final BookingRepository bookingRepo;
+  private final int avgConsultationMinutes;
+  private final String publicWebUrl;
 
   public BookingNotificationService(
       NotificationAppService notificationAppService,
@@ -46,7 +56,10 @@ public class BookingNotificationService {
       UserDetailsRepository userDetailsRepo,
       AppointmentRepository appointmentRepo,
       VisitRepository visitRepo,
-      VisitAppService visitAppService) {
+      VisitAppService visitAppService,
+      BookingRepository bookingRepo,
+      @Value("${medtrack.avg-consultation-minutes:10}") int avgConsultationMinutes,
+      @Value("${medtrack.public-web-url:http://localhost:5173}") String publicWebUrl) {
     this.notificationAppService = notificationAppService;
     this.enrichment = enrichment;
     this.patientRepo = patientRepo;
@@ -54,6 +67,9 @@ public class BookingNotificationService {
     this.appointmentRepo = appointmentRepo;
     this.visitRepo = visitRepo;
     this.visitAppService = visitAppService;
+    this.bookingRepo = bookingRepo;
+    this.avgConsultationMinutes = Math.max(1, avgConsultationMinutes);
+    this.publicWebUrl = publicWebUrl;
   }
 
   public void notifyAppointmentBooked(BookingEntity booking, String patientEmailFromRequest) {
@@ -68,15 +84,19 @@ public class BookingNotificationService {
       String doctor = enrichment.doctorName(booking.getDoctorId());
       String clinic = enrichment.hospitalName(booking.getHospitalId());
       if (clinic == null || clinic.isBlank()) {
-        clinic = "MedTrack Clinic";
+        clinic = "Swasnira";
       }
       String when = formatWhen(booking);
       String token =
           booking.getTokenNumber() == null ? "—" : String.valueOf(booking.getTokenNumber());
+      SlotEstimate slot = estimateAppointmentSlot(booking);
 
       Map<String, String> extra = new HashMap<>();
       extra.put("appointmentDate", booking.getAppointmentDate().toString());
       extra.put("whenDisplay", when);
+      extra.put("patientsOnSlot", String.valueOf(slot.patientsOnSlot()));
+      extra.put("expectedTime", slot.expectedDisplay());
+      extra.put("trackUrl", trackUrl("/track?phone=" + phone));
 
       NotifyRequest req =
           new NotifyRequest(
@@ -110,6 +130,61 @@ public class BookingNotificationService {
     } catch (Exception ex) {
       log.warn(
           "[booking-notify] failed for booking {}: {}", booking.getId(), ex.getMessage());
+    }
+  }
+
+  /** SMS after a lab test is booked: slot size, token, calculated time, and a tracking link. */
+  public void notifyLabBooked(LabBookingEntity booking) {
+    if (booking == null) return;
+    try {
+      String phone = normalizePhone(booking.getPatientPhone());
+      String email = firstNonBlank(emailFromPatientRecord(phone), emailFromUserDetails(phone));
+      String clinic = enrichment.hospitalName(booking.getHospitalId());
+      if (clinic == null || clinic.isBlank()) clinic = "Swasnira";
+      String token =
+          booking.getTokenNumber() == null ? "—" : String.valueOf(booking.getTokenNumber());
+      int patients = booking.getTokenNumber() == null ? 1 : booking.getTokenNumber();
+      String expected = formatInstant(booking.getExpectedVisitAt());
+      String mode =
+          "HOME_COLLECTION".equalsIgnoreCase(booking.getMode()) ? "Home collection" : "In lab";
+      Map<String, String> extra = new HashMap<>();
+      extra.put("patientsOnSlot", String.valueOf(patients));
+      extra.put("expectedTime", expected);
+      extra.put("trackUrl", trackUrl("/patient/lab-booking"));
+      extra.put("bookingNumber", booking.getBookingNumber() == null ? "" : booking.getBookingNumber());
+      extra.put("modeLabel", mode);
+
+      NotifyRequest req =
+          new NotifyRequest(
+              booking.getHospitalId() == null ? "10001" : String.valueOf(booking.getHospitalId()),
+              booking.getId(),
+              phone,
+              "LAB_BOOKING_CONFIRMED",
+              booking.getPatientName(),
+              phone.isBlank() ? null : phone,
+              email,
+              !phone.isBlank(),
+              email != null && !email.isBlank(),
+              mode,
+              clinic,
+              expected,
+              token,
+              null,
+              "BOOKED",
+              null,
+              null,
+              null,
+              extra);
+      Map<String, Object> result = notificationAppService.send(req);
+      log.info(
+          "[booking-notify] LAB_BOOKING_CONFIRMED booking={} phone={} patients={} token={} result={}",
+          booking.getId(),
+          phone,
+          patients,
+          token,
+          result.get("eventCode"));
+    } catch (Exception ex) {
+      log.warn("[booking-notify] lab sms failed for {}: {}", booking.getId(), ex.getMessage());
     }
   }
 
@@ -335,6 +410,67 @@ public class BookingNotificationService {
         .filter(e -> e != null && !e.isBlank())
         .orElse(null);
   }
+
+  private SlotEstimate estimateAppointmentSlot(BookingEntity booking) {
+    int patientsOnSlot = 1;
+    int position = 1;
+    try {
+      List<BookingEntity> day =
+          bookingRepo.findByDoctorIdAndAppointmentDateOrderByAppointmentTimeAsc(
+              booking.getDoctorId(), booking.getAppointmentDate());
+      Instant slotKey = truncateMinute(booking.getAppointmentTime());
+      List<BookingEntity> onSlot =
+          day.stream()
+              .filter(row -> row.getStatus() == null || !"CANCELLED".equalsIgnoreCase(row.getStatus()))
+              .filter(row -> slotKey != null && slotKey.equals(truncateMinute(row.getAppointmentTime())))
+              .sorted(
+                  Comparator.comparingInt(
+                          (BookingEntity row) ->
+                              row.getTokenNumber() == null ? Integer.MAX_VALUE : row.getTokenNumber())
+                      .thenComparing(
+                          row -> row.getCreatedAt() == null ? Instant.EPOCH : row.getCreatedAt()))
+              .toList();
+      if (!onSlot.isEmpty()) {
+        patientsOnSlot = onSlot.size();
+        for (int i = 0; i < onSlot.size(); i++) {
+          if (booking.getId() != null && booking.getId().equals(onSlot.get(i).getId())) {
+            position = i + 1;
+            break;
+          }
+        }
+      }
+    } catch (Exception ex) {
+      log.warn("[booking-notify] slot count failed for {}: {}", booking.getId(), ex.getMessage());
+    }
+    Instant start = booking.getAppointmentTime();
+    Instant expected =
+        start == null
+            ? null
+            : start.plus(Duration.ofMinutes((long) (position - 1) * avgConsultationMinutes));
+    String display = expected == null ? formatWhen(booking) : formatInstant(expected);
+    return new SlotEstimate(patientsOnSlot, display);
+  }
+
+  private String trackUrl(String path) {
+    String base = publicWebUrl == null ? "" : publicWebUrl.trim();
+    while (base.endsWith("/")) {
+      base = base.substring(0, base.length() - 1);
+    }
+    if (base.isBlank()) base = "http://localhost:5173";
+    return base + path;
+  }
+
+  private static Instant truncateMinute(Instant time) {
+    if (time == null) return null;
+    return time.atZone(ZONE).withSecond(0).withNano(0).toInstant();
+  }
+
+  private static String formatInstant(Instant time) {
+    if (time == null) return "TBD";
+    return DATE_FMT.format(time.atZone(ZONE)) + " at " + TIME_FMT.format(time);
+  }
+
+  private record SlotEstimate(int patientsOnSlot, String expectedDisplay) {}
 
   private static String formatWhen(BookingEntity booking) {
     String date =

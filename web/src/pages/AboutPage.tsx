@@ -221,7 +221,7 @@ export default function AboutPage() {
   }
 
   return (
-    <article className="info-site" aria-label={t("MedTrack application information")}>
+    <article className="info-site" aria-label={t("Swasnira application information")}>
       <nav className="info-subnav" aria-label={t("On this page")}>
         {NAV_LINKS.map((item) => (
           <a key={item.href} href={item.href}>
@@ -231,11 +231,11 @@ export default function AboutPage() {
       </nav>
 
       <section className="info-hero" aria-labelledby="info-hero-title">
-        <p className="info-kicker">{t("MedTrack Clinic")}</p>
+        <p className="info-kicker">{t("Swasnira Clinic")}</p>
         <h1 id="info-hero-title">{t("Hospital visits, from the first call to the last consult.")}</h1>
         <p className="info-lead">
           {t(
-            "MedTrack is a medical visit tracker for clinics and hospitals. It covers booking, check-in, live queues, doctor workflows, patient status, pharmacy orders, HR, and SMS/email alerts — in English and Hindi.",
+            "Swasnira is a medical visit tracker for clinics and hospitals. It covers booking, check-in, live queues, doctor workflows, patient status, pharmacy orders, HR, and SMS/email alerts — in English and Hindi.",
           )}
         </p>
         <div className="info-hero-actions">
@@ -270,10 +270,10 @@ export default function AboutPage() {
       </section>
 
       <section id="about" className="info-section">
-        <h2>{t("What MedTrack is")}</h2>
+        <h2>{t("What Swasnira is")}</h2>
         <p>
           {t(
-            "MedTrack Clinic is built so front-desk staff can create a visit from a phone call in under 45 seconds, doctors can run a minimal queue, and patients always see doctor name, fixed appointment time, token, and when the consult is likely.",
+            "Swasnira Clinic is built so front-desk staff can create a visit from a phone call in under 45 seconds, doctors can run a minimal queue, and patients always see doctor name, fixed appointment time, token, and when the consult is likely.",
           )}
         </p>
         <p>
@@ -310,7 +310,7 @@ export default function AboutPage() {
       <section id="modules" className="info-section">
         <h2>{t("Everything in the application")}</h2>
         <p className="info-section-lead">
-          {t("These are the live MedTrack modules. Open a card to go to the matching screen (some require sign-in).")}
+          {t("These are the live Swasnira modules. Open a card to go to the matching screen (some require sign-in).")}
         </p>
         <div className="info-module-grid">
           {MODULES.map((item) => (
@@ -390,7 +390,7 @@ export default function AboutPage() {
           <h2>{t("Contact us")}</h2>
           <p>
             {t(
-              "Questions about adopting MedTrack, registering a hospital, or a visit that needs help? Send a message. We read every inquiry.",
+              "Questions about adopting Swasnira, registering a hospital, or a visit that needs help? Send a message. We read every inquiry.",
             )}
           </p>
           <p>
@@ -421,7 +421,7 @@ export default function AboutPage() {
           </div>
         ) : (
           <form className="info-contact-form stack" onSubmit={onSubmit}>
-            <h3>{t("Write to MedTrack")}</h3>
+            <h3>{t("Write to Swasnira")}</h3>
             {error && <div className="msg error">{error}</div>}
             <label>
               <span>
@@ -480,7 +480,7 @@ export default function AboutPage() {
       </section>
 
       <footer className="info-foot">
-        <p>MedTrack Clinic · {t("Medical visit tracking")}</p>
+        <p>Swasnira Clinic · {t("Medical visit tracking")}</p>
         <p>
           <Link to="/login">{t("Sign in")}</Link>
           {" · "}

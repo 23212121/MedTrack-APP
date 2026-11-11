@@ -63,12 +63,12 @@ export default function AppHeader({
               <span />
             </button>
           )}
-          <Link to={homeTo} className="app-header-logo" aria-label={t("MedTrack home")}>
+          <Link to={homeTo} className="app-header-logo" aria-label={t("Swasnira home")}>
             <span className="app-header-mark" aria-hidden="true">
-              M
+              S
             </span>
             <span className="app-header-brand">
-              <span className="app-header-brand-name">MedTrack</span>
+              <span className="app-header-brand-name">Swasnira</span>
               <span className="app-header-brand-sub">{t("Clinic")}</span>
             </span>
           </Link>

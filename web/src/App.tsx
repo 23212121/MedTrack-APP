@@ -99,7 +99,7 @@ export default function App() {
   const title =
     location.pathname === "/"
       ? "Dashboard"
-      : (pageTitles[location.pathname] ?? "MedTrack Clinic");
+      : (pageTitles[location.pathname] ?? "Swasnira Clinic");
   const isDashboard = location.pathname === "/" || location.pathname === "/doctor-portal";
   const isHrm = location.pathname === "/hrm" || location.pathname.startsWith("/hrm/");
   const isDoctorUser = session.isDoctor();
@@ -210,7 +210,7 @@ export default function App() {
               P
             </span>
             <div>
-              <div className="brand">MedTrack</div>
+              <div className="brand">Swasnira</div>
               <p className="sidebar-tagline">{t("Patient portal")}</p>
             </div>
           </div>
@@ -302,7 +302,7 @@ export default function App() {
               Lb
             </span>
             <div>
-              <div className="brand">MedTrack</div>
+              <div className="brand">Swasnira</div>
               <p className="sidebar-tagline">Lab technician</p>
             </div>
           </div>
@@ -368,7 +368,7 @@ export default function App() {
               Rx
             </span>
             <div>
-              <div className="brand">MedTrack</div>
+              <div className="brand">Swasnira</div>
               <p className="sidebar-tagline">{t("Medical store")}</p>
             </div>
           </div>
@@ -470,10 +470,10 @@ export default function App() {
       <aside className="sidebar" aria-label={t("Main navigation")}>
         <div className="sidebar-brand">
           <span className="sidebar-mark" aria-hidden="true">
-            M
+            S
           </span>
           <div>
-            <div className="brand">MedTrack</div>
+            <div className="brand">Swasnira</div>
             <p className="sidebar-tagline">{t("Clinic visit ops")}</p>
           </div>
         </div>
@@ -491,7 +491,7 @@ export default function App() {
               {session.getUserId() || session.getUsername()}
             </p>
           )}
-          {!hospitalLabel && <p className="sidebar-footer-meta">{t("MedTrack session")}</p>}
+          {!hospitalLabel && <p className="sidebar-footer-meta">{t("Swasnira session")}</p>}
           <SidebarIconLink to="/logout" label="Logout" onNavigate={() => setSidebarOpen(false)} />
         </div>
       </aside>

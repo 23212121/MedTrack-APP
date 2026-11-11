@@ -64,7 +64,7 @@ export default async function DeskPage() {
       <div className="topbar">
         <div>
           <h1 className="hero-brand" style={{ fontSize: "1.8rem" }}>
-            {session.role === UserRole.DOCTOR ? "Doctor desk" : "MedTrack Desk"}
+            {session.role === UserRole.DOCTOR ? "Doctor desk" : "Swasnira Desk"}
           </h1>
           <p className="muted" style={{ margin: 0 }}>
             {session.fullName} · {session.role}

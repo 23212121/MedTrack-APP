@@ -2,7 +2,7 @@
 export const hi: Record<string, string> = {
   // Header / chrome
   Clinic: "क्लिनिक",
-  "MedTrack Clinic": "MedTrack क्लिनिक",
+  "Swasnira Clinic": "Swasnira क्लिनिक",
   "Signed in as": "साइन इन",
   Profile: "प्रोफ़ाइल",
   Logout: "लॉगआउट",
@@ -13,7 +13,7 @@ export const hi: Record<string, string> = {
   Close: "बंद करें",
   "Open menu": "मेनू खोलें",
   "Close menu": "मेनू बंद करें",
-  "MedTrack home": "MedTrack होम",
+  "Swasnira home": "Swasnira होम",
   Language: "भाषा",
   English: "English",
   हिन्दी: "हिन्दी",
@@ -29,7 +29,7 @@ export const hi: Record<string, string> = {
   "Store {id}": "स्टोर {id}",
   Doctor: "डॉक्टर",
   Admin: "एडमिन",
-  "MedTrack session": "MedTrack सत्र",
+  "Swasnira session": "Swasnira सत्र",
   Dashboard: "डैशबोर्ड",
 
   // Nav groups
@@ -230,14 +230,14 @@ export const hi: Record<string, string> = {
   // Logout / 404
   "Signed out": "साइन आउट हो गए",
   "Session not found": "सत्र नहीं मिला",
-  "You have left MedTrack Clinic. Your session is gone — like a page that never existed — so charts, queues, and bookings stay protected until you sign in again.":
-    "आप MedTrack क्लिनिक से बाहर हो गए हैं। आपका सत्र समाप्त है, इसलिए चार्ट, कतार और बुकिंग तब तक सुरक्षित रहेंगे जब तक आप फिर साइन इन नहीं करते।",
+  "You have left Swasnira Clinic. Your session is gone — like a page that never existed — so charts, queues, and bookings stay protected until you sign in again.":
+    "आप Swasnira क्लिनिक से बाहर हो गए हैं। आपका सत्र समाप्त है, इसलिए चार्ट, कतार और बुकिंग तब तक सुरक्षित रहेंगे जब तक आप फिर साइन इन नहीं करते।",
   "Sign in again": "फिर साइन इन करें",
   "Lost in the clinic": "क्लिनिक में पथ नहीं मिला",
   "Page not found": "पेज नहीं मिला",
   "Go to dashboard": "डैशबोर्ड पर जाएँ",
-  "Error code: LOGOUT_404 · MedTrack Clinic": "त्रुटि कोड: LOGOUT_404 · MedTrack क्लिनिक",
-  "Error code: HTTP_404 · MedTrack Clinic": "त्रुटि कोड: HTTP_404 · MedTrack क्लिनिक",
+  "Error code: LOGOUT_404 · Swasnira Clinic": "त्रुटि कोड: LOGOUT_404 · Swasnira क्लिनिक",
+  "Error code: HTTP_404 · Swasnira Clinic": "त्रुटि कोड: HTTP_404 · Swasnira क्लिनिक",
 
   // Booking
   "Book an appointment": "अपॉइंटमेंट बुक करें",
@@ -673,27 +673,27 @@ export const hi: Record<string, string> = {
   // Public information site
   About: "परिचय",
   Contact: "संपर्क",
-  "About MedTrack": "MedTrack परिचय",
-  "About MedTrack — modules, journey, and contact":
-    "MedTrack परिचय — मॉड्यूल, यात्रा और संपर्क",
-  "MedTrack application information": "MedTrack आवेदन जानकारी",
+  "About Swasnira": "Swasnira परिचय",
+  "About Swasnira — modules, journey, and contact":
+    "Swasnira परिचय — मॉड्यूल, यात्रा और संपर्क",
+  "Swasnira application information": "Swasnira आवेदन जानकारी",
   "On this page": "इस पृष्ठ पर",
   Modules: "मॉड्यूल",
   "Visit journey": "विजिट यात्रा",
   "Who it is for": "यह किसके लिए है",
   "Hospital visits, from the first call to the last consult.":
     "अस्पताल विजिट — पहली कॉल से अंतिम परामर्श तक।",
-  "MedTrack is a medical visit tracker for clinics and hospitals. It covers booking, check-in, live queues, doctor workflows, patient status, pharmacy orders, HR, and SMS/email alerts — in English and Hindi.":
-    "MedTrack क्लिनिक और अस्पतालों के लिए विजिट ट्रैकर है। इसमें बुकिंग, चेक-इन, लाइव कतार, डॉक्टर वर्कफ़्लो, मरीज़ स्थिति, दवा ऑर्डर, एचआर और एसएमएस/ईमेल अलर्ट हैं — अंग्रेज़ी और हिन्दी में।",
+  "Swasnira is a medical visit tracker for clinics and hospitals. It covers booking, check-in, live queues, doctor workflows, patient status, pharmacy orders, HR, and SMS/email alerts — in English and Hindi.":
+    "Swasnira क्लिनिक और अस्पतालों के लिए विजिट ट्रैकर है। इसमें बुकिंग, चेक-इन, लाइव कतार, डॉक्टर वर्कफ़्लो, मरीज़ स्थिति, दवा ऑर्डर, एचआर और एसएमएस/ईमेल अलर्ट हैं — अंग्रेज़ी और हिन्दी में।",
   "Contact us": "हमसे संपर्क करें",
   "Product snapshot": "उत्पाद झलक",
   "Login types": "लॉगिन प्रकार",
   "Clinic modules": "क्लिनिक मॉड्यूल",
   "Notify channels": "सूचना चैनल",
   Languages: "भाषाएँ",
-  "What MedTrack is": "MedTrack क्या है",
-  "MedTrack Clinic is built so front-desk staff can create a visit from a phone call in under 45 seconds, doctors can run a minimal queue, and patients always see doctor name, fixed appointment time, token, and when the consult is likely.":
-    "MedTrack क्लिनिक इसलिए बना है कि फ्रंट-डेस्क एक फ़ोन कॉल से 45 सेकंड में विजिट बना सके, डॉक्टर सरल कतार चला सकें, और मरीज़ हमेशा डॉक्टर का नाम, तय समय, टोकन और संभावित परामर्श समय देख सकें।",
+  "What Swasnira is": "Swasnira क्या है",
+  "Swasnira Clinic is built so front-desk staff can create a visit from a phone call in under 45 seconds, doctors can run a minimal queue, and patients always see doctor name, fixed appointment time, token, and when the consult is likely.":
+    "Swasnira क्लिनिक इसलिए बना है कि फ्रंट-डेस्क एक फ़ोन कॉल से 45 सेकंड में विजिट बना सके, डॉक्टर सरल कतार चला सकें, और मरीज़ हमेशा डॉक्टर का नाम, तय समय, टोकन और संभावित परामर्श समय देख सकें।",
   "The product is not a full EHR, lab system, insurance engine, or telemedicine app. It is the operational spine of a clinic visit: schedules, bookings, tokens, delays, fees, documents, chat, medicine orders, and hospital HR.":
     "यह पूरा ईएचआर, लैब सिस्टम, बीमा इंजन या टेलीमेडिसिन ऐप नहीं है। यह क्लिनिक विजिट का संचालन है: समय-सारणी, बुकिंग, टोकन, देरी, शुल्क, दस्तावेज़, चैट, दवा ऑर्डर और अस्पताल एचआर।",
   "Hospitals & clinics": "अस्पताल और क्लिनिक",
@@ -719,8 +719,8 @@ export const hi: Record<string, string> = {
   "Staff / doctor login": "स्टाफ़ / डॉक्टर लॉगिन",
   "Hospital, doctor, store": "अस्पताल, डॉक्टर, स्टोर",
   "Everything in the application": "एप्लिकेशन की पूरी जानकारी",
-  "These are the live MedTrack modules. Open a card to go to the matching screen (some require sign-in).":
-    "ये MedTrack के लाइव मॉड्यूल हैं। कार्ड खोलकर संबंधित स्क्रीन पर जाएँ (कुछ के लिए साइन इन चाहिए)।",
+  "These are the live Swasnira modules. Open a card to go to the matching screen (some require sign-in).":
+    "ये Swasnira के लाइव मॉड्यूल हैं। कार्ड खोलकर संबंधित स्क्रीन पर जाएँ (कुछ के लिए साइन इन चाहिए)।",
   "Getting started": "शुरुआत",
   Pharmacy: "फार्मेसी",
   "No login required": "लॉगिन की जरूरत नहीं",
@@ -795,13 +795,13 @@ export const hi: Record<string, string> = {
   "Languages & voice": "भाषा और आवाज़",
   "The UI switches between English and Hindi from the header. Voice booking understands spoken appointment details so desk staff and patients can fill a booking without typing every field.":
     "हेडर से अंग्रेज़ी और हिन्दी बदलें। आवाज़ बुकिंग बोले गए विवरण समझती है ताकि हर फ़ील्ड टाइप न करनी पड़े।",
-  "Questions about adopting MedTrack, registering a hospital, or a visit that needs help? Send a message. We read every inquiry.":
-    "MedTrack अपनाने, अस्पताल पंजीकरण, या किसी विजिट में मदद? संदेश भेजें। हम हर पूछताछ पढ़ते हैं।",
+  "Questions about adopting Swasnira, registering a hospital, or a visit that needs help? Send a message. We read every inquiry.":
+    "Swasnira अपनाने, अस्पताल पंजीकरण, या किसी विजिट में मदद? संदेश भेजें। हम हर पूछताछ पढ़ते हैं।",
   "Public tools": "सार्वजनिक उपकरण",
   Book: "बुक",
   Track: "ट्रैक",
   Queue: "कतार",
-  "Write to MedTrack": "MedTrack को लिखें",
+  "Write to Swasnira": "Swasnira को लिखें",
   "Hospital or organization": "अस्पताल या संगठन",
   Subject: "विषय",
   Message: "संदेश",

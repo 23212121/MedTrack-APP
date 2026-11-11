@@ -8,7 +8,7 @@ export function buildUpiPay(opts: {
   const pa = (opts.vpa || "").trim().replace(/\s+/g, "");
   const pn = sanitizeUpiName(opts.payeeName);
   const am = Math.max(0, Number(opts.amount) || 0).toFixed(2);
-  const tn = (opts.note || "MedTrack").replace(/[^A-Za-z0-9]/g, "").slice(0, 32) || "MedTrack";
+  const tn = (opts.note || "Swasnira").replace(/[^A-Za-z0-9]/g, "").slice(0, 32) || "Swasnira";
   return (
     "upi://pay?pa=" +
     pa +
@@ -22,12 +22,12 @@ export function buildUpiPay(opts: {
 }
 
 export function sanitizeUpiName(name?: string): string {
-  const s = (name || "MedTrack")
+  const s = (name || "Swasnira")
     .replace(/[^A-Za-z0-9 ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 34);
-  return s || "MedTrack";
+  return s || "Swasnira";
 }
 
 export function upiQueryFromIntent(uri: string): string {

@@ -163,7 +163,8 @@ public class NotificationAppService {
 
   private String subjectFor(NotifyRequest req) {
     return switch (req.eventCode()) {
-      case "BOOKING_CONFIRMED" -> "Your appointment has been booked — " + nullTo(req.clinicName(), "MedTrack Clinic");
+      case "BOOKING_CONFIRMED" -> "Your appointment has been booked — " + nullTo(req.clinicName(), "Swasnira");
+      case "LAB_BOOKING_CONFIRMED" -> "Lab test booked — " + nullTo(req.clinicName(), "Swasnira");
       case "PAYMENT_COMPLETED" -> "Payment successful — " + nullTo(req.clinicName(), "MedTrack Clinic");
       case "DOCUMENT_ATTACHED" -> "Document attached to your appointment — " + nullTo(req.clinicName(), "MedTrack Clinic");
       case "CHECKED_IN" -> "Checked in — token " + req.token();
@@ -174,7 +175,7 @@ public class NotificationAppService {
       case "VISIT_COMPLETED" -> "Visit completed";
       case "OVERTIME_FEE" -> "Extra consult fee applied";
       case "TRACK_OTP" -> "MedTrack appointment OTP";
-      case "MEDICINE_ORDER" -> "Medicine order update — " + nullTo(req.clinicName(), "MedTrack");
+      case "MEDICINE_ORDER" -> "Medicine order update — " + nullTo(req.clinicName(), "Swasnira");
       case "HRM_APPROVAL" -> "HR update — " + nullTo(req.clinicName(), "MedTrack");
       default -> "Clinic update — " + req.eventCode();
     };
@@ -195,16 +196,13 @@ public class NotificationAppService {
 
     return switch (req.eventCode()) {
       case "BOOKING_CONFIRMED" -> {
-        String base =
-            clinic
-                + ": Hi "
-                + patient
-                + ", your appointment has been booked with "
-                + doctor
-                + " for "
-                + req.scheduledTime()
-                + "."
-                + tokenPart;
+        String patients = extra(req, "patientsOnSlot");
+        String expected = firstNonBlank(extra(req, "expectedTime"), req.scheduledTime());
+        String link = extra(req, "trackUrl");
+        String slotPart = patients.isBlank() ? "" : " Patients on this slot: " + patients + ".";
+        String expectPart =
+            expected == null || expected.isBlank() ? "" : " Expected time: " + expected + ".";
+        String linkPart = link.isBlank() ? "" : " Track: " + link;
         if ("EMAIL".equals(channel)) {
           yield "Dear "
               + patient
@@ -213,14 +211,69 @@ public class NotificationAppService {
               + clinic
               + "\nDoctor: "
               + doctor
-              + "\nWhen: "
-              + req.scheduledTime()
+              + "\nSlot time: "
+              + nullTo(req.scheduledTime(), "—")
+              + "\nPatients on this slot: "
+              + (patients.isBlank() ? "—" : patients)
               + "\nToken: "
               + (req.token() == null || req.token().isBlank() ? "—" : "# " + req.token())
-              + "\n\nPlease arrive on time. Track your visit with your mobile number on the patient track page.\n\nRegards,\n"
+              + "\nExpected time: "
+              + nullTo(expected, "—")
+              + "\n\nTrack your visit: "
+              + (link.isBlank() ? "open the patient track page and enter your mobile number." : link)
+              + "\n\nRegards,\n"
               + clinic;
         }
-        yield base;
+        yield clinic
+            + ": Hi "
+            + patient
+            + ", appointment booked with "
+            + doctor
+            + "."
+            + slotPart
+            + tokenPart
+            + expectPart
+            + linkPart;
+      }
+      case "LAB_BOOKING_CONFIRMED" -> {
+        String patients = extra(req, "patientsOnSlot");
+        String expected = firstNonBlank(extra(req, "expectedTime"), req.scheduledTime());
+        String link = extra(req, "trackUrl");
+        String bookingNo = extra(req, "bookingNumber");
+        String mode = extra(req, "modeLabel");
+        String ref = bookingNo.isBlank() ? "" : " Booking " + bookingNo + ".";
+        String modePart = mode.isBlank() ? "" : " " + mode + ".";
+        if ("EMAIL".equals(channel)) {
+          yield "Dear "
+              + patient
+              + ",\n\nYour lab test has been booked.\n\n"
+              + "Hospital/Clinic: "
+              + clinic
+              + "\nBooking: "
+              + (bookingNo.isBlank() ? "—" : bookingNo)
+              + "\nType: "
+              + (mode.isBlank() ? "Lab test" : mode)
+              + "\nPatients on this slot: "
+              + (patients.isBlank() ? "—" : patients)
+              + "\nToken: "
+              + (req.token() == null || req.token().isBlank() ? "—" : "# " + req.token())
+              + "\nExpected time: "
+              + nullTo(expected, "—")
+              + "\n\nCheck it here: "
+              + (link.isBlank() ? "open Lab booking in the patient portal." : link)
+              + "\n\nRegards,\n"
+              + clinic;
+        }
+        yield clinic
+            + ": Hi "
+            + patient
+            + ", lab test booked."
+            + ref
+            + modePart
+            + (patients.isBlank() ? "" : " Patients on this slot: " + patients + ".")
+            + tokenPart
+            + (expected == null || expected.isBlank() ? "" : " Expected time: " + expected + ".")
+            + (link.isBlank() ? "" : " Track: " + link);
       }
       case "PAYMENT_COMPLETED" -> {
         String txn =
@@ -365,6 +418,19 @@ public class NotificationAppService {
       }
       default -> clinic + ": Status update " + req.eventCode() + " for " + patient + ".";
     };
+  }
+
+  private static String extra(NotifyRequest req, String key) {
+    if (req.extra() == null || key == null) return "";
+    String value = req.extra().get(key);
+    return value == null ? "" : value.trim();
+  }
+
+  private static String firstNonBlank(String... values) {
+    for (String value : values) {
+      if (value != null && !value.isBlank()) return value.trim();
+    }
+    return "";
   }
 
   private static String nullTo(String v, String d) {
